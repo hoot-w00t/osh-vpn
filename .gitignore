@@ -1,0 +1,16 @@
+.vscode/
+*.txt
+*.sh
+*.a
+*.so
+*.dll
+*.o
+*.d
+*.i
+*.gcno
+*.gcda
+*.out
+*.exe
+oshd
+oshd_tests
+vgcore.*
