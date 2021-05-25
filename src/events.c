@@ -7,16 +7,32 @@
 
 static event_t *event_queue_head = NULL;
 
+// Get the current time in *tv and add delay (in seconds) to it in *tv
+static void tv_delay(struct timeval *tv, time_t delay)
+{
+    gettimeofday(tv, NULL);
+    tv->tv_sec += delay;
+}
+
 // Return an allocated event_t
-static event_t *event_create(event_handler_t handler, void *data,
-    const struct timeval *trigger)
+static event_t *event_create(event_handler_t handler, event_handler_t freedata,
+ void *data, const struct timeval *trigger)
 {
     event_t *event = xzalloc(sizeof(event_t));
 
     event->handler = handler;
     event->data = data;
+    event->freedata = freedata;
     memcpy(&event->trigger, trigger, sizeof(struct timeval));
     return event;
+}
+
+// Free *event and its resources
+static void event_free(event_t *event)
+{
+    if (event->freedata)
+        event->freedata(event->data);
+    free(event);
 }
 
 // Queue *event
@@ -47,6 +63,7 @@ static void event_queue(event_t *event)
 // Process all events in the event queue that should trigger
 void event_process_queued(void)
 {
+    event_t *event;
     struct timeval now;
 
     // Get the current time to compare with the triggers
@@ -60,8 +77,7 @@ void event_process_queued(void)
         if (now.tv_sec < event_queue_head->trigger.tv_sec)
             break;
 
-        // Keep the current event here
-        event_t *event = event_queue_head;
+        event = event_queue_head;
 
         // Move the event queue to the next event
         event_queue_head = event->next;
@@ -69,18 +85,26 @@ void event_process_queued(void)
         // Handle the current event
         event->handler(event->data);
 
-        // Free the event_t now that it was triggered
-        free(event);
+        event_free(event);
     }
 }
 
-// Get the current time and add delay_s seconds to it in *tv
-static void tv_delay_s(struct timeval *tv, time_t delay_s)
+// Cancel all events in the queue
+void event_cancel_queue(void)
 {
-    gettimeofday(tv, NULL);
-    tv->tv_sec += delay_s;
-}
+    event_t *i = event_queue_head;
+    event_t *next;
 
+    // Iterate over the entire event queue and free everything
+    while (i) {
+        next = i->next;
+        event_free(i);
+        i = next;
+    }
+
+    // The queue was entirely freed, now we can mark it as empty
+    event_queue_head = NULL;
+}
 
 // Queue connect event
 typedef struct connect_event_data {
@@ -89,13 +113,19 @@ typedef struct connect_event_data {
     time_t delay;
 } connect_event_data_t;
 
+static void connect_event_freedata(void *data)
+{
+    connect_event_data_t *e_data = (connect_event_data_t *) data;
+
+    free(e_data->addr);
+    free(e_data);
+}
+
 static void connect_event_handler(void *data)
 {
     connect_event_data_t *e_data = (connect_event_data_t *) data;
 
     oshd_connect_queue(e_data->addr, e_data->port, e_data->delay);
-    free(e_data->addr);
-    free(e_data);
 }
 
 void event_queue_connect(const char *addr, uint16_t port, time_t delay,
@@ -104,11 +134,12 @@ void event_queue_connect(const char *addr, uint16_t port, time_t delay,
     struct timeval trigger;
     connect_event_data_t *data = xalloc(sizeof(connect_event_data_t));
 
-    tv_delay_s(&trigger, event_delay);
+    tv_delay(&trigger, event_delay);
     data->addr = xstrdup(addr);
     data->port = port;
     data->delay = delay;
-    event_queue(event_create(connect_event_handler, data, &trigger));
+    event_queue(event_create(connect_event_handler, connect_event_freedata,
+        data, &trigger));
 }
 
 
@@ -127,6 +158,7 @@ void event_queue_periodic_ping(void)
 {
     struct timeval trigger;
 
-    tv_delay_s(&trigger, 30);
-    event_queue(event_create(periodic_ping_event_handler, NULL, &trigger));
+    tv_delay(&trigger, 30);
+    event_queue(event_create(periodic_ping_event_handler, NULL,
+        NULL, &trigger));
 }
