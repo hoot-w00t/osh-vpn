@@ -6,6 +6,7 @@
 #include "oshd_route.h"
 #include "oshd.h"
 
+#include "events.h"
 #include "tcp.h"
 #include "tuntap.h"
 #include "xalloc.h"
@@ -178,14 +179,17 @@ void oshd_loop(void)
     int events;
 
     // Queue the connections to our remotes
-    // TODO: Add a way to reconnect the disconnected remotes (with a delay)
     for (size_t i = 0; i < oshd.remote_count; ++i)
         oshd_connect_queue(oshd.remote_addrs[i], oshd.remote_ports[i]);
 
     // Osh actually starts
     oshd.run = true;
+    event_queue_periodic_ping();
 
     while (oshd.run) {
+        // Process queued events
+        event_process_queued();
+
         // Update our polling structure
         pfd_update();
 

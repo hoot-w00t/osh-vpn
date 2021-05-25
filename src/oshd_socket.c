@@ -10,6 +10,26 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+// Set network socket options
+static bool oshd_setsockopts(int s)
+{
+    uint32_t optval;
+
+    // Enable keep alive probing on the socket
+    optval = 1;
+    if (setsockopt(s, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval)) < 0) {
+        logger(LOG_ERR, "Failed to set SO_KEEPALIVE option on socket %i", s);
+        return false;
+    }
+
+    // Set the socket to non-blocking
+    if (set_nonblocking(s) < 0) {
+        logger(LOG_ERR, "Failed to set socket %i to non-blocking", s);
+        return -1;
+    }
+    return true;
+}
+
 // Accept incoming connection
 bool oshd_accept(void)
 {
@@ -35,8 +55,8 @@ bool oshd_accept(void)
         port = ((struct sockaddr_in *) &sin)->sin_port;
     }
 
-    // We work with non-blocking sockets
-    set_nonblocking(client_fd);
+    // Set all the socket options
+    oshd_setsockopts(client_fd);
 
     // Initialize the node we the newly created socket
     node = node_init(client_fd, false, &addr, port);
@@ -70,10 +90,12 @@ bool oshd_connect_queue(const char *address, const uint16_t port)
     // socket information
     netaddr_pton(&naddr, d_addr);
     node = node_init(client_fd, true, &naddr, port);
+    node_reconnect_to(node, address, port, 10);
     memcpy(&node->sin, &d_sin, d_sin_len);
 
-    // We work with non-blocking sockets
-    set_nonblocking(node->fd);
+    // Set all the socket options
+    oshd_setsockopts(client_fd);
+
     node_add(node);
 
     logger(LOG_INFO, "Trying to connect to %s...", node->addrw);
@@ -121,8 +143,9 @@ bool oshd_connect(const char *address, const uint16_t port)
         return false;
     netaddr_pton(&naddr, d_addr);
     node = node_init(client_fd, true, &naddr, port);
+    node_reconnect_to(node, address, port, 10);
     node->connected = true;
-    set_nonblocking(node->fd);
+    oshd_setsockopts(client_fd);
     node_add(node);
     return node_queue_hello(node);
 }

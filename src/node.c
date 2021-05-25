@@ -1,5 +1,6 @@
 #include "node.h"
 #include "oshd.h"
+#include "events.h"
 #include "logger.h"
 #include "xalloc.h"
 #include <stdio.h>
@@ -369,6 +370,11 @@ void node_disconnect(node_t *node)
     } else {
         logger(LOG_WARN, "%s: Already disconnected", node->addrw);
     }
+
+    if (node->reconnect_addr) {
+        event_queue_connect(node->reconnect_addr, node->reconnect_port,
+            node->reconnect_delay);
+    }
 }
 
 // Free a node and all its resources
@@ -377,6 +383,7 @@ void node_destroy(node_t *node)
     node_disconnect(node);
     free(node->io.recvbuf);
     netbuffer_free(node->io.sendq);
+    free(node->reconnect_addr);
     free(node);
 }
 
@@ -389,11 +396,9 @@ node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port)
     node->fd = fd;
     node->initiator = initiator;
 
-    // Initialize node address and port
-    netaddr_cpy(&node->addr, addr);
-    node->port = port;
-    netaddr_ntop(addrp, sizeof(addrp), &node->addr);
-    snprintf(node->addrw, sizeof(node->addrw), "%s:%u", addrp, node->port);
+    // Write the node's address:port
+    netaddr_ntop(addrp, sizeof(addrp), addr);
+    snprintf(node->addrw, sizeof(node->addrw), "%s:%u", addrp, port);
 
     // Initialize network buffers
     node->io.recvbuf = xalloc(OSHPACKET_MAXSIZE);
@@ -405,6 +410,15 @@ node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port)
     node->io.sendq_packet_size = 0;
 
     return node;
+}
+
+void node_reconnect_to(node_t *node, const char *addr, uint16_t port,
+    time_t delay)
+{
+    free(node->reconnect_addr);
+    node->reconnect_addr = addr ? xstrdup(addr) : NULL;
+    node->reconnect_port = port;
+    node->reconnect_delay = delay;
 }
 
 // Returns true if the node name is valid

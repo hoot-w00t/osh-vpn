@@ -11,6 +11,7 @@ TEST_BIN	=	oshd_tests
 SRC		=	src/easyconf/easyconf.c		\
 			src/easyconf/getline.c		\
 			src/easyconf/parameter.c	\
+			src/events.c			\
 			src/logger.c			\
 			src/main.c			\
 			src/netaddr.c			\
