@@ -396,6 +396,9 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
         }
 
         case DATA: {
+            if (!oshd.tuntap_used)
+                return true;
+
             netpacket_t netpkt;
             char netpkt_src[INET6_ADDRSTRLEN];
             char netpkt_dest[INET6_ADDRSTRLEN];
