@@ -372,8 +372,11 @@ void node_disconnect(node_t *node)
     }
 
     if (node->reconnect_addr) {
-        event_queue_connect(node->reconnect_addr, node->reconnect_port,
+        logger(LOG_INFO, "Retrying to connect to %s:%u in %li seconds",
+            node->reconnect_addr, node->reconnect_port,
             node->reconnect_delay);
+        event_queue_connect(node->reconnect_addr, node->reconnect_port,
+            node->reconnect_delay * 2, node->reconnect_delay);
     }
 }
 
@@ -412,13 +415,26 @@ node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port)
     return node;
 }
 
+// Set the node socket's reconnection delay
+void node_reconnect_delay(node_t *node, time_t delay)
+{
+    if (delay < oshd.reconnect_delay_min) {
+        node->reconnect_delay = oshd.reconnect_delay_min;
+    } else if (delay > oshd.reconnect_delay_max) {
+        node->reconnect_delay = oshd.reconnect_delay_max;
+    } else {
+        node->reconnect_delay = delay;
+    }
+}
+
+// Set the node's socket reconnection information
 void node_reconnect_to(node_t *node, const char *addr, uint16_t port,
     time_t delay)
 {
     free(node->reconnect_addr);
     node->reconnect_addr = addr ? xstrdup(addr) : NULL;
     node->reconnect_port = port;
-    node->reconnect_delay = delay;
+    node_reconnect_delay(node, delay);
 }
 
 // Returns true if the node name is valid

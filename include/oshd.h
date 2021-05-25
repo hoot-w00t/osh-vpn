@@ -51,6 +51,10 @@ typedef struct oshd {
     netroute_t **routes;
     size_t routes_count;
 
+    // Minimum and maximum reconnection delays (in seconds)
+    time_t reconnect_delay_min;
+    time_t reconnect_delay_max;
+
     // When set to false the daemon will stop
     bool run;
 } oshd_t;

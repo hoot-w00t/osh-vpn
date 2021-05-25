@@ -86,25 +86,28 @@ static void tv_delay_s(struct timeval *tv, time_t delay_s)
 typedef struct connect_event_data {
     char *addr;
     uint16_t port;
+    time_t delay;
 } connect_event_data_t;
 
 static void connect_event_handler(void *data)
 {
     connect_event_data_t *e_data = (connect_event_data_t *) data;
 
-    oshd_connect_queue(e_data->addr, e_data->port);
+    oshd_connect_queue(e_data->addr, e_data->port, e_data->delay);
     free(e_data->addr);
     free(e_data);
 }
 
-void event_queue_connect(const char *addr, uint16_t port, time_t delay_s)
+void event_queue_connect(const char *addr, uint16_t port, time_t delay,
+    time_t event_delay)
 {
     struct timeval trigger;
     connect_event_data_t *data = xalloc(sizeof(connect_event_data_t));
 
-    tv_delay_s(&trigger, delay_s);
+    tv_delay_s(&trigger, event_delay);
     data->addr = xstrdup(addr);
     data->port = port;
+    data->delay = delay;
     event_queue(event_create(connect_event_handler, data, &trigger));
 }
 

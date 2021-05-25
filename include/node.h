@@ -98,6 +98,7 @@ void node_tree_update(void);
 void node_disconnect(node_t *node);
 void node_destroy(node_t *node);
 node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port);
+void node_reconnect_delay(node_t *node, time_t delay);
 void node_reconnect_to(node_t *node, const char *addr, uint16_t port,
     time_t delay);
 bool node_valid_name(const char *name);

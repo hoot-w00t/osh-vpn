@@ -21,6 +21,9 @@ void oshd_init_conf(void)
     oshd.server_port = OSHD_DEFAULT_PORT;
     oshd.server_enabled = true;
 
+    oshd.reconnect_delay_min = 10;
+    oshd.reconnect_delay_max = 60;
+
     oshd.run = true;
 }
 
@@ -97,7 +100,6 @@ bool oshd_load_conf(const char *filename)
         free(oshd.cmd_devdown);
         oshd.cmd_devdown = xstrdup(ecp_value(p));
     }
-
 
     // Load all remotes
 

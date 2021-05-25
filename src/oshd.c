@@ -179,8 +179,10 @@ void oshd_loop(void)
     int events;
 
     // Queue the connections to our remotes
-    for (size_t i = 0; i < oshd.remote_count; ++i)
-        oshd_connect_queue(oshd.remote_addrs[i], oshd.remote_ports[i]);
+    for (size_t i = 0; i < oshd.remote_count; ++i) {
+        oshd_connect_queue(oshd.remote_addrs[i], oshd.remote_ports[i],
+            oshd.reconnect_delay_min);
+    }
 
     // Osh actually starts
     oshd.run = true;

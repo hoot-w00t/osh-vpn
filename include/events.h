@@ -25,7 +25,8 @@ struct event {
 
 void event_process_queued(void);
 
-void event_queue_connect(const char *addr, uint16_t port, time_t delay_s);
+void event_queue_connect(const char *addr, uint16_t port, time_t delay,
+    time_t event_delay);
 void event_queue_periodic_ping(void);
 
 #endif

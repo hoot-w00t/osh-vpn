@@ -68,7 +68,7 @@ bool oshd_accept(void)
 }
 
 // Queue node connection (non-blocking connect)
-bool oshd_connect_queue(const char *address, const uint16_t port)
+bool oshd_connect_queue(const char *address, const uint16_t port, time_t delay)
 {
     node_t *node;
     int client_fd;
@@ -90,7 +90,7 @@ bool oshd_connect_queue(const char *address, const uint16_t port)
     // socket information
     netaddr_pton(&naddr, d_addr);
     node = node_init(client_fd, true, &naddr, port);
-    node_reconnect_to(node, address, port, 10);
+    node_reconnect_to(node, address, port, delay);
     memcpy(&node->sin, &d_sin, d_sin_len);
 
     // Set all the socket options
@@ -122,6 +122,9 @@ bool oshd_connect_async(node_t *node)
         logger(LOG_INFO, "Established connection with %s", node->addrw);
         node->connected = true;
 
+        // We can reset the reconnection delay to the minimum
+        node_reconnect_delay(node, oshd.reconnect_delay_min);
+
         // We are the initiator, so we initiate the authentication
         return node_queue_hello(node);
     }
@@ -129,7 +132,7 @@ bool oshd_connect_async(node_t *node)
 }
 
 // Try to connect to a node (blocking)
-bool oshd_connect(const char *address, const uint16_t port)
+bool oshd_connect(const char *address, const uint16_t port, time_t delay)
 {
     node_t *node;
     int client_fd;
@@ -143,7 +146,7 @@ bool oshd_connect(const char *address, const uint16_t port)
         return false;
     netaddr_pton(&naddr, d_addr);
     node = node_init(client_fd, true, &naddr, port);
-    node_reconnect_to(node, address, port, 10);
+    node_reconnect_to(node, address, port, delay);
     node->connected = true;
     oshd_setsockopts(client_fd);
     node_add(node);
