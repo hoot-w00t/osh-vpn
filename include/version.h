@@ -2,7 +2,7 @@
 #define _OSH_VERSION_H
 
 #ifndef OSH_COMMIT_HASH
-#define OSH_COMMIT_HASH "undefined"
+#include "version_git.h"
 #endif
 
 #define OSH_VERSION_MAJOR (0)

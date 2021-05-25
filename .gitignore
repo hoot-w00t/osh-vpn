@@ -14,3 +14,4 @@
 oshd
 oshd_tests
 vgcore.*
+include/version_git.h

@@ -5,6 +5,10 @@ CFLAGS		=	-Wall -Wextra -Wshadow -O2 -g -pipe
 CFLAGS		+=	-Iinclude -Iinclude/easyconf
 LDFLAGS		=
 
+VERSION_GIT_H	=	include/version_git.h
+VERSION_GIT	=	$(strip $(shell cat $(VERSION_GIT_H) 2>/dev/null))
+HEAD_COMMIT	=	$(strip $(shell git describe --always --tags --abbrev=10))
+
 BIN		=	oshd
 TEST_BIN	=	oshd_tests
 
@@ -46,13 +50,19 @@ TEST_OBJ	=	$(TEST_SRC:%.c=obj/%.o)
 DEP		=	$(OBJ:.o=.d)
 TEST_DEP	=	$(TEST_OBJ:.o=.d)
 
-all:	$(BIN)
+all:	update_version_git	$(BIN)
 
 $(BIN):	$(OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 $(TEST_BIN):	$(TEST_OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS) -lcriterion
+
+update_version_git:
+ifneq ($(findstring $(HEAD_COMMIT), $(VERSION_GIT)), $(HEAD_COMMIT))
+	@echo Updating $(VERSION_GIT_H) with commit hash $(HEAD_COMMIT)
+	@echo "#define OSH_COMMIT_HASH \"$(HEAD_COMMIT)\"" > $(VERSION_GIT_H)
+endif
 
 test:	$(TEST_BIN)
 	@./$(TEST_BIN)
@@ -67,4 +77,4 @@ obj/%.o:	%.c
 -include $(DEP)
 -include $(TEST_DEP)
 
-.PHONY:	all	test	clean
+.PHONY:	all	update_version_git	test	clean
