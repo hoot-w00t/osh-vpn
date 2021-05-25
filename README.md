@@ -7,3 +7,9 @@ Clone the repository and navigate to it, then just run
 ```
 make
 ```
+
+You can also build and run unit tests with
+```
+make test
+```
+These unit tests require [Criterion](https://github.com/Snaipe/Criterion).
