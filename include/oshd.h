@@ -29,11 +29,6 @@ typedef struct oshd {
                             // addresses
     size_t remote_count;    // Amount of entries in those arrays
 
-    char *cmd_devup;   // Command that will be executed after the TUN/TAP
-                       // device is opened
-    char *cmd_devdown; // Same as above but will be executed right before the
-                       // device is closed
-
     // Array of the node's sockets, all direct connections
     node_t **nodes;
     size_t nodes_count;

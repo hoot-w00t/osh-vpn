@@ -22,10 +22,10 @@ SRC		=	src/easyconf/easyconf.c		\
 			src/netbuffer.c			\
 			src/netpacket.c			\
 			src/node.c			\
+			src/oshd_cmd.c			\
 			src/oshd_conf.c			\
 			src/oshd_device.c		\
 			src/oshd_route.c		\
-			src/oshd_script.c		\
 			src/oshd_socket.c		\
 			src/oshd.c			\
 			src/oshpacket.c			\

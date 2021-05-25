@@ -1,4 +1,5 @@
 #include "oshd.h"
+#include "oshd_cmd.h"
 #include "xalloc.h"
 #include "logger.h"
 #include <stdio.h>
@@ -88,8 +89,7 @@ bool oshd_load_conf(const char *filename)
             snprintf(err, sizeof(err), "DevUp requires a value");
             goto on_error;
         }
-        free(oshd.cmd_devup);
-        oshd.cmd_devup = xstrdup(ecp_value(p));
+        oshd_cmd_set("DevUp", ecp_value(p));
     }
 
     if ((p = ec_find(conf, "DevDown"))) {
@@ -97,8 +97,7 @@ bool oshd_load_conf(const char *filename)
             snprintf(err, sizeof(err), "DevDown requires a value");
             goto on_error;
         }
-        free(oshd.cmd_devdown);
-        oshd.cmd_devdown = xstrdup(ecp_value(p));
+        oshd_cmd_set("DevDown", ecp_value(p));
     }
 
     // Load all remotes

@@ -1,6 +1,6 @@
 #define _OSH_OSHD_C
 
-#include "oshd_script.h"
+#include "oshd_cmd.h"
 #include "oshd_device.h"
 #include "oshd_socket.h"
 #include "oshd_route.h"
@@ -108,10 +108,8 @@ bool oshd_init(void)
             return false;
         set_nonblocking(oshd.tuntap_fd);
         setenv("OSHD_DEVICE", oshd.tuntap_dev, 1);
-        if (oshd.cmd_devup) {
-            if (oshd_script(oshd.cmd_devup) != 0)
-                return false;
-        }
+        if (!oshd_cmd_execute("DevUp"))
+            return false;
         pfd_off += 1;
     }
 
@@ -143,8 +141,7 @@ void oshd_free(void)
 {
     oshd.run = false;
     if (oshd.tuntap_fd > 0) {
-        if (oshd.cmd_devdown)
-            oshd_script(oshd.cmd_devdown);
+        oshd_cmd_execute("DevDown");
         close(oshd.tuntap_fd);
     }
     if (oshd.server_fd > 0) {
@@ -161,8 +158,7 @@ void oshd_free(void)
     free(oshd.remote_addrs);
     free(oshd.remote_ports);
 
-    free(oshd.cmd_devup);
-    free(oshd.cmd_devdown);
+    oshd_cmd_unset_all();
 
     for (size_t i = 0; i < oshd.node_tree_count; ++i)
         node_id_free(oshd.node_tree[i]);
