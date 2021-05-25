@@ -10,8 +10,8 @@ static char *conf_file = NULL;
 
 void print_version(void)
 {
-    printf("oshd %i.%i.%i (%s)\n", OSH_VERSION_MAJOR, OSH_VERSION_MINOR,
-        OSH_VERSION_PATCH, OSH_COMMIT_HASH);
+    printf("oshd %i.%i.%i-" OSH_COMMIT_HASH "\n",
+        OSH_VERSION_MAJOR, OSH_VERSION_MINOR, OSH_VERSION_PATCH);
 }
 
 void print_help(const char *cmd)
