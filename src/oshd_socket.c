@@ -487,10 +487,12 @@ bool oshd_process_packet(node_t *node)
                     oshpacket_type_name(pkt->type), src_node, dest_node, dest->next_hop->id->name);
                 node_queue_packet_forward(dest->next_hop, pkt);
             } else {
-                logger(LOG_ERR, "Dropping %s packet from %s to %s: No route", oshpacket_type_name(pkt->type), src_node, dest_node);
+                logger(LOG_INFO, "Dropping %s packet from %s to %s: No route",
+                    oshpacket_type_name(pkt->type), src_node, dest_node);
             }
         } else {
-            logger(LOG_ERR, "Dropping %s packet from %s to %s: Unknown destination", oshpacket_type_name(pkt->type), src_node, dest_node);
+            logger(LOG_WARN, "Dropping %s packet from %s to %s: Unknown destination",
+                oshpacket_type_name(pkt->type), src_node, dest_node);
         }
         return true;
     }
