@@ -98,6 +98,12 @@ static void oshd_signal_exit(__attribute__((unused)) int sig)
     }
 }
 
+// When we get this signal, dump the digraph of the network to stdout
+static void oshd_signal_digraph(__attribute__((unused)) int sig)
+{
+    node_tree_dump_digraph();
+}
+
 // Initialize oshd
 bool oshd_init(void)
 {
@@ -133,6 +139,7 @@ bool oshd_init(void)
 
     signal(SIGINT, oshd_signal_exit);
     signal(SIGTERM, oshd_signal_exit);
+    signal(SIGUSR1, oshd_signal_digraph);
     return true;
 }
 
