@@ -291,9 +291,11 @@ void node_tree_dump(void)
             oshd.node_tree[i]->edges_count);
 
         for (ssize_t j = 0; j < oshd.node_tree[i]->edges_count; ++j) {
-            printf("%s%c", oshd.node_tree[i]->edges[j]->name,
-                ((j + 1) < oshd.node_tree[i]->edges_count) ? ',' : '\n');
+            printf("%s", oshd.node_tree[i]->edges[j]->name);
+            if ((j + 1) < oshd.node_tree[i]->edges_count)
+                printf(", ");
         }
+        printf("\n");
     }
     printf("%zu nodes in the tree\n", oshd.node_tree_count);
 }
