@@ -37,14 +37,14 @@ void oshd_read_tuntap_pkt(void)
 
     if ((route = netroute_find(&pkt_hdr.dest))) {
         // We have a route for this network destination
-        logger(LOG_DEBUG, "%s: %s: %s -> %s (%i bytes, to %s)",
+        logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%i bytes, to %s)",
             oshd.tuntap_dev, oshd.name, pkt_src, pkt_dest, pkt_size,
             route->dest_node->name);
         node_queue_packet(route->dest_node->next_hop, route->dest_node->name,
             DATA, pkt, (uint16_t) pkt_size);
     } else {
         // We don't have a route for this network destination so we broadcast it
-        logger(LOG_DEBUG, "%s: %s: %s -> %s (%i bytes, broadcast)",
+        logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%i bytes, broadcast)",
             oshd.tuntap_dev, oshd.name, pkt_src, pkt_dest, pkt_size);
         node_queue_packet_broadcast(NULL, DATA, pkt, (uint16_t) pkt_size);
     }

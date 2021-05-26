@@ -59,7 +59,7 @@ netroute_t *netroute_add(const netaddr_t *addr, node_id_t *dest_node)
     }
     route->dest_node = dest_node;
 
-    if (logger_get_level() == LOG_DEBUG)
+    if (logger_is_debugged(DBG_ROUTING))
         netroute_dump();
     return route;
 }
@@ -78,7 +78,7 @@ void netroute_del_orphan_routes(void)
     bool changed = false;
     size_t i = 0;
 
-    logger(LOG_DEBUG, "Deleting orphan routes");
+    logger_debug(DBG_ROUTING, "Deleting orphan routes");
     while (i < oshd.routes_count) {
         if (!oshd.routes[i]->dest_node->next_hop) {
             changed = true;
@@ -101,7 +101,7 @@ void netroute_del_orphan_routes(void)
             ++i;
         }
     }
-    if (changed && logger_get_level() == LOG_DEBUG)
+    if (changed && logger_is_debugged(DBG_ROUTING))
         netroute_dump();
 }
 
@@ -120,7 +120,7 @@ bool netroute_add_local(const netaddr_t *addr)
     netaddr_cpy(&oshd.local_routes[oshd.local_routes_count], addr);
     oshd.local_routes_count += 1;
 
-    if (logger_get_level() == LOG_DEBUG)
+    if (logger_is_debugged(DBG_ROUTING))
         netroute_dump_local();
     return true;
 }

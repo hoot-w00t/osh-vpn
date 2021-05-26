@@ -128,7 +128,7 @@ bool oshd_load_conf(const char *filename)
             oshd.remote_ports[oshd.remote_count] = OSHD_DEFAULT_PORT;
         }
 
-        logger(LOG_INFO, "Remote: %s:%u added",
+        logger_debug(DBG_CONF, "Remote: %s:%u added",
             oshd.remote_addrs[oshd.remote_count],
             oshd.remote_ports[oshd.remote_count]);
 

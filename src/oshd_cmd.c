@@ -37,6 +37,8 @@ void oshd_cmd_set(const char *name, const char *cmdline)
     command_t *cmd = find_command(name);
 
     if (cmd) {
+        logger_debug(DBG_CMD, "Setting %s command to '%s'", cmd->name,
+            cmd->cmdline);
         free(cmd->cmdline);
         cmd->cmdline = xstrdup(cmdline);
     }
@@ -48,6 +50,7 @@ void oshd_cmd_unset(const char *name)
     command_t *cmd = find_command(name);
 
     if (cmd) {
+        logger_debug(DBG_CMD, "Unsetting %s command", cmd->name);
         free(cmd->cmdline);
         cmd->cmdline = NULL;
     }

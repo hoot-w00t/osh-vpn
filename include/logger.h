@@ -2,19 +2,35 @@
 #define _OSH_LOGGER_H
 
 #include <stdarg.h>
+#include <stdbool.h>
 
 typedef enum loglevel {
     LOG_CRIT = 0,
     LOG_ERR,
     LOG_WARN,
-    LOG_INFO,
-    LOG_DEBUG
+    LOG_INFO
 } loglevel_t;
+#define loglevel_size (4)
 
-void logger_set_level(loglevel_t level);
-loglevel_t logger_get_level(void);
-void logger_inc_level(void);
-void logger_dec_level(void);
+typedef enum debug_what {
+    DBG_OSHD = 0,
+    DBG_TUNTAP,
+    DBG_ROUTING,
+    DBG_NETBUFFER,
+    DBG_NODETREE,
+    DBG_CMD,
+    DBG_CONF,
+    DBG_SOCKETS,
+    DBG_EVENTS
+} debug_what_t;
+#define debug_what_size (9)
+
+void logger_toggle_debug(debug_what_t what);
+bool logger_toggle_debug_name(const char *name);
+const char *logger_get_debug_name(debug_what_t what);
+bool logger_is_debugged(debug_what_t what);
+
 void logger(loglevel_t level, const char *format, ...);
+void logger_debug(debug_what_t what, const char *format, ...);
 
 #endif

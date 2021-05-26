@@ -36,6 +36,7 @@ SRC		=	src/easyconf/easyconf.c		\
 TEST_SRC	=	src/easyconf/easyconf.c			\
 			src/easyconf/getline.c			\
 			src/easyconf/parameter.c		\
+			src/logger.c				\
 			src/xalloc.c				\
 			src/netaddr.c				\
 			src/netbuffer.c				\

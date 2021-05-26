@@ -60,6 +60,7 @@ static void pfd_update(void)
 static void oshd_signal_exit(int sig)
 {
     if (oshd.run) {
+        logger_debug(DBG_OSHD, "Received exit signal, calling oshd_stop()");
         oshd_stop();
     } else {
         logger(LOG_CRIT, "Uncaught exit signal: %s", strsignal(sig));
@@ -190,6 +191,7 @@ void oshd_loop(void)
         // Process queued events
         event_process_queued();
         if (oshd.nodes_updated) {
+            logger_debug(DBG_OSHD, "Nodes updated, resizing pfd");
             oshd.nodes_updated = false;
             pfd_resize();
         }

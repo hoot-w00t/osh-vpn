@@ -302,7 +302,7 @@ void node_tree_dump(void)
 
 static void node_tree_update_next_hops(void)
 {
-    logger(LOG_DEBUG, "Updating next hops");
+    logger_debug(DBG_NODETREE, "Updating next hops");
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
         oshd.node_tree[i]->next_hop = node_id_find_next_hop(oshd.node_tree[i]);
 
@@ -316,7 +316,7 @@ static void node_tree_update_next_hops(void)
         if (   !oshd.node_tree[i]->next_hop
             && !oshd.node_tree[i]->local_node)
         {
-            logger(LOG_DEBUG, "Clearing edges from orphan node %s",
+            logger_debug(DBG_NODETREE, "Clearing edges from orphan node %s",
                 oshd.node_tree[i]->name);
             free(oshd.node_tree[i]->edges);
             oshd.node_tree[i]->edges = NULL;
@@ -327,7 +327,7 @@ static void node_tree_update_next_hops(void)
 
 void node_tree_update(void)
 {
-    logger(LOG_DEBUG, "Node tree updated");
+    logger_debug(DBG_NODETREE, "Node tree updated");
 
     // After the node tree gets updated we need to re-calculate the next hops
     // of all nodes
@@ -336,7 +336,7 @@ void node_tree_update(void)
     // We also need to delete all routes to orphan nodes
     netroute_del_orphan_routes();
 
-    if (logger_get_level() == LOG_DEBUG)
+    if (logger_is_debugged(DBG_NODETREE))
         node_tree_dump();
 }
 
@@ -508,7 +508,8 @@ bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
             &&  oshd.node_tree[i]->next_hop
             &&  oshd.node_tree[i]->next_hop != exclude)
         {
-            logger(LOG_DEBUG, "Broadcasting %s packet for %s through %s (%s, %u bytes)",
+            logger_debug(DBG_SOCKETS,
+                "Broadcasting %s packet for %s through %s (%s, %u bytes)",
                 oshpacket_type_name(type),
                 oshd.node_tree[i]->name,
                 oshd.node_tree[i]->next_hop->id->name,
@@ -610,7 +611,7 @@ bool node_queue_edge_exg(node_t *node)
              to minimize memory reallocation latency
        TODO: We can also trim repeating edges
     */
-    logger(LOG_DEBUG, "node_queue_edge_exg: Creating the edge map");
+    logger_debug(DBG_NODETREE, "node_queue_edge_exg: Creating the edge map");
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
         // Skip the local node because it is useless
         if (oshd.node_tree[i]->local_node)
@@ -618,7 +619,7 @@ bool node_queue_edge_exg(node_t *node)
 
         // Direct edge
         if (oshd.node_tree[i]->node_socket) {
-            logger(LOG_DEBUG, "    Direct  : %s <=> %s",
+            logger_debug(DBG_NODETREE, "    Direct  : %s <=> %s",
                 oshd.name, oshd.node_tree[i]->name);
 
             // Allocate memory to store the new edge and copy the edge names
@@ -631,7 +632,7 @@ bool node_queue_edge_exg(node_t *node)
 
         // Indirect edges
         for (ssize_t j = 0; j < oshd.node_tree[i]->edges_count; ++j) {
-            logger(LOG_DEBUG, "    Indirect: %s <=> %s",
+            logger_debug(DBG_NODETREE, "    Indirect: %s <=> %s",
                 oshd.node_tree[i]->name, oshd.node_tree[i]->edges[j]->name);
 
             // Allocate memory to store the new edge and copy the edge names
@@ -650,7 +651,8 @@ bool node_queue_edge_exg(node_t *node)
     char *curr_buf = buf;
     bool success = true;
 
-    logger(LOG_DEBUG, "    Queuing EDGE_EXG packets for %zu edges (%zu bytes)",
+    logger_debug(DBG_NODETREE,
+        "    Queuing EDGE_EXG packets for %zu edges (%zu bytes)",
         buf_count, entry_size * buf_count);
 
     // Queue all edges in the buffer
@@ -669,8 +671,8 @@ bool node_queue_edge_exg(node_t *node)
 
         // Queue the packet
         if (node_queue_packet(node, node->id->name, EDGE_EXG, (uint8_t *) curr_buf, size)) {
-            logger(LOG_DEBUG, "    Queued EDGE_EXG with %zu edges (%zu bytes)",
-                entries, size);
+            logger_debug(DBG_NODETREE,
+                "    Queued EDGE_EXG with %zu edges (%zu bytes)", entries, size);
         } else {
             success = false;
         }
@@ -723,7 +725,7 @@ bool node_queue_add_route_broadcast(node_t *exclude, const netaddr_t *addrs,
 
         // Broadcast the packet
         if (node_queue_packet_broadcast(exclude, ADD_ROUTE, curr_buf, size)) {
-            logger(LOG_DEBUG, "Broadcast ADD_ROUTE with %zu routes (%zu bytes)",
+            logger_debug(DBG_ROUTING, "Broadcast ADD_ROUTE with %zu routes (%zu bytes)",
                 entries, size);
         } else {
             success = false;

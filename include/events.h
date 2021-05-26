@@ -25,6 +25,7 @@ struct event {
 
     // Timestamp at which the event should trigger
     struct timeval trigger;
+    char trigger_fmt[32];
 
     // Next event in the linked list
     event_t *next;

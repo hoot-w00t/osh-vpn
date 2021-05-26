@@ -1,9 +1,11 @@
 #include "oshd.h"
 #include "oshd_socket.h"
 #include "events.h"
+#include "logger.h"
 #include "xalloc.h"
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static event_t *event_queue_head = NULL;
 
@@ -24,6 +26,8 @@ static event_t *event_create(event_handler_t handler, event_freedata_t freedata,
     event->data = data;
     event->freedata = freedata;
     memcpy(&event->trigger, trigger, sizeof(struct timeval));
+    strftime(event->trigger_fmt, sizeof(event->trigger_fmt), "%Y-%m-%d %H:%M:%S",
+        localtime(&event->trigger.tv_sec));
     return event;
 }
 
@@ -39,6 +43,9 @@ static void event_free(event_t *event)
 static void event_queue(event_t *event)
 {
     event_t **i = &event_queue_head;
+
+    logger_debug(DBG_EVENTS, "Queuing event %p at %s", event,
+        event->trigger_fmt);
 
     // We will keep the event queue sorted by the trigger time of the events
     // The events must be sorted from the fastest to trigger to the longest
@@ -83,6 +90,8 @@ void event_process_queued(void)
         event_queue_head = event->next;
 
         // Handle the current event
+        logger_debug(DBG_EVENTS, "Processing event %p queued at %s",
+            event, event->trigger_fmt);
         event->handler(event->data);
         event->handled = true;
 

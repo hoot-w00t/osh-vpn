@@ -1,49 +1,90 @@
 #include "logger.h"
 #include <stdio.h>
+#include <string.h>
+#include <time.h>
 
-static loglevel_t logging_level = LOG_WARN;
+static bool enabled_debug[debug_what_size] = {0};
+static const char *debug_names[debug_what_size] = {
+    "oshd",
+    "tuntap",
+    "routing",
+    "netbuffer",
+    "nodetree",
+    "cmd",
+    "conf",
+    "sockets",
+    "events"
+};
 
-void logger_set_level(loglevel_t level)
+static const char *level_names[loglevel_size] = {
+    "Critical",
+    "Error",
+    "Warning",
+    "Info"
+};
+
+// Toggle debugging for what
+void logger_toggle_debug(debug_what_t what)
 {
-    logging_level = level;
+    if (what < debug_what_size)
+        enabled_debug[what] = !enabled_debug[what];
 }
 
-loglevel_t logger_get_level(void)
+// Toggle debugging for *name
+// If *name is not valid, returns false
+bool logger_toggle_debug_name(const char *name)
 {
-    return logging_level;
-}
-
-void logger_inc_level(void)
-{
-    logging_level += 1;
-}
-
-void logger_dec_level(void)
-{
-    if (logging_level > 0)
-        logging_level -= 1;
-}
-
-static const char *level_name(loglevel_t level)
-{
-    switch (level) {
-        case LOG_CRIT: return "Critical";
-        case LOG_ERR : return "Error";
-        case LOG_WARN: return "Warning";
-        case LOG_INFO: return "Info";
-        default      : return "Debug";
+    for (debug_what_t i = 0; i < debug_what_size; ++i) {
+        if (!strcasecmp(name, debug_names[i])) {
+            logger_toggle_debug(i);
+            return true;
+        }
     }
+    return false;
 }
 
+// Returns the name of what
+const char *logger_get_debug_name(debug_what_t what)
+{
+    return debug_names[what];
+}
+
+// Returns true if what is being debugged
+bool logger_is_debugged(debug_what_t what)
+{
+    return enabled_debug[what];
+}
+
+static void logger_print(const char *level, const char *format, va_list ap)
+{
+    const time_t curr_time = time(NULL);
+    static char fmt_buf[256];
+    static char time_buf[32];
+
+    strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S",
+        localtime(&curr_time));
+    vsnprintf(fmt_buf, sizeof(fmt_buf), format, ap);
+    printf("%s: %s: %s\n", time_buf, level, fmt_buf);
+}
+
+// Log a message of level
 void logger(loglevel_t level, const char *format, ...)
 {
     va_list ap;
-    static char buf[256];
 
-    if (level <= logging_level) {
+    va_start(ap, format);
+    logger_print(level_names[level], format, ap);
+    va_end(ap);
+}
+
+// Log a message if what is being debugged
+void logger_debug(debug_what_t what, const char *format, ...)
+{
+    va_list ap;
+
+    if (enabled_debug[what]) {
         va_start(ap, format);
-        vsnprintf(buf, sizeof(buf), format, ap);
+        logger_print("Debug", format, ap);
         va_end(ap);
-        printf("%s: %s\n", level_name(level), buf);
     }
 }

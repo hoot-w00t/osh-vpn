@@ -279,7 +279,7 @@ static bool oshd_process_edge(node_t *node, oshpacket_hdr_t *pkt,
         src = node_id_add(src_name);
         dest = node_id_add(dest_name);
 
-        logger(LOG_DEBUG, "%s: %s: %s edge: %s <=> %s", node->addrw,
+        logger_debug(DBG_NODETREE, "%s: %s: %s edge: %s <=> %s", node->addrw,
             node->id->name, action_name, src_name, dest_name);
         action(src, dest);
     }
@@ -373,7 +373,7 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
         case PONG:
             gettimeofday(&node->rtt_pong, NULL);
             node->rtt = (node->rtt_pong.tv_usec - node->rtt_ping.tv_usec) / 1000;
-            logger(LOG_DEBUG, "%s: %s: RTT %ims", node->addrw,
+            logger_debug(DBG_SOCKETS, "%s: %s: RTT %ims", node->addrw,
                 node->id->name, node->rtt);
 
             return true;
@@ -458,9 +458,9 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
             netaddr_ntop(netpkt_src, sizeof(netpkt_src), &netpkt.src);
             netaddr_ntop(netpkt_dest, sizeof(netpkt_dest), &netpkt.dest);
 
-            logger(LOG_DEBUG, "%s: %s: %s <- %s (%u bytes, from %s)", node->addrw,
-                node->id->name, netpkt_dest, netpkt_src, pkt->payload_size,
-                src_node->name);
+            logger_debug(DBG_TUNTAP, "%s: %s: %s <- %s (%u bytes, from %s)",
+                node->addrw, node->id->name, netpkt_dest, netpkt_src,
+                pkt->payload_size, src_node->name);
 
             if (!oshd_write_tuntap_pkt(payload, pkt->payload_size))
                 return false;
@@ -530,7 +530,7 @@ bool oshd_process_packet(node_t *node)
 
         if (dest) {
             if (dest->next_hop) {
-                logger(LOG_DEBUG, "Forwarding %s packet from %s to %s through %s",
+                logger_debug(DBG_ROUTING, "Forwarding %s packet from %s to %s through %s",
                     oshpacket_type_name(pkt->type), src_node, dest_node, dest->next_hop->id->name);
                 node_queue_packet_forward(dest->next_hop, pkt);
             } else {
