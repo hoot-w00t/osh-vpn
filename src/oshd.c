@@ -123,6 +123,13 @@ bool oshd_init(void)
         offset += 1;
     }
 
+    // Create our local node's ID in the tree
+    node_id_t *me = node_id_add(oshd.name);
+
+    // We are the one and only local node
+    me->local_node = true;
+
+
     signal(SIGINT, oshd_signal_exit);
     signal(SIGTERM, oshd_signal_exit);
     signal(SIGUSR1, oshd_signal_digraph);

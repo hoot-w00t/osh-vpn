@@ -33,7 +33,6 @@ node_id_t *node_id_add(const char *name)
         oshd.node_tree_count += 1;
 
         strncpy(id->name, name, NODE_NAME_SIZE);
-        id->local_node = !strcmp(id->name, oshd.name);
     }
     return id;
 }
@@ -281,11 +280,10 @@ void node_tree_dump_digraph(void)
 void node_tree_dump(void)
 {
     printf("Node tree (%s):\n", oshd.name);
-    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
-        // Skip our local node, our edges are the direct connections
-        if (oshd.node_tree[i]->local_node)
-            continue;
 
+    // Skip our local node, our edges are the direct connections
+    // We start at 1 because the first element will always be our local node
+    for (size_t i = 1; i < oshd.node_tree_count; ++i) {
         printf("    %s (%s, next hop: %s): %zi edges: ",
             oshd.node_tree[i]->name,
             oshd.node_tree[i]->node_socket ? "direct" : "indirect",
@@ -303,18 +301,18 @@ void node_tree_dump(void)
 static void node_tree_update_next_hops(void)
 {
     logger_debug(DBG_NODETREE, "Updating next hops");
-    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
+
+    // We will never have to update the next hop or the edges or our local node,
+    // so we skip by starting with the second element in the tree, because the
+    // first will always be our local node
+    for (size_t i = 1; i < oshd.node_tree_count; ++i) {
         oshd.node_tree[i]->next_hop = node_id_find_next_hop(oshd.node_tree[i]);
 
         /*
            If we have no route for this destination then we clear its edges
            If we don't we go out of sync
-
-           The local node will never have a route because it's local, so we
-           never need to clear its edges
         */
-        if (   !oshd.node_tree[i]->next_hop
-            && !oshd.node_tree[i]->local_node)
+        if (!oshd.node_tree[i]->next_hop)
         {
             logger_debug(DBG_NODETREE, "Clearing edges from orphan node %s",
                 oshd.node_tree[i]->name);
@@ -503,9 +501,11 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
 bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
     uint8_t *payload, uint16_t payload_size)
 {
-    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
-        if (   !oshd.node_tree[i]->local_node
-            &&  oshd.node_tree[i]->next_hop
+    // We will never broadcast a packet to the local node, so skip it by
+    // starting with the second element, the first one will always be our local
+    // node
+    for (size_t i = 1; i < oshd.node_tree_count; ++i) {
+        if (    oshd.node_tree[i]->next_hop
             &&  oshd.node_tree[i]->next_hop != exclude)
         {
             logger_debug(DBG_SOCKETS,
@@ -611,12 +611,12 @@ bool node_queue_edge_exg(node_t *node)
              to minimize memory reallocation latency
        TODO: We can also trim repeating edges
     */
-    logger_debug(DBG_NODETREE, "node_queue_edge_exg: Creating the edge map");
-    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
-        // Skip the local node because it is useless
-        if (oshd.node_tree[i]->local_node)
-            continue;
 
+    logger_debug(DBG_NODETREE, "node_queue_edge_exg: Creating the edge map");
+
+    // We skip the local node because it is useless, by starting with the
+    // second element, because the first one will always be our local node
+    for (size_t i = 1; i < oshd.node_tree_count; ++i) {
         // Direct edge
         if (oshd.node_tree[i]->node_socket) {
             logger_debug(DBG_NODETREE, "    Direct  : %s <=> %s",
