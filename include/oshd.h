@@ -32,6 +32,7 @@ typedef struct oshd {
     // Array of the node's sockets, all direct connections
     node_t **nodes;
     size_t nodes_count;
+    bool nodes_updated;
 
     // Array of all nodes on the network (ID)
     node_id_t **node_tree;
@@ -56,11 +57,7 @@ typedef struct oshd {
 
 int set_nonblocking(int fd);
 
-void pfd_resize(void);
-void pfd_update(void);
-void node_add(node_t *node);
-void node_remove(node_t *node);
-
+void oshd_stop(void);
 bool oshd_init(void);
 void oshd_free(void);
 bool oshd_process_packet(node_t *node);

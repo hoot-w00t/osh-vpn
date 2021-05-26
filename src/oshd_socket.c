@@ -2,6 +2,7 @@
 #include "oshd_device.h"
 #include "oshd_route.h"
 #include "node.h"
+#include "events.h"
 #include "netpacket.h"
 #include "tcp.h"
 #include "logger.h"
@@ -63,7 +64,7 @@ bool oshd_accept(void)
     node->connected = true;
 
     logger(LOG_INFO, "Accepted connection from %s", node->addrw);
-    node_add(node);
+    event_queue_node_add(node);
     return true;
 }
 
@@ -96,7 +97,7 @@ bool oshd_connect_queue(const char *address, const uint16_t port, time_t delay)
     // Set all the socket options
     oshd_setsockopts(client_fd);
 
-    node_add(node);
+    event_queue_node_add(node);
 
     logger(LOG_INFO, "Trying to connect to %s...", node->addrw);
     return true;
@@ -114,7 +115,7 @@ bool oshd_connect_async(node_t *node)
         if (errno != EINPROGRESS && errno != EALREADY) {
             // Otherwise something is wrong with the socket
             logger(LOG_ERR, "connect: %s: %s", node->addrw, strerror(errno));
-            node_remove(node);
+            event_queue_node_remove(node);
             return false;
         }
     } else {
@@ -149,7 +150,7 @@ bool oshd_connect(const char *address, const uint16_t port, time_t delay)
     node_reconnect_to(node, address, port, delay);
     node->connected = true;
     oshd_setsockopts(client_fd);
-    node_add(node);
+    event_queue_node_add(node);
     return node_queue_hello(node);
 }
 
@@ -163,7 +164,7 @@ bool node_send_queued(node_t *node)
     if (node->io.sendq_packet_size > OSHPACKET_MAXSIZE) {
         logger(LOG_ERR, "%s: Invalid packet size (send, %u bytes)",
             node->addrw, node->io.sendq_packet_size);
-        node_remove(node);
+        event_queue_node_remove(node);
         return false;
     }
 
@@ -178,6 +179,14 @@ bool node_send_queued(node_t *node)
             if ((node->io.sendq_ptr = netbuffer_next(node->io.sendq))) {
                 // If we do have another packet in queue, retrieve its size
                 node->io.sendq_packet_size = OSHPACKET_HDR_SIZE + ntohs(((oshpacket_hdr_t *) node->io.sendq_ptr)->payload_size);
+            } else {
+                // The send queue is empty
+                // If we should disconnect, do it
+                if (node->finish_and_disconnect) {
+                    logger(LOG_INFO, "Gracefully disconnecting %s", node->addrw);
+                    event_queue_node_remove(node);
+                    return false;
+                }
             }
         } else {
             // We're not done sending this packet, shift pointer to the remaining data
@@ -186,7 +195,7 @@ bool node_send_queued(node_t *node)
     } else if (sent_size < 0) {
         // There was a send() error
         logger(LOG_ERR, "%s: send: %s", node->addrw, strerror(errno));
-        node_remove(node);
+        event_queue_node_remove(node);
         return false;
     }
     return true;
@@ -212,7 +221,7 @@ bool node_recv_queued(node_t *node)
                 node->io.recv_packet_size = OSHPACKET_HDR_SIZE + pkt->payload_size;
                 if (node->io.recv_packet_size <= OSHPACKET_HDR_SIZE || node->io.recv_packet_size > OSHPACKET_MAXSIZE) {
                     logger(LOG_ERR, "%s: Invalid packet size (recv, %u bytes)", node->addrw, node->io.recv_packet_size);
-                    node_remove(node);
+                    event_queue_node_remove(node);
                     return false;
                 }
                 node->io.recvd_hdr = true;
@@ -221,7 +230,7 @@ bool node_recv_queued(node_t *node)
             if (!oshd_process_packet(node)) {
                 // There was an error while processing the packet, we drop the
                 // connection
-                node_remove(node);
+                event_queue_node_remove(node);
                 return false;
             }
 
@@ -232,7 +241,7 @@ bool node_recv_queued(node_t *node)
         }
     } else if (recvd_size < 0) {
         logger(LOG_ERR, "%s: recv: %s", node->addrw, strerror(errno));
-        node_remove(node);
+        event_queue_node_remove(node);
         return false;
     }
     return true;
@@ -332,6 +341,11 @@ static bool oshd_process_unauthenticated(node_t *node, oshpacket_hdr_t *pkt,
 
             return true;
         }
+
+        case GOODBYE:
+            logger(LOG_INFO, "%s: Gracefully disconnecting", node->addrw);
+            return false;
+
         default:
             logger(LOG_ERR, "%s: Received %s packet but the node is not authenticated",
                 node->addrw, oshpacket_type_name(pkt->type));
@@ -348,6 +362,11 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
         case HELLO:
             logger(LOG_ERR, "%s: %s: Already authenticated but received HELLO",
                 node->addrw, node->id->name);
+            return false;
+
+        case GOODBYE:
+            logger(LOG_INFO, "%s: %s: Gracefully disconnecting", node->addrw,
+                node->id->name);
             return false;
 
         case PING: return node_queue_pong(node);

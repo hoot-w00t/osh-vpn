@@ -15,7 +15,7 @@ static void tv_delay(struct timeval *tv, time_t delay)
 }
 
 // Return an allocated event_t
-static event_t *event_create(event_handler_t handler, event_handler_t freedata,
+static event_t *event_create(event_handler_t handler, event_freedata_t freedata,
  void *data, const struct timeval *trigger)
 {
     event_t *event = xzalloc(sizeof(event_t));
@@ -31,7 +31,7 @@ static event_t *event_create(event_handler_t handler, event_handler_t freedata,
 static void event_free(event_t *event)
 {
     if (event->freedata)
-        event->freedata(event->data);
+        event->freedata(event->data, event->handled);
     free(event);
 }
 
@@ -84,6 +84,7 @@ void event_process_queued(void)
 
         // Handle the current event
         event->handler(event->data);
+        event->handled = true;
 
         event_free(event);
     }
@@ -113,7 +114,8 @@ typedef struct connect_event_data {
     time_t delay;
 } connect_event_data_t;
 
-static void connect_event_freedata(void *data)
+static void connect_event_freedata(void *data,
+    __attribute__((unused)) bool handled)
 {
     connect_event_data_t *e_data = (connect_event_data_t *) data;
 
@@ -161,4 +163,79 @@ void event_queue_periodic_ping(void)
     tv_delay(&trigger, 30);
     event_queue(event_create(periodic_ping_event_handler, NULL,
         NULL, &trigger));
+}
+
+
+// Queue node add event
+static void node_add_event_freedata(void *data, bool handled)
+{
+    if (!handled) {
+        // If the node wasn't added to the list, we have to destroy it
+        // Otherwise it will be lost in memory
+        node_destroy((node_t *) data);
+    }
+}
+
+static void node_add_event_handler(void *data)
+{
+    node_t *node = (node_t *) data;
+
+    oshd.nodes = xrealloc(oshd.nodes, sizeof(node_t *) * (oshd.nodes_count + 1));
+    oshd.nodes[oshd.nodes_count] = node;
+    oshd.nodes_count += 1;
+    oshd.nodes_updated = true;
+}
+
+void event_queue_node_add(node_t *node)
+{
+    struct timeval trigger;
+
+    // Always trigger when processing the event queue
+    memset(&trigger, 0, sizeof(trigger));
+    event_queue(event_create(node_add_event_handler, node_add_event_freedata,
+        node, &trigger));
+}
+
+
+// Queue node remove event
+static void node_remove_event_handler(void *data)
+{
+    node_t *node = (node_t *) data;
+    size_t i;
+
+    for (i = 0; i < oshd.nodes_count && oshd.nodes[i] != node; ++i);
+
+    // If the node doesn't exist in the list, stop here
+    // It was probably already freed elsewhere
+    if (i >= oshd.nodes_count)
+        return;
+
+    node_destroy(node);
+    for (; i + 1 < oshd.nodes_count; ++i)
+        oshd.nodes[i] = oshd.nodes[i + 1];
+    oshd.nodes_count -= 1;
+    if (oshd.nodes_count) {
+        oshd.nodes = xrealloc(oshd.nodes, sizeof(node_t *) * (oshd.nodes_count));
+    } else {
+        free(oshd.nodes);
+        oshd.nodes = NULL;
+    }
+    oshd.nodes_updated = true;
+}
+
+static void node_remove_event_freedata(void *data, bool handled)
+{
+    if (!handled) {
+        node_add_event_handler(data);
+    }
+}
+
+void event_queue_node_remove(node_t *node)
+{
+    struct timeval trigger;
+
+    // Always trigger when processing the event queue
+    memset(&trigger, 0, sizeof(trigger));
+    event_queue(event_create(node_remove_event_handler,
+        node_remove_event_freedata, node, &trigger));
 }

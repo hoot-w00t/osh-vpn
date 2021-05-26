@@ -532,6 +532,15 @@ bool node_queue_hello(node_t *node)
         (uint8_t *) oshd.name, strlen(oshd.name));
 }
 
+// Queue GOODBYE request
+bool node_queue_goodbye(node_t *node)
+{
+    uint8_t buf = 0;
+
+    node->finish_and_disconnect = true;
+    return node_queue_packet(node, node->id->name, GOODBYE, &buf, sizeof(buf));
+}
+
 // Queue PING request
 bool node_queue_ping(node_t *node)
 {

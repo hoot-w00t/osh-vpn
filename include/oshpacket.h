@@ -18,6 +18,7 @@
 
 typedef enum oshpacket_type {
     HELLO = 0,
+    GOODBYE,
     PING,
     PONG,
     DATA,

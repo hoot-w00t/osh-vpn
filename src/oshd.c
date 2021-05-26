@@ -36,14 +36,14 @@ int set_nonblocking(int fd)
 }
 
 // Realloc pfd to hold all file descriptors
-void pfd_resize(void)
+static void pfd_resize(void)
 {
     pfd_count = pfd_off + oshd.nodes_count;
     pfd = xrealloc(pfd, sizeof(struct pollfd) * pfd_count);
 }
 
 // Update TUN/TAP, server and nodes POLLIN/POLLOUT events
-void pfd_update(void)
+static void pfd_update(void)
 {
     for (size_t i = 0; i < oshd.nodes_count; ++i) {
         pfd[i + pfd_off].fd = oshd.nodes[i]->fd;
@@ -55,43 +55,12 @@ void pfd_update(void)
     }
 }
 
-// Add a node
-void node_add(node_t *node)
-{
-    oshd.nodes = xrealloc(oshd.nodes, sizeof(node_t *) * (oshd.nodes_count + 1));
-    oshd.nodes[oshd.nodes_count] = node;
-    oshd.nodes_count += 1;
-    pfd_resize();
-    pfd_update();
-}
-
-// Remove a node and update pfd
-void node_remove(node_t *node)
-{
-    size_t i;
-
-    for (i = 0; i < oshd.nodes_count && oshd.nodes[i] != node; ++i);
-    node_destroy(node);
-    for (; i + 1 < oshd.nodes_count; ++i) {
-        oshd.nodes[i] = oshd.nodes[i + 1];
-    }
-    oshd.nodes_count -= 1;
-    if (oshd.nodes_count) {
-        oshd.nodes = xrealloc(oshd.nodes, sizeof(node_t *) * (oshd.nodes_count));
-    } else {
-        free(oshd.nodes);
-        oshd.nodes = NULL;
-    }
-    pfd_resize();
-    pfd_update();
-}
-
 // The first time we get a signal, set oshd_run to false
 // If oshd_run is already false, call exit()
-static void oshd_signal_exit(__attribute__((unused)) int sig)
+static void oshd_signal_exit(int sig)
 {
     if (oshd.run) {
-        oshd.run = false;
+        oshd_stop();
     } else {
         logger(LOG_CRIT, "Uncaught exit signal: %s", strsignal(sig));
         exit(EXIT_FAILURE);
@@ -102,6 +71,22 @@ static void oshd_signal_exit(__attribute__((unused)) int sig)
 static void oshd_signal_digraph(__attribute__((unused)) int sig)
 {
     node_tree_dump_digraph();
+}
+
+// Stop the daemon
+// Set the oshd.run variable to false
+// Then for all nodes: disable reconnection and queue GOODBYE packets
+void oshd_stop(void)
+{
+    oshd.run = false;
+    for (size_t i = 0; i < oshd.nodes_count; ++i) {
+        node_reconnect_disable(oshd.nodes[i]);
+        if (oshd.nodes[i]->connected) {
+            node_queue_goodbye(oshd.nodes[i]);
+        } else {
+            event_queue_node_remove(oshd.nodes[i]);
+        }
+    }
 }
 
 // Initialize oshd
@@ -160,6 +145,11 @@ void oshd_free(void)
     free(oshd.nodes);
     free(pfd);
 
+    // We have to reset those in case the event queue tries to remove nodes
+    // This is to safely cancel these events
+    oshd.nodes_count = 0;
+    oshd.nodes = NULL;
+
     for (size_t i = 0; i < oshd.remote_count; ++i)
         free(oshd.remote_addrs[i]);
     free(oshd.remote_addrs);
@@ -190,12 +180,19 @@ void oshd_loop(void)
     }
 
     // Osh actually starts
-    oshd.run = true;
     event_queue_periodic_ping();
 
-    while (oshd.run) {
+    // We continue running while oshd.run is true and there are still connected
+    // nodes
+    // When oshd.run is set to false all nodes should gracefully close and the
+    // nodes_count should get to 0 before the program can finally exit
+    while (oshd.run || oshd.nodes_count) {
         // Process queued events
         event_process_queued();
+        if (oshd.nodes_updated) {
+            oshd.nodes_updated = false;
+            pfd_resize();
+        }
 
         // Update our polling structure
         pfd_update();
@@ -210,39 +207,34 @@ void oshd_loop(void)
                 continue;
 
             logger(LOG_CRIT, "poll: %s", strerror(errno));
-            oshd.run = false;
-            break;
+            oshd_stop();
+            return;
         }
 
         // We then iterate over all our file descriptors to handle the events
         for (size_t i = 0; i < pfd_count; ++i) {
             if (pfd[i].fd == oshd.tuntap_fd) {
-                if (pfd[i].revents & POLLIN) {
+                if ((pfd[i].revents & POLLIN) && oshd.run) {
                     // Data is available on the TUN/TAP device
                     oshd_read_tuntap_pkt();
-                    break;
                 }
             } else if (pfd[i].fd == oshd.server_fd) {
-                if (pfd[i].revents & POLLIN) {
+                if ((pfd[i].revents & POLLIN) && oshd.run) {
                     // The server is ready to accept an incoming connection
                     oshd_accept();
-                    break;
                 }
             } else if (!oshd.nodes[i - pfd_off]->connected) {
                 // If a node is not connected yet, we check it to see if the
                 // socket has finished connecting
-                if (!oshd_connect_async(oshd.nodes[i - pfd_off]))
-                    break;
+                oshd_connect_async(oshd.nodes[i - pfd_off]);
             } else {
                 if (pfd[i].revents & POLLIN) {
                     // A node is ready to receive data
-                    if (!node_recv_queued(oshd.nodes[i - pfd_off]))
-                        break;
+                    node_recv_queued(oshd.nodes[i - pfd_off]);
                 }
                 if (pfd[i].revents & POLLOUT) {
                     // A node is ready to send queued data
-                    if (!node_send_queued(oshd.nodes[i - pfd_off]))
-                        break;
+                    node_send_queued(oshd.nodes[i - pfd_off]);
                 }
             }
         }

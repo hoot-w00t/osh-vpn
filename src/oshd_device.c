@@ -19,7 +19,7 @@ void oshd_read_tuntap_pkt(void)
 
     if ((pkt_size = read(oshd.tuntap_fd, pkt, sizeof(pkt))) <= 0) {
         logger(LOG_CRIT, "%s: read(): %s", oshd.tuntap_dev, strerror(errno));
-        oshd.run = false;
+        oshd_stop();
         return;
     }
     if (!netpacket_from_data(&pkt_hdr, pkt, oshd.is_tap)) {
@@ -65,7 +65,7 @@ bool oshd_write_tuntap_pkt(uint8_t *data, uint16_t data_len)
         }
 
         // TODO: Only exit the program if we can no longer read/write to the TUN/TAP device
-        oshd.run = false;
+        oshd_stop();
         return false;
     }
     return true;

@@ -70,6 +70,10 @@ struct node {
                         // But it will be NULL before the node has successfully
                         // authenticated
 
+    // If this is true disconnect and remove the node after the send queue is
+    // empty. Used for GOODBYE packets
+    bool finish_and_disconnect;
+
     // Remote "address:port" string
     char addrw[128];
 
@@ -101,6 +105,7 @@ node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port);
 void node_reconnect_delay(node_t *node, time_t delay);
 void node_reconnect_to(node_t *node, const char *addr, uint16_t port,
     time_t delay);
+#define node_reconnect_disable(node) node_reconnect_to((node), NULL, 0, 0)
 bool node_valid_name(const char *name);
 
 bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
@@ -110,6 +115,7 @@ bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
     uint8_t *payload, uint16_t payload_size);
 
 bool node_queue_hello(node_t *node);
+bool node_queue_goodbye(node_t *node);
 bool node_queue_ping(node_t *node);
 bool node_queue_pong(node_t *node);
 bool node_queue_edge(node_t *node, oshpacket_type_t type,

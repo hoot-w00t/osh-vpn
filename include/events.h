@@ -5,16 +5,18 @@
 #include <sys/time.h>
 
 typedef void (*event_handler_t)(void *);
+typedef void (*event_freedata_t)(void *, bool);
 typedef struct event event_t;
 
 struct event {
-    // Function called when the event triggers
+    // Function called when the event triggers, handled is set to true after
     event_handler_t handler;
+    bool handled;
 
     // Function called after the handler is executed or when the event is
     // canceled, this is to free allocated resources in *data (including the
     // *data pointer itself)
-    event_handler_t freedata;
+    event_freedata_t freedata;
 
     // Pointer to some data passed to the handler
     // If this points to dynamically allocated memory it must be freed by the
@@ -34,5 +36,7 @@ void event_cancel_queue(void);
 void event_queue_connect(const char *addr, uint16_t port, time_t delay,
     time_t event_delay);
 void event_queue_periodic_ping(void);
+void event_queue_node_add(node_t *node);
+void event_queue_node_remove(node_t *node);
 
 #endif
