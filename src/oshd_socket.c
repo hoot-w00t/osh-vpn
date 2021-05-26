@@ -384,8 +384,9 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
             if (    pkt->payload_size < (NODE_NAME_SIZE * 2)
                 || (pkt->payload_size % (NODE_NAME_SIZE * 2)) != 0)
             {
-                logger(LOG_ERR, "%s: Invalid %s size: %u bytes", node->addrw,
-                    oshpacket_type_name(pkt->type), pkt->payload_size);
+                logger(LOG_ERR, "%s: %s: Invalid %s size: %u bytes",
+                    node->addrw, node->id->name, oshpacket_type_name(pkt->type),
+                    pkt->payload_size);
                 return false;
             }
 
@@ -419,8 +420,8 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
             if (    pkt->payload_size < entry_size
                 || (pkt->payload_size % entry_size) != 0)
             {
-                logger(LOG_ERR, "%s: Invalid ADD_ROUTE size: %u bytes",
-                    node->addrw, pkt->payload_size);
+                logger(LOG_ERR, "%s: %s: Invalid ADD_ROUTE size: %u bytes",
+                    node->addrw, node->id->name, pkt->payload_size);
                 return false;
             }
 
@@ -430,8 +431,8 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
             for (size_t i = 0; i < entries; ++i) {
                 addr.type = payload[(i * entry_size)];
                 if (addr.type > IP6) {
-                    logger(LOG_ERR, "%s: Invalid ADD_ROUTE address type",
-                        node->addrw);
+                    logger(LOG_ERR, "%s: %s: Invalid ADD_ROUTE address type",
+                        node->addrw, node->id->name);
                     return false;
                 }
                 memcpy(addr.data, &payload[(i * entry_size) + 1], 16);
@@ -449,7 +450,8 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
             char netpkt_dest[INET6_ADDRSTRLEN];
 
             if (!netpacket_from_data(&netpkt, payload, oshd.is_tap)) {
-                logger(LOG_ERR, "%s: Failed to decode received tunnel packet", node->addrw);
+                logger(LOG_ERR, "%s: %s: Failed to decode received tunnel packet",
+                    node->addrw, node->id->name);
                 return false;
             }
 
