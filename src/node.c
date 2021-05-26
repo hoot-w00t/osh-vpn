@@ -61,7 +61,8 @@ static void node_id_add_edge_internal(node_id_t *nid, node_id_t *edge)
     ssize_t i = node_id_find_edge(nid, edge);
 
     if (i < 0) {
-        nid->edges = xrealloc(nid->edges, sizeof(node_id_t *) * (nid->edges_count + 1));
+        nid->edges = xrealloc(nid->edges,
+            sizeof(node_id_t *) * (nid->edges_count + 1));
         i = nid->edges_count;
         nid->edges_count += 1;
     }
@@ -72,19 +73,14 @@ static void node_id_add_edge_internal(node_id_t *nid, node_id_t *edge)
 static void node_id_del_edge_internal(node_id_t *nid, node_id_t *edge)
 {
     ssize_t i = node_id_find_edge(nid, edge);
-    size_t new_size;
 
     if (i >= 0) {
-        if (i + 1 < nid->edges_count)
-            memmove(&nid->edges[i], &nid->edges[i + 1], sizeof(node_id_t *) * (nid->edges_count - i - 1));
-        new_size = sizeof(node_id_t *) * (nid->edges_count - 1);
-        if (new_size) {
-            nid->edges = xrealloc(nid->edges, new_size);
-        } else {
-            free(nid->edges);
-            nid->edges = NULL;
+        if (i + 1 < nid->edges_count) {
+            memmove(&nid->edges[i], &nid->edges[i + 1],
+                sizeof(node_id_t *) * (nid->edges_count - i - 1));
         }
         nid->edges_count -= 1;
+        nid->edges = xrealloc(nid->edges, sizeof(node_id_t *) * nid->edges_count);
     }
 }
 

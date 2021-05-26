@@ -76,7 +76,6 @@ void netroute_free(netroute_t *route)
 void netroute_del_orphan_routes(void)
 {
     bool changed = false;
-    size_t new_size;
     size_t i = 0;
 
     logger(LOG_DEBUG, "Deleting orphan routes");
@@ -92,19 +91,9 @@ void netroute_del_orphan_routes(void)
                 memmove(&oshd.routes[i], &oshd.routes[i + 1],
                     sizeof(netroute_t *) * (oshd.routes_count - i - 1));
             }
-
-            // Calculate the new size of the array
-            new_size = sizeof(netroute_t *) * (oshd.routes_count - 1);
-
-            // Because xrealloc() will never return NULL we have to handle the
-            // case where there are 0 routes left
-            if (new_size) {
-                oshd.routes = xrealloc(oshd.routes, new_size);
-            } else {
-                free(oshd.routes);
-                oshd.routes = NULL;
-            }
             oshd.routes_count -= 1;
+            oshd.routes = xrealloc(oshd.routes,
+                sizeof(netroute_t *) * oshd.routes_count);
         } else {
             // We only increment our iterator if the route wasn't removed,
             // because if we removed one the next will be shifted at the same

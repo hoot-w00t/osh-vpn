@@ -30,12 +30,17 @@ void *xzalloc(size_t size)
 }
 
 // Re-size *ptr to size bytes
+// If size is 0, frees *ptr and returns NULL
 // abort() if allocation fails
 void *xrealloc(void *ptr, size_t size)
 {
-    void *newptr = realloc(ptr, size);
+    void *newptr;
 
-    if (!newptr) {
+    if (size == 0) {
+        free(ptr);
+        return NULL;
+    }
+    if (!(newptr = realloc(ptr, size))) {
         fprintf(stderr, "xrealloc failed (%p, %zu bytes)\n", ptr, size);
         abort();
     }

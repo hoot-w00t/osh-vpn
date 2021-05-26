@@ -214,12 +214,7 @@ static void node_remove_event_handler(void *data)
     for (; i + 1 < oshd.nodes_count; ++i)
         oshd.nodes[i] = oshd.nodes[i + 1];
     oshd.nodes_count -= 1;
-    if (oshd.nodes_count) {
-        oshd.nodes = xrealloc(oshd.nodes, sizeof(node_t *) * (oshd.nodes_count));
-    } else {
-        free(oshd.nodes);
-        oshd.nodes = NULL;
-    }
+    oshd.nodes = xrealloc(oshd.nodes, sizeof(node_t *) * (oshd.nodes_count));
     oshd.nodes_updated = true;
 }
 
