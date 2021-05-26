@@ -297,10 +297,6 @@ static bool oshd_process_unauthenticated(node_t *node, oshpacket_hdr_t *pkt,
                     pkt->payload_size);
                 return false;
             }
-            if (!node->initiator) {
-                if (!node_queue_hello(node))
-                    return false;
-            }
 
             char name[NODE_NAME_SIZE + 1];
             memset(name, 0, sizeof(name));
@@ -315,9 +311,16 @@ static bool oshd_process_unauthenticated(node_t *node, oshpacket_hdr_t *pkt,
 
             if (id->node_socket) {
                 // Disconnect the current socket if node is already authenticated
-                logger(LOG_CRIT, "%s: Another socket is already authenticated as %s",
+                logger(LOG_ERR, "%s: Another socket is already authenticated as %s",
                     node->addrw, name);
-                return false;
+                return node_queue_goodbye(node);
+            }
+
+            // The remote node has a valid name, we do not know it already so we
+            // can reply with our own name and authenticate
+            if (!node->initiator) {
+                if (!node_queue_hello(node))
+                    return false;
             }
 
             node_id_t *me = node_id_add(oshd.name);
