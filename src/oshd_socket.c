@@ -309,6 +309,12 @@ static bool oshd_process_unauthenticated(node_t *node, oshpacket_hdr_t *pkt,
 
             node_id_t *id = node_id_add(name);
 
+            if (id->local_node) {
+                // Disconnect the current socket if node tries to authenticate
+                // as our local node
+                logger(LOG_ERR, "%s: Tried to authenticate as myself", node->addrw);
+                return node_queue_goodbye(node);
+            }
             if (id->node_socket) {
                 // Disconnect the current socket if node is already authenticated
                 logger(LOG_ERR, "%s: Another socket is already authenticated as %s",
