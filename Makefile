@@ -3,7 +3,8 @@ PKG_CONFIG	=	pkg-config
 
 CFLAGS		=	-Wall -Wextra -Wshadow -O2 -g -pipe
 CFLAGS		+=	-Iinclude -Iinclude/easyconf
-LDFLAGS		=
+CFLAGS		+=	$(shell $(PKG_CONFIG) --cflags openssl)
+LDFLAGS		=	$(shell $(PKG_CONFIG) --libs openssl)
 
 VERSION_GIT_H	=	include/version_git.h
 VERSION_GIT	=	$(strip $(shell cat $(VERSION_GIT_H) 2>/dev/null))
@@ -12,7 +13,8 @@ HEAD_COMMIT	=	$(strip $(shell git describe --always --tags --abbrev=10))
 BIN		=	oshd
 TEST_BIN	=	oshd_tests
 
-SRC		=	src/easyconf/easyconf.c		\
+SRC		=	src/crypto/pkey.c		\
+			src/easyconf/easyconf.c		\
 			src/easyconf/getline.c		\
 			src/easyconf/parameter.c	\
 			src/events.c			\
