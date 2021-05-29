@@ -348,15 +348,51 @@ static bool oshd_process_unauthenticated(node_t *node, oshpacket_hdr_t *pkt,
 
             node_id_t *me = node_id_add(oshd.name);
 
+            // Try to load the remote node's public key
+            logger_debug(DBG_AUTHENTICATION, "Loading the public key for %s",
+                id->name);
+            EVP_PKEY *remote_pubkey = oshd_open_key(id->name, false);
+
+            if (!remote_pubkey) {
+                // If we don't have a public key to verify the HELLO signature,
+                // we can't authenticate the node
+                logger(LOG_ERR, "%s: %s: Authentication failed: No public key",
+                    node->addrw, name);
+                return node_queue_goodbye(node);
+            }
+
+            // If the signature verification succeeds then the node is authenticated
+            logger_debug(DBG_AUTHENTICATION, "Verifying signature from %s (%s)",
+                node->addrw, id->name);
+            node->authenticated = pkey_verify(remote_pubkey,
+                (uint8_t *) payload_hello->node_name, NODE_NAME_SIZE,
+                payload_hello->sig, sizeof(payload_hello->sig));
+
+            // We don't need the remote node's public key anymore
+            pkey_free(remote_pubkey);
+
+            // If the node is not authenticated, the signature verification failed
+            // The remote node did not sign the data using the private key
+            // associated with the public key we have
+            if (!node->authenticated) {
+                logger(LOG_ERR, "%s: %s: Authentication failed: Signature verification failed",
+                    node->addrw, name);
+                return node_queue_goodbye(node);
+            }
+
+            // The remote node is now authenticated
+
             id->node_socket = node;
             node->id = id;
-            node->authenticated = true;
 
             node_id_add_edge(me, id);
             node_tree_update();
 
-            logger(LOG_INFO, "%s: Authenticated: %s", node->addrw, node->id->name);
-            logger(LOG_INFO, "%s: %s: Exchanging the local network map", node->addrw, node->id->name);
+            logger(LOG_INFO, "%s: %s: Authenticated successfully", node->addrw,
+                node->id->name);
+            logger(LOG_INFO, "%s: %s: Exchanging the local network map",
+                node->addrw, node->id->name);
+
             if (!node_queue_edge_exg(node))
                 return false;
             if (!node_queue_edge_broadcast(node, ADD_EDGE, oshd.name, name))

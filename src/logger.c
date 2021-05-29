@@ -13,7 +13,8 @@ static const char *debug_names[debug_what_size] = {
     "cmd",
     "conf",
     "sockets",
-    "events"
+    "events",
+    "authentication"
 };
 
 static const char *level_names[loglevel_size] = {

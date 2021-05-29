@@ -15,6 +15,10 @@
 #define NODE_NAME_SIZE (16)
 #endif
 
+#ifndef HELLO_SIG_SIZE
+// The Ed25519 keys' signature is 64 bytes in length
+#define HELLO_SIG_SIZE (64)
+#endif
 
 typedef enum oshpacket_type {
     HELLO = 0,
@@ -38,6 +42,7 @@ typedef struct __attribute__((__packed__)) oshpacket_hdr {
 
 typedef struct __attribute__((__packed__)) oshpacket_hello {
     char node_name[NODE_NAME_SIZE];
+    uint8_t sig[HELLO_SIG_SIZE];
 } oshpacket_hello_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_edge {

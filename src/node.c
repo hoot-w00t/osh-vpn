@@ -528,8 +528,31 @@ bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
 bool node_queue_hello(node_t *node)
 {
     oshpacket_hello_t payload;
+    uint8_t *sig;
+    size_t sig_size;
 
+    logger_debug(DBG_AUTHENTICATION, "Creating HELLO packet for %s", node->addrw);
     memcpy(payload.node_name, oshd.name, NODE_NAME_SIZE);
+
+    // Sign the HELLO payload (the node's name) using our private key
+    logger_debug(DBG_AUTHENTICATION, "Signing the node name");
+    if (!pkey_sign(oshd.privkey, (uint8_t *) payload.node_name,
+            sizeof(payload.node_name), &sig, &sig_size))
+    {
+        return false;
+    }
+
+    // Make sure that the signature size is the same as the HELLO packet expects
+    if (sig_size != sizeof(payload.sig)) {
+        free(sig);
+        logger(LOG_ERR, "node_queue_hello: Signature size is invalid (%zu bytes)",
+            sig_size);
+        return false;
+    }
+    memcpy(payload.sig, sig, sizeof(payload.sig));
+    free(sig);
+
+    logger_debug(DBG_AUTHENTICATION, "Queuing the HELLO packet for %s", node->addrw);
     return node_queue_packet(node, node->id->name, HELLO,
         (uint8_t *) &payload, sizeof(payload));
 }
