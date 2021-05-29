@@ -356,16 +356,12 @@ static bool oshd_process_unauthenticated(node_t *node, oshpacket_hdr_t *pkt,
             node_tree_update();
 
             logger(LOG_INFO, "%s: Authenticated: %s", node->addrw, node->id->name);
-            if (!node_queue_ping(node))
-                return false;
-
             logger(LOG_INFO, "%s: %s: Exchanging the local network map", node->addrw, node->id->name);
             if (!node_queue_edge_exg(node))
                 return false;
             if (!node_queue_edge_broadcast(node, ADD_EDGE, oshd.name, name))
                 return false;
-
-            return true;
+            return node_queue_ping(node);
         }
 
         case GOODBYE:
