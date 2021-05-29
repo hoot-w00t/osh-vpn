@@ -8,6 +8,152 @@
 #include <errno.h>
 #include <easyconf.h>
 
+typedef bool (*oshd_conf_handler_t)(ecp_t *);
+
+typedef enum oshd_conf_param_type {
+    VALUE_OPTIONAL = 0,
+    VALUE_NONE,
+    VALUE_REQUIRED
+} oshd_conf_param_type_t;
+
+typedef struct oshd_conf_param {
+    char *name;
+    oshd_conf_param_type_t type;
+    oshd_conf_handler_t handler;
+} oshd_conf_param_t;
+
+// Buffer to store configuration error messages from handlers
+static char oshd_conf_error[256];
+
+// NoServer
+static bool oshd_param_noserver(__attribute__((unused)) ecp_t *ecp)
+{
+    oshd.server_enabled = false;
+    return true;
+}
+
+// NoDevice
+static bool oshd_param_nodevice(__attribute__((unused)) ecp_t *ecp)
+{
+    oshd.tuntap_used = false;
+    return true;
+}
+
+// Name
+static bool oshd_param_name(ecp_t *ecp)
+{
+    if (!node_valid_name(ecp_value(ecp))) {
+        // TODO: Print the invalid character in the error
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "Invalid node name");
+        return false;
+    }
+    strncpy(oshd.name, ecp_value(ecp), NODE_NAME_SIZE);
+    return true;
+}
+
+// Port
+static bool oshd_param_port(ecp_t *ecp)
+{
+    oshd.server_port = (uint16_t) atoi(ecp_value(ecp));
+    if (oshd.server_port == 0) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "Invalid port: %s", ecp_value(ecp));
+        return false;
+    }
+    return true;
+}
+
+// Mode
+static bool oshd_param_mode(ecp_t *ecp)
+{
+    if (!strcmp(ecp_value(ecp), "tap")) {
+        oshd.is_tap = true;
+    } else if (!strcmp(ecp_value(ecp), "tun")) {
+        oshd.is_tap = false;
+    } else {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error), "Unknown mode");
+        return false;
+    }
+    return true;
+}
+
+// Device
+static bool oshd_param_device(ecp_t *ecp)
+{
+    memset(oshd.tuntap_dev, 0, sizeof(oshd.tuntap_dev));
+    strncpy(oshd.tuntap_dev, ecp_value(ecp), sizeof(oshd.tuntap_dev) - 1);
+    return true;
+}
+
+// DevUp
+static bool oshd_param_devup(ecp_t *ecp)
+{
+    oshd_cmd_set("DevUp", ecp_value(ecp));
+    return true;
+}
+
+// DevDown
+static bool oshd_param_devdown(ecp_t *ecp)
+{
+    oshd_cmd_set("DevDown", ecp_value(ecp));
+    return true;
+}
+
+// Remote
+static bool oshd_param_remote(ecp_t *ecp)
+{
+    char *addr = xstrdup(ecp_value(ecp));
+    char *port = addr;
+
+    // Skip the address to get to the next value (separated with whitespaces)
+    for (; *port && *port != ' ' && *port != '\t'; ++port);
+
+    // If there are still characters after the address, separate the address and
+    // port values
+    if (*port) *port++ = '\0';
+
+    // Go to the start of the second parameter, skipping whitespaces
+    for (; *port == ' ' || *port == '\t'; ++port);
+
+    // Append a new address and port to the remote lists
+    oshd.remote_addrs = xrealloc(oshd.remote_addrs,
+        sizeof(char *) * (oshd.remote_count + 1));
+    oshd.remote_ports = xrealloc(oshd.remote_ports,
+        sizeof(uint16_t) * (oshd.remote_count + 1));
+
+    // Set the address
+    oshd.remote_addrs[oshd.remote_count] = addr;
+
+    // Set the port
+    if ((*port)) {
+        oshd.remote_ports[oshd.remote_count] = (uint16_t) atoi(port);
+    } else {
+        oshd.remote_ports[oshd.remote_count] = OSHD_DEFAULT_PORT;
+    }
+
+    logger_debug(DBG_CONF, "Remote: %s:%u added",
+        oshd.remote_addrs[oshd.remote_count],
+        oshd.remote_ports[oshd.remote_count]);
+
+    oshd.remote_count += 1;
+    return true;
+}
+
+// Array of all configuration parameters and their handlers
+static oshd_conf_param_t oshd_conf_params[] = {
+    { .name = "NoServer", .type = VALUE_NONE    , &oshd_param_noserver},
+    { .name = "NoDevice", .type = VALUE_NONE    , &oshd_param_nodevice},
+    { .name = "Name"    , .type = VALUE_REQUIRED, &oshd_param_name},
+    { .name = "Port", .type = VALUE_REQUIRED, &oshd_param_port},
+    { .name = "Mode", .type = VALUE_REQUIRED, &oshd_param_mode},
+    { .name = "Device", .type = VALUE_REQUIRED, &oshd_param_device},
+    { .name = "DevUp", .type = VALUE_REQUIRED, &oshd_param_devup},
+    { .name = "DevDown", .type = VALUE_REQUIRED, &oshd_param_devdown},
+    { .name = "Remote", .type = VALUE_REQUIRED, &oshd_param_remote},
+    { NULL, 0, NULL }
+};
+
 // Initialize oshd_t global
 void oshd_init_conf(void)
 {
@@ -32,114 +178,56 @@ void oshd_init_conf(void)
 bool oshd_load_conf(const char *filename)
 {
     ec_t *conf;
-    ecp_t *p;
-    char err[256];
 
+    // Reset the oshd_conf_error buffer
+    memset(oshd_conf_error, 0, sizeof(oshd_conf_error));
+
+    // Load the configuration file
     if (!(conf = ec_load_from_file(filename))) {
         logger(LOG_ERR, "%s: %s", filename, strerror(errno));
         return false;
     }
 
-    // Load single parameters
+    // Iterate through each configuration parameter
+    ec_foreach(ecp, conf) {
+        bool found = false;
 
-    if (ec_find(conf, "NoServer"))
-        oshd.server_enabled = false;
+        // Find the corresponding handler for the parameter
+        for (size_t i = 0; oshd_conf_params[i].name; ++i) {
+            if (!strcmp(ecp_name(ecp), oshd_conf_params[i].name)) {
+                found = true;
+                if (oshd_conf_params[i].type == VALUE_NONE && ecp_value(ecp)) {
+                    snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+                        "%s does not take a value", oshd_conf_params[i].name);
+                    goto on_error;
+                } else if (oshd_conf_params[i].type == VALUE_REQUIRED && !ecp_value(ecp)) {
+                    snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+                        "%s requires a value", oshd_conf_params[i].name);
+                    goto on_error;
+                }
 
-    if (ec_find(conf, "NoDevice"))
-        oshd.tuntap_used = false;
-
-    if ((p = ec_find(conf, "Name")) && ecp_value(p)) {
-        if (!node_valid_name(ecp_value(p))) {
-            // TODO: Print the invalid character in the error
-            snprintf(err, sizeof(err), "Invalid node name");
-            goto on_error;
+                if (!(oshd_conf_params[i].handler(ecp)))
+                    goto on_error;
+                break;
+            }
         }
-        strncpy(oshd.name, ecp_value(p), NODE_NAME_SIZE);
-    } else {
-        snprintf(err, sizeof(err), "The node requires a name");
-        goto on_error;
-    }
 
-    if ((p = ec_find(conf, "Port")))
-        oshd.server_port = (uint16_t) atoi(ecp_value(p));
-
-    if ((p = ec_find(conf, "Mode"))) {
-        if (!ecp_value(p)) {
-            snprintf(err, sizeof(err), "Mode requires a value");
-            goto on_error;
-        }
-        if (!strcmp(ecp_value(p), "tap")) {
-            oshd.is_tap = true;
-        } else if (!strcmp(ecp_value(p), "tun")) {
-            oshd.is_tap = false;
-        } else {
-            snprintf(err, sizeof(err), "Unknown mode");
+        if (!found) {
+            snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+                "Invalid parameter: %s", ecp_name(ecp));
             goto on_error;
         }
     }
-
-    if ((p = ec_find(conf, "Device"))) {
-        memset(oshd.tuntap_dev, 0, sizeof(oshd.tuntap_dev));
-        if (ecp_value(p))
-            strncpy(oshd.tuntap_dev, ecp_value(p), sizeof(oshd.tuntap_dev) - 1);
-    }
-
-    if ((p = ec_find(conf, "DevUp"))) {
-        if (!ecp_value(p)) {
-            snprintf(err, sizeof(err), "DevUp requires a value");
-            goto on_error;
-        }
-        oshd_cmd_set("DevUp", ecp_value(p));
-    }
-
-    if ((p = ec_find(conf, "DevDown"))) {
-        if (!ecp_value(p)) {
-            snprintf(err, sizeof(err), "DevDown requires a value");
-            goto on_error;
-        }
-        oshd_cmd_set("DevDown", ecp_value(p));
-    }
-
-    // Load all remotes
-
-    ec_foreach(pr, conf) {
-        if (strcmp(ecp_name(pr), "Remote")) continue;
-        if (!ecp_value(pr)) {
-            snprintf(err, sizeof(err), "Remote requires a value");
-            goto on_error;
-        }
-
-        char *addr = xstrdup(ecp_value(pr));
-        char *port = addr;
-
-        for (; *port && *port != ' ' && *port != '\t'; ++port);
-        if (*port) *port++ = '\0';
-        for (; *port == ' ' || *port == '\t'; ++port);
-
-        oshd.remote_addrs = xrealloc(oshd.remote_addrs,
-            sizeof(char *) * (oshd.remote_count + 1));
-        oshd.remote_ports = xrealloc(oshd.remote_ports,
-            sizeof(uint16_t) * (oshd.remote_count + 1));
-
-        oshd.remote_addrs[oshd.remote_count] = addr;
-        if ((*port)) {
-            oshd.remote_ports[oshd.remote_count] = (uint16_t) atoi(port);
-        } else {
-            oshd.remote_ports[oshd.remote_count] = OSHD_DEFAULT_PORT;
-        }
-
-        logger_debug(DBG_CONF, "Remote: %s:%u added",
-            oshd.remote_addrs[oshd.remote_count],
-            oshd.remote_ports[oshd.remote_count]);
-
-        oshd.remote_count += 1;
-    }
-
     ec_destroy(conf);
+
+    if (strlen(oshd.name) == 0) {
+        logger(LOG_ERR, "The daemon must have a name");
+        return false;
+    }
     return true;
 
 on_error:
-    logger(LOG_ERR, "%s: %s", filename, err);
+    logger(LOG_ERR, "%s: %s", filename, oshd_conf_error);
     ec_destroy(conf);
     return false;
 }
