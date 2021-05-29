@@ -3,6 +3,7 @@
 
 #include "node.h"
 #include "oshd_route.h"
+#include "crypto/pkey.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -11,6 +12,13 @@
 typedef struct oshd {
     // Name of the local node
     char name[NODE_NAME_SIZE + 1];
+
+    // Keys directory to fetch all private and public keys from
+    char *keys_dir;
+
+    // The local node's private and public keys
+    EVP_PKEY *privkey;
+    EVP_PKEY *pubkey;
 
     // TUN/TAP device information
     bool tuntap_used;    // true if the device will be opened and used
@@ -54,6 +62,8 @@ typedef struct oshd {
     // When set to false the daemon will stop
     bool run;
 } oshd_t;
+
+EVP_PKEY *oshd_open_key(const char *name, bool private);
 
 int set_nonblocking(int fd);
 

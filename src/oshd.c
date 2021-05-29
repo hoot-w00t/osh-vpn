@@ -26,6 +26,23 @@ static struct pollfd *pfd = NULL;
 static size_t pfd_off = 0;
 static size_t pfd_count = 0;
 
+// Load a private or a public key from the keys directory
+// name should be a node's name
+// Returns NULL on error
+EVP_PKEY *oshd_open_key(const char *name, bool private)
+{
+    const size_t filename_len = strlen(oshd.keys_dir) + strlen(name) + 6;
+    char *filename = xalloc(filename_len);
+    EVP_PKEY *pkey;
+
+    snprintf(filename, filename_len, "%s/%s.%s", oshd.keys_dir, name,
+        private ? "key" : "pub");
+    pkey = private ? pkey_load_privkey_pem(filename)
+                   : pkey_load_pubkey_pem(filename);
+    free(filename);
+    return pkey;
+}
+
 // Set file descriptor flag O_NONBLOCK
 int set_nonblocking(int fd)
 {
@@ -129,6 +146,10 @@ bool oshd_init(void)
     // We are the one and only local node
     me->local_node = true;
 
+    if (!(oshd.privkey = oshd_open_key(oshd.name, true)))
+        return false;
+    if (!(oshd.pubkey = oshd_open_key(oshd.name, false)))
+        return false;
 
     signal(SIGINT, oshd_signal_exit);
     signal(SIGTERM, oshd_signal_exit);
@@ -175,6 +196,10 @@ void oshd_free(void)
     free(oshd.routes);
 
     event_cancel_queue();
+
+    free(oshd.keys_dir);
+    pkey_free(oshd.privkey);
+    pkey_free(oshd.pubkey);
 }
 
 void oshd_loop(void)

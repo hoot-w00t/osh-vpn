@@ -52,6 +52,14 @@ static bool oshd_param_name(ecp_t *ecp)
     return true;
 }
 
+// KeysDir
+static bool oshd_param_keysdir(ecp_t *ecp)
+{
+    free(oshd.keys_dir);
+    oshd.keys_dir = xstrdup(ecp_value(ecp));
+    return true;
+}
+
 // Port
 static bool oshd_param_port(ecp_t *ecp)
 {
@@ -169,6 +177,7 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "NoServer", .type = VALUE_NONE, &oshd_param_noserver},
     { .name = "NoDevice", .type = VALUE_NONE, &oshd_param_nodevice},
     { .name = "Name", .type = VALUE_REQUIRED, &oshd_param_name},
+    { .name = "KeysDir", .type = VALUE_REQUIRED, &oshd_param_keysdir},
     { .name = "Port", .type = VALUE_REQUIRED, &oshd_param_port},
     { .name = "Mode", .type = VALUE_REQUIRED, &oshd_param_mode},
     { .name = "Device", .type = VALUE_REQUIRED, &oshd_param_device},
@@ -248,6 +257,10 @@ bool oshd_load_conf(const char *filename)
 
     if (strlen(oshd.name) == 0) {
         logger(LOG_ERR, "The daemon must have a name");
+        return false;
+    }
+    if (!oshd.keys_dir) {
+        logger(LOG_ERR, "The daemon must have a keys directory");
         return false;
     }
     if (oshd.reconnect_delay_max < oshd.reconnect_delay_min) {
