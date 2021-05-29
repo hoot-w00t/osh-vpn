@@ -527,8 +527,11 @@ bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
 // Queue HELLO request
 bool node_queue_hello(node_t *node)
 {
+    oshpacket_hello_t payload;
+
+    memcpy(payload.node_name, oshd.name, NODE_NAME_SIZE);
     return node_queue_packet(node, node->id->name, HELLO,
-        (uint8_t *) oshd.name, strlen(oshd.name));
+        (uint8_t *) &payload, sizeof(payload));
 }
 
 // Queue GOODBYE request
@@ -561,15 +564,15 @@ bool node_queue_pong(node_t *node)
 bool node_queue_edge(node_t *node, oshpacket_type_t type,
     const char *src, const char *dest)
 {
-    char buf[(NODE_NAME_SIZE * 2)];
+    oshpacket_edge_t buf;
 
     switch (type) {
         case ADD_EDGE:
         case DEL_EDGE:
-            memcpy(buf,                  src,  NODE_NAME_SIZE);
-            memcpy(buf + NODE_NAME_SIZE, dest, NODE_NAME_SIZE);
+            memcpy(buf.src_node, src,  NODE_NAME_SIZE);
+            memcpy(buf.dest_node, dest, NODE_NAME_SIZE);
             return node_queue_packet(node, node->id->name, type,
-                        (uint8_t *) buf, sizeof(buf));
+                        (uint8_t *) &buf, sizeof(oshpacket_edge_t));
 
         default:
             logger(LOG_ERR, "node_queue_edge: Invalid type %s",
@@ -582,15 +585,15 @@ bool node_queue_edge(node_t *node, oshpacket_type_t type,
 bool node_queue_edge_broadcast(node_t *exclude, oshpacket_type_t type,
     const char *src, const char *dest)
 {
-    char buf[(NODE_NAME_SIZE * 2)];
+    oshpacket_edge_t buf;
 
     switch (type) {
         case ADD_EDGE:
         case DEL_EDGE:
-            memcpy(buf,                  src,  NODE_NAME_SIZE);
-            memcpy(buf + NODE_NAME_SIZE, dest, NODE_NAME_SIZE);
+            memcpy(buf.src_node, src,  NODE_NAME_SIZE);
+            memcpy(buf.dest_node, dest, NODE_NAME_SIZE);
             return node_queue_packet_broadcast(exclude, type,
-                    (uint8_t *) buf, sizeof(buf));
+                    (uint8_t *) &buf, sizeof(oshpacket_edge_t));
 
         default:
             logger(LOG_ERR, "node_queue_edge: Invalid type %s",
@@ -602,9 +605,8 @@ bool node_queue_edge_broadcast(node_t *exclude, oshpacket_type_t type,
 // Queue EDGE_EXG packets for *node with the whole network map
 bool node_queue_edge_exg(node_t *node)
 {
-    const size_t entry_size = NODE_NAME_SIZE * 2;
     size_t buf_count = 0;
-    char *buf = NULL;
+    oshpacket_edge_t *buf = NULL;
 
     /*
        TODO: We can also optimize this more by creating/updating this buffer
@@ -625,10 +627,10 @@ bool node_queue_edge_exg(node_t *node)
                 oshd.name, oshd.node_tree[i]->name);
 
             // Allocate memory to store the new edge and copy the edge names
-            buf = xrealloc(buf, entry_size * (buf_count + 1));
-            memcpy(buf + (buf_count * entry_size), oshd.name, NODE_NAME_SIZE);
-            memcpy(buf + (buf_count * entry_size) + NODE_NAME_SIZE,
-                oshd.node_tree[i]->name, NODE_NAME_SIZE);
+            buf = xrealloc(buf, sizeof(oshpacket_edge_t) * (buf_count + 1));
+            memcpy(buf[buf_count].src_node, oshd.name, NODE_NAME_SIZE);
+            memcpy(buf[buf_count].dest_node, oshd.node_tree[i]->name,
+                NODE_NAME_SIZE);
             ++buf_count;
         }
 
@@ -638,24 +640,24 @@ bool node_queue_edge_exg(node_t *node)
                 oshd.node_tree[i]->name, oshd.node_tree[i]->edges[j]->name);
 
             // Allocate memory to store the new edge and copy the edge names
-            buf = xrealloc(buf, entry_size * (buf_count + 1));
-            memcpy(buf + (buf_count * entry_size),
-                oshd.node_tree[i]->name, NODE_NAME_SIZE);
-            memcpy(buf + (buf_count * entry_size) + NODE_NAME_SIZE,
-                oshd.node_tree[i]->edges[j]->name, NODE_NAME_SIZE);
+            buf = xrealloc(buf, sizeof(oshpacket_edge_t) * (buf_count + 1));
+            memcpy(buf[buf_count].src_node, oshd.node_tree[i]->name,
+                NODE_NAME_SIZE);
+            memcpy(buf[buf_count].dest_node, oshd.node_tree[i]->edges[j]->name,
+                NODE_NAME_SIZE);
             ++buf_count;
         }
     }
 
     // Calculate the maximum number of edges we can send in one packet
-    size_t max_entries = OSHPACKET_PAYLOAD_MAXSIZE / entry_size;
+    size_t max_entries = OSHPACKET_PAYLOAD_MAXSIZE / sizeof(oshpacket_edge_t);
     size_t remaining_entries = buf_count;
-    char *curr_buf = buf;
+    uint8_t *curr_buf = (uint8_t *) buf;
     bool success = true;
 
     logger_debug(DBG_NODETREE,
         "    Queuing EDGE_EXG packets for %zu edges (%zu bytes)",
-        buf_count, entry_size * buf_count);
+        buf_count, sizeof(oshpacket_edge_t) * buf_count);
 
     // Queue all edges in the buffer
     while (remaining_entries > 0) {
@@ -669,10 +671,10 @@ bool node_queue_edge_exg(node_t *node)
             entries = remaining_entries;
 
         // Calculate the payload size
-        size = entries * entry_size;
+        size = entries * sizeof(oshpacket_edge_t);
 
         // Queue the packet
-        if (node_queue_packet(node, node->id->name, EDGE_EXG, (uint8_t *) curr_buf, size)) {
+        if (node_queue_packet(node, node->id->name, EDGE_EXG, curr_buf, size)) {
             logger_debug(DBG_NODETREE,
                 "    Queued EDGE_EXG with %zu edges (%zu bytes)", entries, size);
         } else {
@@ -696,19 +698,18 @@ bool node_queue_add_route_broadcast(node_t *exclude, const netaddr_t *addrs,
     if (count == 0)
         return true;
 
-    const size_t entry_size = 17;
-    size_t buf_size = entry_size * count;
-    uint8_t *buf = xalloc(buf_size);
+    size_t buf_size = sizeof(oshpacket_route_t) * count;
+    oshpacket_route_t *buf = xalloc(buf_size);
 
     // Format the addresses's type and data into buf
     for (size_t i = 0; i < count; ++i) {
-        buf[(i * entry_size)] = addrs[i].type;
-        memcpy(&buf[(i * entry_size) + 1], addrs[i].data, 16);
+        buf[i].addr_type = addrs[i].type;
+        memcpy(buf[i].addr_data, addrs[i].data, 16);
     }
 
-    size_t max_entries = OSHPACKET_PAYLOAD_MAXSIZE / entry_size;
+    size_t max_entries = OSHPACKET_PAYLOAD_MAXSIZE / sizeof(oshpacket_route_t);
     size_t remaining_entries = count;
-    uint8_t *curr_buf = buf;
+    uint8_t *curr_buf = (uint8_t *) buf;
     bool success = true;
 
     // Queue all edges in the buffer
@@ -723,7 +724,7 @@ bool node_queue_add_route_broadcast(node_t *exclude, const netaddr_t *addrs,
             entries = remaining_entries;
 
         // Calculate the payload size
-        size = entries * entry_size;
+        size = entries * sizeof(oshpacket_route_t);
 
         // Broadcast the packet
         if (node_queue_packet_broadcast(exclude, ADD_ROUTE, curr_buf, size)) {

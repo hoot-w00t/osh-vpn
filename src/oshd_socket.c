@@ -249,33 +249,29 @@ bool node_recv_queued(node_t *node)
 
 // Iterate through all edges in *payload and add/delete them
 static bool oshd_process_edge(node_t *node, oshpacket_hdr_t *pkt,
-    uint8_t *payload, bool add)
+    oshpacket_edge_t *payload, bool add)
 {
     char *action_name = add ? "Add" : "Delete";
     void (*action)(node_id_t *, node_id_t *) = add ? &node_id_add_edge
                                                    : &node_id_del_edge;
 
-    const size_t entry_size = NODE_NAME_SIZE * 2;
-    const size_t edges = pkt->payload_size / entry_size;
+    const size_t entries = pkt->payload_size / sizeof(oshpacket_edge_t);
     char src_name[NODE_NAME_SIZE + 1];
     char dest_name[NODE_NAME_SIZE + 1];
     node_id_t *src;
     node_id_t *dest;
 
-    for (size_t i = 0; i < edges; ++i) {
-        memcpy(src_name,
-            payload + (entry_size * i),
-            NODE_NAME_SIZE);
-        memcpy(dest_name,
-            payload + (entry_size * i) + NODE_NAME_SIZE,
-            NODE_NAME_SIZE);
+    memset(src_name, 0, sizeof(src_name));
+    memset(dest_name, 0, sizeof(dest_name));
+    for (size_t i = 0; i < entries; ++i) {
+        memcpy(src_name, payload[i].src_node, NODE_NAME_SIZE);
+        memcpy(dest_name, payload[i].dest_node, NODE_NAME_SIZE);
 
         if (!node_valid_name(src_name) || !node_valid_name(dest_name)) {
             logger(LOG_ERR, "%s: %s: %s edge: Invalid edge names", node->addrw,
                 node->id->name, action_name);
             return false;
         }
-
         src = node_id_add(src_name);
         dest = node_id_add(dest_name);
 
@@ -286,21 +282,42 @@ static bool oshd_process_edge(node_t *node, oshpacket_hdr_t *pkt,
     return true;
 }
 
+// Iterate through all routes in *payload and add them
+static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
+    oshpacket_route_t *payload, node_id_t *src_node)
+{
+    const size_t entries = pkt->payload_size / sizeof(oshpacket_route_t);
+    netaddr_t addr;
+
+    for (size_t i = 0; i < entries; ++i) {
+        addr.type = payload[i].addr_type;
+        if (addr.type > IP6) {
+            logger(LOG_ERR, "%s: %s: Invalid ADD_ROUTE address type",
+                node->addrw, node->id->name);
+            return false;
+        }
+        memcpy(addr.data, payload[i].addr_data, 16);
+        netroute_add(&addr, src_node);
+    }
+    return true;
+}
+
 // Process a packet from a node that is not authenticated yet
 static bool oshd_process_unauthenticated(node_t *node, oshpacket_hdr_t *pkt,
     uint8_t *payload)
 {
     switch (pkt->type) {
         case HELLO: {
-            if (pkt->payload_size > NODE_NAME_SIZE) {
+            if (pkt->payload_size != sizeof(oshpacket_hello_t)) {
                 logger(LOG_ERR, "%s: Invalid HELLO size: %u bytes", node->addrw,
                     pkt->payload_size);
                 return false;
             }
 
+            oshpacket_hello_t *payload_hello = (oshpacket_hello_t *) payload;
             char name[NODE_NAME_SIZE + 1];
             memset(name, 0, sizeof(name));
-            memcpy(name, payload, pkt->payload_size);
+            memcpy(name, payload_hello->node_name, NODE_NAME_SIZE);
 
             if (!node_valid_name(name)) {
                 logger(LOG_ERR, "%s: Invalid name", node->addrw);
@@ -390,8 +407,8 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
         case EDGE_EXG:
         case ADD_EDGE:
         case DEL_EDGE: {
-            if (    pkt->payload_size < (NODE_NAME_SIZE * 2)
-                || (pkt->payload_size % (NODE_NAME_SIZE * 2)) != 0)
+            if (    pkt->payload_size < sizeof(oshpacket_edge_t)
+                || (pkt->payload_size % sizeof(oshpacket_edge_t)) != 0)
             {
                 logger(LOG_ERR, "%s: %s: Invalid %s size: %u bytes",
                     node->addrw, node->id->name, oshpacket_type_name(pkt->type),
@@ -408,11 +425,14 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                 node_queue_packet_broadcast(node, ADD_EDGE, payload,
                     pkt->payload_size);
 
-                success = oshd_process_edge(node, pkt, payload, true);
+                success = oshd_process_edge(node, pkt,
+                    (oshpacket_edge_t *) payload, true);
             } else if (pkt->type == ADD_EDGE) {
-                success = oshd_process_edge(node, pkt, payload, true);
+                success = oshd_process_edge(node, pkt,
+                    (oshpacket_edge_t *) payload, true);
             } else {
-                success = oshd_process_edge(node, pkt, payload, false);
+                success = oshd_process_edge(node, pkt,
+                    (oshpacket_edge_t *) payload, false);
             }
             node_tree_update();
 
@@ -424,30 +444,15 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
         }
 
         case ADD_ROUTE: {
-            const size_t entry_size = 17;
-
-            if (    pkt->payload_size < entry_size
-                || (pkt->payload_size % entry_size) != 0)
+            if (    pkt->payload_size < sizeof(oshpacket_route_t)
+                || (pkt->payload_size % sizeof(oshpacket_route_t)) != 0)
             {
                 logger(LOG_ERR, "%s: %s: Invalid ADD_ROUTE size: %u bytes",
                     node->addrw, node->id->name, pkt->payload_size);
                 return false;
             }
-
-            size_t entries = pkt->payload_size / entry_size;
-            netaddr_t addr;
-
-            for (size_t i = 0; i < entries; ++i) {
-                addr.type = payload[(i * entry_size)];
-                if (addr.type > IP6) {
-                    logger(LOG_ERR, "%s: %s: Invalid ADD_ROUTE address type",
-                        node->addrw, node->id->name);
-                    return false;
-                }
-                memcpy(addr.data, &payload[(i * entry_size) + 1], 16);
-                netroute_add(&addr, src_node);
-            }
-            return true;
+            return oshd_process_route(node, pkt, (oshpacket_route_t *) payload,
+                    src_node);
         }
 
         case DATA: {

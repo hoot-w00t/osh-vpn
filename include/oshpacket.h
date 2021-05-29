@@ -29,12 +29,26 @@ typedef enum oshpacket_type {
 } oshpacket_type_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_hdr {
-    uint8_t          magic            ;
-    oshpacket_type_t type          : 8;
-    uint16_t         payload_size     ;
-    char             src_node[16]     ;
-    char             dest_node[16]    ;
+    uint8_t          magic;
+    oshpacket_type_t type : 8;
+    uint16_t         payload_size;
+    char             src_node[NODE_NAME_SIZE];
+    char             dest_node[NODE_NAME_SIZE];
 } oshpacket_hdr_t;
+
+typedef struct __attribute__((__packed__)) oshpacket_hello {
+    char node_name[NODE_NAME_SIZE];
+} oshpacket_hello_t;
+
+typedef struct __attribute__((__packed__)) oshpacket_edge {
+    char src_node[NODE_NAME_SIZE];
+    char dest_node[NODE_NAME_SIZE];
+} oshpacket_edge_t;
+
+typedef struct __attribute__((__packed__)) oshpacket_route {
+    netaddr_type_t addr_type : 8;
+    uint8_t addr_data[16];
+} oshpacket_route_t;
 
 #define OSHPACKET_HDR_SIZE (4 + (NODE_NAME_SIZE * 2))
 // TODO: Define a proper payload size
