@@ -140,17 +140,43 @@ static bool oshd_param_remote(ecp_t *ecp)
     return true;
 }
 
+// ReconnectDelayMin
+static bool oshd_param_reconnectdelaymin(ecp_t *ecp)
+{
+    oshd.reconnect_delay_min = (time_t) atoi(ecp_value(ecp));
+    if (oshd.reconnect_delay_min <= 0) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "ReconnectDelayMin cannot be of 0 seconds or less");
+        return false;
+    }
+    return true;
+}
+
+// ReconnectDelayMax
+static bool oshd_param_reconnectdelaymax(ecp_t *ecp)
+{
+    oshd.reconnect_delay_max = (time_t) atoi(ecp_value(ecp));
+    if (oshd.reconnect_delay_max <= 0) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "ReconnectDelayMax cannot be of 0 seconds or less");
+        return false;
+    }
+    return true;
+}
+
 // Array of all configuration parameters and their handlers
-static oshd_conf_param_t oshd_conf_params[] = {
-    { .name = "NoServer", .type = VALUE_NONE    , &oshd_param_noserver},
-    { .name = "NoDevice", .type = VALUE_NONE    , &oshd_param_nodevice},
-    { .name = "Name"    , .type = VALUE_REQUIRED, &oshd_param_name},
+static const oshd_conf_param_t oshd_conf_params[] = {
+    { .name = "NoServer", .type = VALUE_NONE, &oshd_param_noserver},
+    { .name = "NoDevice", .type = VALUE_NONE, &oshd_param_nodevice},
+    { .name = "Name", .type = VALUE_REQUIRED, &oshd_param_name},
     { .name = "Port", .type = VALUE_REQUIRED, &oshd_param_port},
     { .name = "Mode", .type = VALUE_REQUIRED, &oshd_param_mode},
     { .name = "Device", .type = VALUE_REQUIRED, &oshd_param_device},
     { .name = "DevUp", .type = VALUE_REQUIRED, &oshd_param_devup},
     { .name = "DevDown", .type = VALUE_REQUIRED, &oshd_param_devdown},
     { .name = "Remote", .type = VALUE_REQUIRED, &oshd_param_remote},
+    { .name = "ReconnectDelayMin", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymin},
+    { .name = "ReconnectDelayMax", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymax},
     { NULL, 0, NULL }
 };
 
@@ -224,6 +250,12 @@ bool oshd_load_conf(const char *filename)
         logger(LOG_ERR, "The daemon must have a name");
         return false;
     }
+    if (oshd.reconnect_delay_max < oshd.reconnect_delay_min) {
+        logger(LOG_ERR, "ReconnectDelayMax (%lus) cannot be smaller than ReconnectDelayMin (%lus)",
+            oshd.reconnect_delay_max, oshd.reconnect_delay_min);
+        return false;
+    }
+
     return true;
 
 on_error:
