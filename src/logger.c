@@ -66,6 +66,7 @@ static void logger_print(const char *level, const char *format, va_list ap)
         localtime(&curr_time));
     vsnprintf(fmt_buf, sizeof(fmt_buf), format, ap);
     printf("%s: %s: %s\n", time_buf, level, fmt_buf);
+    fflush(stdout);
 }
 
 // Log a message of level
