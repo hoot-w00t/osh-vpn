@@ -1,7 +1,7 @@
 #include "netbuffer.h"
 #include <criterion/criterion.h>
 
-void netbuffer_test_full(netbuffer_t *nbuf, const size_t slot_count, const size_t size)
+static void netbuffer_test_full(netbuffer_t *nbuf, const size_t slot_count, const size_t size)
 {
     uint8_t *slots[slot_count];
     uint8_t *slot = NULL;
@@ -53,7 +53,7 @@ void netbuffer_test_full(netbuffer_t *nbuf, const size_t slot_count, const size_
         cr_assert_null(netbuffer_next(nbuf));
 }
 
-void netbuffer_test_chain(netbuffer_t *nbuf, const size_t loop_amount, const size_t size)
+static void netbuffer_test_chain(netbuffer_t *nbuf, const size_t loop_amount, const size_t size)
 {
     uint8_t *prev = NULL;
     uint8_t *slot = NULL;
@@ -84,6 +84,19 @@ void netbuffer_test_chain(netbuffer_t *nbuf, const size_t loop_amount, const siz
     // We should have processed every slot, this should return NULL
     for (size_t i = 0; i < loop_amount; ++i)
         cr_assert_null(netbuffer_next(nbuf));
+}
+
+Test(netbuffer, test_very_big)
+{
+    const size_t slot_count = 4096, size = 4096;
+    netbuffer_t *nbuf = netbuffer_alloc(slot_count, size);
+
+    for (size_t i = 0; i < 32; ++i)
+        netbuffer_test_full(nbuf, slot_count, size);
+    netbuffer_test_chain(nbuf, slot_count * 2, size);
+    netbuffer_test_chain(nbuf, slot_count - 1, size);
+    netbuffer_test_full(nbuf, slot_count, size);
+    netbuffer_free(nbuf);
 }
 
 Test(netbuffer, test_big)
@@ -139,4 +152,22 @@ Test(netbuffer, error_cases)
 {
     cr_assert_null(netbuffer_alloc(0, 1024));
     cr_assert_null(netbuffer_alloc(1, 0));
+}
+
+Test(netbuffer, range_test_slot_counts_and_sizes)
+{
+    const size_t max_slots = 64, max_size = 256;
+
+    for (size_t slot_count = 1; slot_count <= max_slots; ++slot_count) {
+        for (size_t size = 1; size <= max_size; ++size) {
+            netbuffer_t *nbuf = netbuffer_alloc(slot_count, size);
+            netbuffer_test_full(nbuf, slot_count, size);
+            if (slot_count > 1 && size > 1) {
+                netbuffer_test_chain(nbuf, slot_count * 2, size);
+                netbuffer_test_chain(nbuf, slot_count - 1, size);
+            }
+            netbuffer_test_full(nbuf, slot_count, size);
+            netbuffer_free(nbuf);
+        }
+    }
 }

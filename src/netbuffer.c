@@ -5,32 +5,40 @@
 #include <string.h>
 
 // Allocate network buffer
-netbuffer_t *netbuffer_alloc(size_t slots, size_t slot_size)
+netbuffer_t *netbuffer_alloc(size_t slot_count, size_t slot_size)
 {
     netbuffer_t *nbuf;
 
-    if (!slots || !slot_size)
+    if (!slot_count || !slot_size)
         return NULL;
 
-    nbuf = xalloc(sizeof(netbuffer_t));
-    nbuf->slot_size = slot_size;
-    nbuf->empty = true;
-    nbuf->phys_start = xalloc(sizeof(uint8_t) * (slots * slot_size));
-    nbuf->phys_end = nbuf->phys_start + (slots * slot_size);
-    nbuf->data_start = nbuf->phys_start;
-    nbuf->data_end = nbuf->phys_start;
+    nbuf = xzalloc(sizeof(netbuffer_t));
+    logger_debug(DBG_NETBUFFER, "Netbuffer: Allocated %p for %zu slots of %zu bytes",
+        slot_count, slot_size);
 
-    logger_debug(DBG_NETBUFFER,
-        "Allocated netbuffer %p starting at %p (%zu slots of %zu bytes)",
-        nbuf, nbuf->phys_start, slots, slot_size);
+    nbuf->slot_size = slot_size;
+    nbuf->slot_count = slot_count;
+
+    nbuf->data_size = slot_count * slot_size;
+    nbuf->data = xzalloc(nbuf->data_size);
+    nbuf->slots = xalloc(slot_count * sizeof(uint8_t *));
+    nbuf->slots_taken = xzalloc(slot_count * sizeof(bool));
+    for (size_t i = 0; i < slot_count; ++i)
+        nbuf->slots[i] = nbuf->data + (i * slot_size);
+
+    logger_debug(DBG_NETBUFFER, "Netbuffer: %p: Allocated data %p (%zu bytes)",
+        nbuf->data, nbuf->data_size);
     return nbuf;
 }
 
 // Free network buffer
 void netbuffer_free(netbuffer_t *nbuf)
 {
-    logger_debug(DBG_NETBUFFER, "Freeing netbuffer %p", nbuf);
-    free(nbuf->phys_start);
+    logger_debug(DBG_NETBUFFER, "Freeing netbuffer %p (%zu slots of %zu bytes)",
+        nbuf, nbuf->slot_count, nbuf->slot_size);
+    free(nbuf->data);
+    free(nbuf->slots);
+    free(nbuf->slots_taken);
     free(nbuf);
 }
 
@@ -40,14 +48,23 @@ uint8_t *netbuffer_reserve(netbuffer_t *nbuf)
 {
     uint8_t *slot;
 
-    if (nbuf->data_end >= nbuf->phys_end)
-        nbuf->data_end = nbuf->phys_start;
-    if (nbuf->data_end == nbuf->data_start && !nbuf->empty)
+    // If the next available index is at the end of the slots, go back to the
+    // beginning
+    if (nbuf->next_available >= nbuf->slot_count)
+        nbuf->next_available = 0;
+
+    // If the next available slot is taken already the netbuffer is full and
+    // cannot reserve any more data
+    if (nbuf->slots_taken[nbuf->next_available])
         return NULL;
 
-    nbuf->empty = false;
-    slot = nbuf->data_end;
-    nbuf->data_end += nbuf->slot_size;
+    // The next available slot is not taken, so take it
+    nbuf->slots_taken[nbuf->next_available] = 1;
+    slot = nbuf->slots[nbuf->next_available];
+
+    // Move to the next slot for future calls
+    nbuf->next_available += 1;
+
     logger_debug(DBG_NETBUFFER, "Netbuffer %p reserved slot %p", nbuf, slot);
     return slot;
 }
@@ -56,18 +73,26 @@ uint8_t *netbuffer_reserve(netbuffer_t *nbuf)
 // If netbuffer is empty, returns NULL
 uint8_t *netbuffer_next(netbuffer_t *nbuf)
 {
-    if (nbuf->empty)
+    // If the current slot is not taken then there are no other slots taken,
+    // the netbuffer is empty
+    if (!nbuf->slots_taken[nbuf->next_taken])
         return NULL;
 
-    nbuf->data_start += nbuf->slot_size;
-    if (nbuf->data_start >= nbuf->phys_end)
-        nbuf->data_start = nbuf->phys_start;
+    // The current slot is taken, we move to the next one and make this one
+    // available again
+    nbuf->slots_taken[nbuf->next_taken] = 0;
+    nbuf->next_taken += 1;
 
-    if (   nbuf->data_start == nbuf->data_end
-        || nbuf->data_end >= nbuf->phys_end)
-    {
-        nbuf->empty = true;
+    // If the next taken index is at the end of the slots, go back to the
+    // beginning
+    if (nbuf->next_taken >= nbuf->slot_count)
+        nbuf->next_taken = 0;
+
+    // If the next queued slot is taken, we can return it
+    // Otherwise it means that the netbuffer is now empty
+    if (nbuf->slots_taken[nbuf->next_taken]) {
+        return nbuf->slots[nbuf->next_taken];
+    } else {
         return NULL;
     }
-    return nbuf->data_start;
 }
