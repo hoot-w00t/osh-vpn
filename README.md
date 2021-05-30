@@ -1,5 +1,5 @@
 # osh-vpn
-[![GitHub license](https://img.shields.io/github/license/hoot-w00t/osh-vpn)](https://github.com/hoot-w00t/osh-vpn/blob/main/LICENSE)
+[![Build project](https://github.com/hoot-w00t/osh-vpn/actions/workflows/build.yml/badge.svg)](https://github.com/hoot-w00t/osh-vpn/actions/workflows/build.yml) [![GitHub license](https://img.shields.io/github/license/hoot-w00t/osh-vpn)](https://github.com/hoot-w00t/osh-vpn/blob/main/LICENSE)
 
 Osh is an experimental mesh VPN made as a fun and learning project.
 
