@@ -1,6 +1,7 @@
 #ifndef _OSH_OSHPACKET_H
 #define _OSH_OSHPACKET_H
 
+#include "netaddr.h"
 #include <stdint.h>
 
 #ifndef OSHPACKET_MAGIC
