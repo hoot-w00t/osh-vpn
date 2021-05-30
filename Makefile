@@ -13,7 +13,9 @@ HEAD_COMMIT	=	$(strip $(shell git describe --always --tags --abbrev=10))
 BIN		=	oshd
 TEST_BIN	=	oshd_tests
 
-SRC		=	src/crypto/pkey.c		\
+SRC		=	src/crypto/cipher.c		\
+			src/crypto/pkey.c		\
+			src/crypto/sha3.c		\
 			src/easyconf/easyconf.c		\
 			src/easyconf/getline.c		\
 			src/easyconf/parameter.c	\
