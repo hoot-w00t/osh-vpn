@@ -1,4 +1,4 @@
-#include "oshd_socket.h"
+#include "oshpacket.h"
 
 const char *oshpacket_type_name(oshpacket_type_t type)
 {
