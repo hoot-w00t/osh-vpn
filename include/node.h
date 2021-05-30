@@ -4,6 +4,8 @@
 #include "netaddr.h"
 #include "netbuffer.h"
 #include "oshpacket.h"
+#include "crypto/cipher.h"
+#include "crypto/pkey.h"
 #include <sys/time.h>
 #include <netinet/in.h>
 
@@ -70,6 +72,23 @@ struct node {
                         // But it will be NULL before the node has successfully
                         // authenticated
 
+    // X25519 keys, ciphers and counters to encrypt/decrypt traffic
+    // The send cipher will be used to encrypt outgoing packets
+    // The recv cipher will be used to decrypt incoming packets
+    // The send/recv counters are used to prevent replay attacks
+    // The send counter increments every time we send a packet to the node
+    // The recv counter increments every time we receive a packet from the node
+    EVP_PKEY *send_key;
+    cipher_t *send_cipher;
+    uint32_t send_counter;
+    EVP_PKEY *recv_key;
+    cipher_t *recv_cipher;
+    uint32_t recv_counter;
+
+    // This is set to true when initiating the handshake
+    // This is to know when to reply to a handshake request
+    bool handshake_initiator;
+
     // If this is true disconnect and remove the node after the send queue is
     // empty. Used for GOODBYE packets
     bool finish_and_disconnect;
@@ -115,6 +134,7 @@ bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
     uint8_t *payload, uint16_t payload_size);
 
 bool node_queue_hello(node_t *node);
+bool node_queue_handshake(node_t *node, bool initiator);
 bool node_queue_goodbye(node_t *node);
 bool node_queue_ping(node_t *node);
 bool node_queue_pong(node_t *node);
@@ -125,5 +145,9 @@ bool node_queue_edge_broadcast(node_t *exclude, oshpacket_type_t type,
 bool node_queue_edge_exg(node_t *node);
 bool node_queue_add_route_broadcast(node_t *exclude, const netaddr_t *addrs,
     size_t count);
+
+// This is the function called to send the initial packet when an initiator
+// established a connection
+#define node_queue_initial_packet(node) node_queue_handshake(node, true)
 
 #endif

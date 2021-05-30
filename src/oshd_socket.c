@@ -6,6 +6,7 @@
 #include "netpacket.h"
 #include "tcp.h"
 #include "logger.h"
+#include "crypto/sha3.h"
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -127,7 +128,7 @@ bool oshd_connect_async(node_t *node)
         node_reconnect_delay(node, oshd.reconnect_delay_min);
 
         // We are the initiator, so we initiate the authentication
-        return node_queue_hello(node);
+        return node_queue_initial_packet(node);
     }
     return true;
 }
@@ -151,7 +152,7 @@ bool oshd_connect(const char *address, const uint16_t port, time_t delay)
     node->connected = true;
     oshd_setsockopts(client_fd);
     event_queue_node_add(node);
-    return node_queue_hello(node);
+    return node_queue_initial_packet(node);
 }
 
 // Send queued data to node
@@ -214,12 +215,20 @@ bool node_recv_queued(node_t *node)
     if (recvd_size > 0) {
         node->io.recv_bytes += recvd_size;
         if (!node->io.recvd_hdr) {
-            if (node->io.recv_bytes >= OSHPACKET_HDR_SIZE) {
+            if (node->io.recv_bytes >= OSHPACKET_PUBLIC_HDR_SIZE) {
+                // If the magic number is invalid something is wrong
+                if (pkt->magic != OSHPACKET_MAGIC) {
+                    logger(LOG_ERR, "%s: Received invalid magic number 0x%X",
+                        node->addrw, pkt->magic);
+                    event_queue_node_remove(node);
+                    return false;
+                }
+
                 // Switch payload size to host byte order
                 pkt->payload_size = ntohs(pkt->payload_size);
 
                 node->io.recv_packet_size = OSHPACKET_HDR_SIZE + pkt->payload_size;
-                if (node->io.recv_packet_size <= OSHPACKET_HDR_SIZE || node->io.recv_packet_size > OSHPACKET_MAXSIZE) {
+                if (node->io.recv_packet_size <= OSHPACKET_PUBLIC_HDR_SIZE || node->io.recv_packet_size > OSHPACKET_MAXSIZE) {
                     logger(LOG_ERR, "%s: Invalid packet size (recv, %u bytes)", node->addrw, node->io.recv_packet_size);
                     event_queue_node_remove(node);
                     return false;
@@ -236,7 +245,7 @@ bool node_recv_queued(node_t *node)
 
             // Prepare to receive the next packet
             node->io.recvd_hdr = false;
-            node->io.recv_packet_size = OSHPACKET_HDR_SIZE;
+            node->io.recv_packet_size = OSHPACKET_PUBLIC_HDR_SIZE;
             node->io.recv_bytes = 0;
         }
     } else if (recvd_size < 0) {
@@ -302,103 +311,205 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
     return true;
 }
 
+// Process HELLO packet to authenticate a node
+static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
+    oshpacket_hello_t *payload)
+{
+    if (pkt->payload_size != sizeof(oshpacket_hello_t)) {
+        logger(LOG_ERR, "%s: Invalid HELLO size: %u bytes", node->addrw,
+            pkt->payload_size);
+        return false;
+    }
+
+    char name[NODE_NAME_SIZE + 1];
+    memset(name, 0, sizeof(name));
+    memcpy(name, payload->node_name, NODE_NAME_SIZE);
+
+    if (!node_valid_name(name)) {
+        logger(LOG_ERR, "%s: Invalid name", node->addrw);
+        return false;
+    }
+
+    node_id_t *id = node_id_add(name);
+
+    if (id->local_node) {
+        // Disconnect the current socket if node tries to authenticate
+        // as our local node
+        logger(LOG_ERR, "%s: Tried to authenticate as myself", node->addrw);
+        return node_queue_goodbye(node);
+    }
+    if (id->node_socket) {
+        // Disconnect the current socket if node is already authenticated
+        logger(LOG_ERR, "%s: Another socket is already authenticated as %s",
+            node->addrw, name);
+        return node_queue_goodbye(node);
+    }
+
+    node_id_t *me = node_id_add(oshd.name);
+
+    // Try to load the remote node's public key
+    logger_debug(DBG_AUTHENTICATION, "Loading the public key for %s",
+        id->name);
+    EVP_PKEY *remote_pubkey = oshd_open_key(id->name, false);
+
+    if (!remote_pubkey) {
+        // If we don't have a public key to verify the HELLO signature,
+        // we can't authenticate the node
+        logger(LOG_ERR, "%s: %s: Authentication failed: No public key",
+            node->addrw, name);
+        return node_queue_goodbye(node);
+    }
+
+    // If the signature verification succeeds then the node is authenticated
+    logger_debug(DBG_AUTHENTICATION, "Verifying signature from %s (%s)",
+        node->addrw, id->name);
+    node->authenticated = pkey_verify(remote_pubkey,
+        (uint8_t *) payload, sizeof(oshpacket_hello_t) - sizeof(payload->sig),
+        payload->sig, sizeof(payload->sig));
+
+    // We don't need the remote node's public key anymore
+    pkey_free(remote_pubkey);
+
+    // If the node is not authenticated, the signature verification failed
+    // The remote node did not sign the data using the private key
+    // associated with the public key we have
+    if (!node->authenticated) {
+        logger(LOG_ERR, "%s: %s: Authentication failed: Signature verification failed",
+            node->addrw, name);
+        return node_queue_goodbye(node);
+    }
+
+    // The remote node is now authenticated
+
+    id->node_socket = node;
+    node->id = id;
+
+    node_id_add_edge(me, id);
+    node_tree_update();
+
+    logger(LOG_INFO, "%s: %s: Authenticated successfully", node->addrw,
+        node->id->name);
+    logger(LOG_INFO, "%s: %s: Exchanging the local network map",
+        node->addrw, node->id->name);
+
+    if (!node_queue_edge_exg(node))
+        return false;
+    if (!node_queue_edge_broadcast(node, ADD_EDGE, oshd.name, name))
+        return false;
+    return node_queue_ping(node);
+}
+
+static bool oshd_process_handshake(node_t *node, oshpacket_hdr_t *pkt,
+    oshpacket_handshake_t *payload)
+{
+    if (pkt->payload_size != sizeof(oshpacket_handshake_t)) {
+        logger(LOG_ERR, "%s: Invalid HANDSHAKE size: %u bytes", node->addrw,
+            pkt->payload_size);
+        return false;
+    }
+
+    // If we did not initiate this request then we have to reply with our own
+    // handshake
+    if (!node->handshake_initiator) {
+        if (!node_queue_handshake(node, false))
+            return false;
+    }
+
+    // Load the remote node's public keys
+    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Loading the remote node's public keys", node->addrw);
+    EVP_PKEY *r_send_pubkey = pkey_load_x25519_pubkey(payload->send_pubkey,
+        sizeof(payload->send_pubkey));
+    EVP_PKEY *r_recv_pubkey = pkey_load_x25519_pubkey(payload->recv_pubkey,
+        sizeof(payload->recv_pubkey));
+
+    if (!r_send_pubkey || !r_recv_pubkey) {
+        pkey_free(r_send_pubkey);
+        pkey_free(r_recv_pubkey);
+        logger(LOG_ERR, "%s: Handshake failed: Failed to load public keys", node->addrw);
+        return false;
+    }
+
+    // Calculate the shared secret for both keys
+    // Each node sends its own send_pubkey and recv_pubkey, so in order to link
+    // them correctly we need to calculate our own send key with the other
+    // node's recv key, the same applies for our recv key
+    uint8_t *send_secret;
+    uint8_t *recv_secret;
+    size_t send_secret_size;
+    size_t recv_secret_size;
+    bool secret_success = true;
+
+    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Computing send_secret", node->addrw);
+    if (pkey_derive(node->send_key, r_recv_pubkey, &send_secret, &send_secret_size)) {
+        logger_debug(DBG_HANDSHAKE, "%s: Handshake: Computing recv_secret", node->addrw);
+        if (!pkey_derive(node->recv_key, r_send_pubkey, &recv_secret, &recv_secret_size)) {
+            secret_success = false;
+            free(send_secret);
+        }
+    } else {
+        secret_success = false;
+    }
+
+    // We don't need the remote node's public keys now
+    pkey_free(r_send_pubkey);
+    pkey_free(r_recv_pubkey);
+
+    // All the above if statements are here to prevent memory leaks
+    if (!secret_success) {
+        logger(LOG_ERR, "%s: Handshake failed: Failed to compute secrets", node->addrw);
+        return false;
+    }
+
+    // We now calculate the SHA3-512 hashes of the two secrets which we will use
+    // to create the keys and IV of our ciphers
+    uint8_t send_hash[EVP_MAX_MD_SIZE];
+    uint8_t recv_hash[EVP_MAX_MD_SIZE];
+    unsigned int send_hash_size;
+    unsigned int recv_hash_size;
+
+    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Hashing shared secrets", node->addrw);
+    if (   !sha3_512_hash(send_secret, send_secret_size, send_hash, &send_hash_size)
+        || !sha3_512_hash(recv_secret, recv_secret_size, recv_hash, &recv_hash_size))
+    {
+        free(send_secret);
+        free(recv_secret);
+        logger(LOG_ERR, "%s: Handshake failed: Failed to hash secrets", node->addrw);
+        return false;
+    }
+    free(send_secret);
+    free(recv_secret);
+
+    // We can now create our send/recv ciphers using the two hashes
+    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Creating send_cipher", node->addrw);
+    node->send_cipher = cipher_create_aes_256_ctr(true, send_hash, 32, send_hash + 32, 16);
+    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Creating recv_cipher", node->addrw);
+    node->recv_cipher = cipher_create_aes_256_ctr(false, recv_hash, 32, recv_hash + 32, 16);
+
+    if (!node->send_cipher || !node->recv_cipher) {
+        logger(LOG_ERR, "%s: Handshake failed: Failed to create ciphers", node->addrw);
+        return false;
+    }
+
+    // Reset the handshake initiator now that the handshake process is done
+    node->handshake_initiator = false;
+
+    // We were able to create ciphers to encrypt traffic, so we can
+    // proceed to the authentication part, if the node is not yet authenticated
+    if (!node->authenticated)
+        return node_queue_hello(node);
+    return true;
+}
+
 // Process a packet from a node that is not authenticated yet
 static bool oshd_process_unauthenticated(node_t *node, oshpacket_hdr_t *pkt,
     uint8_t *payload)
 {
     switch (pkt->type) {
-        case HELLO: {
-            if (pkt->payload_size != sizeof(oshpacket_hello_t)) {
-                logger(LOG_ERR, "%s: Invalid HELLO size: %u bytes", node->addrw,
-                    pkt->payload_size);
-                return false;
-            }
+        case HELLO:
+            return oshd_process_hello(node, pkt, (oshpacket_hello_t *) payload);
 
-            oshpacket_hello_t *payload_hello = (oshpacket_hello_t *) payload;
-            char name[NODE_NAME_SIZE + 1];
-            memset(name, 0, sizeof(name));
-            memcpy(name, payload_hello->node_name, NODE_NAME_SIZE);
-
-            if (!node_valid_name(name)) {
-                logger(LOG_ERR, "%s: Invalid name", node->addrw);
-                return false;
-            }
-
-            node_id_t *id = node_id_add(name);
-
-            if (id->local_node) {
-                // Disconnect the current socket if node tries to authenticate
-                // as our local node
-                logger(LOG_ERR, "%s: Tried to authenticate as myself", node->addrw);
-                return node_queue_goodbye(node);
-            }
-            if (id->node_socket) {
-                // Disconnect the current socket if node is already authenticated
-                logger(LOG_ERR, "%s: Another socket is already authenticated as %s",
-                    node->addrw, name);
-                return node_queue_goodbye(node);
-            }
-
-            // The remote node has a valid name, we do not know it already so we
-            // can reply with our own name and authenticate
-            if (!node->initiator) {
-                if (!node_queue_hello(node))
-                    return false;
-            }
-
-            node_id_t *me = node_id_add(oshd.name);
-
-            // Try to load the remote node's public key
-            logger_debug(DBG_AUTHENTICATION, "Loading the public key for %s",
-                id->name);
-            EVP_PKEY *remote_pubkey = oshd_open_key(id->name, false);
-
-            if (!remote_pubkey) {
-                // If we don't have a public key to verify the HELLO signature,
-                // we can't authenticate the node
-                logger(LOG_ERR, "%s: %s: Authentication failed: No public key",
-                    node->addrw, name);
-                return node_queue_goodbye(node);
-            }
-
-            // If the signature verification succeeds then the node is authenticated
-            logger_debug(DBG_AUTHENTICATION, "Verifying signature from %s (%s)",
-                node->addrw, id->name);
-            node->authenticated = pkey_verify(remote_pubkey,
-                (uint8_t *) payload_hello->node_name, NODE_NAME_SIZE,
-                payload_hello->sig, sizeof(payload_hello->sig));
-
-            // We don't need the remote node's public key anymore
-            pkey_free(remote_pubkey);
-
-            // If the node is not authenticated, the signature verification failed
-            // The remote node did not sign the data using the private key
-            // associated with the public key we have
-            if (!node->authenticated) {
-                logger(LOG_ERR, "%s: %s: Authentication failed: Signature verification failed",
-                    node->addrw, name);
-                return node_queue_goodbye(node);
-            }
-
-            // The remote node is now authenticated
-
-            id->node_socket = node;
-            node->id = id;
-
-            node_id_add_edge(me, id);
-            node_tree_update();
-
-            logger(LOG_INFO, "%s: %s: Authenticated successfully", node->addrw,
-                node->id->name);
-            logger(LOG_INFO, "%s: %s: Exchanging the local network map",
-                node->addrw, node->id->name);
-
-            if (!node_queue_edge_exg(node))
-                return false;
-            if (!node_queue_edge_broadcast(node, ADD_EDGE, oshd.name, name))
-                return false;
-            return node_queue_ping(node);
-        }
+        case HANDSHAKE:
+            return oshd_process_handshake(node, pkt, (oshpacket_handshake_t *) payload);
 
         case GOODBYE:
             logger(LOG_INFO, "%s: Gracefully disconnecting", node->addrw);
@@ -528,12 +639,49 @@ bool oshd_process_packet(node_t *node)
     oshpacket_hdr_t *pkt = (oshpacket_hdr_t *) node->io.recvbuf;
     uint8_t *payload = node->io.recvbuf + OSHPACKET_HDR_SIZE;
 
-    // If the magic number is invalid the packet is probably broken
-    if (pkt->magic != OSHPACKET_MAGIC) {
-        logger(LOG_ERR, "%s: Received invalid magic number 0x%X",
-            node->addrw, pkt->magic);
+    // If we have a recv_cipher, the private header and payload are encrypted,
+    // so we need to decrypt it before we can process the data
+    if (node->recv_cipher) {
+        const size_t encrypted_size = OSHPACKET_PRIVATE_HDR_SIZE + pkt->payload_size;
+        size_t decrypted_size;
+
+        logger_debug(DBG_ENCRYPTION, "%s: Decrypting packet of %zu bytes",
+            node->addrw, encrypted_size);
+
+        // We decrypt packet at the same location because overlapping streams
+        // are supported for AES-256-CTR
+        // TODO: If the cipher does not support this, decrypt in a temporary
+        //       buffer and then copy the decrypted data back in the recvbuf
+        if (!cipher_decrypt(node->recv_cipher,
+                ((uint8_t *) pkt) + OSHPACKET_PUBLIC_HDR_SIZE, &decrypted_size,
+                ((uint8_t *) pkt) + OSHPACKET_PUBLIC_HDR_SIZE, encrypted_size))
+        {
+            logger(LOG_ERR, "%s: Failed to decrypt packet", node->addrw);
+            return false;
+        }
+
+        // TODO: If the cipher pads data, this will create errors
+        if (decrypted_size != encrypted_size) {
+            logger(LOG_ERR, "%s: Decrypted packet has a different size (encrypted: %zu, decrypted: %zu)",
+                node->addrw, encrypted_size, decrypted_size);
+            return false;
+        }
+    }
+
+    // Retrieve the packet's counter value
+    pkt->counter = ntohl(pkt->counter);
+
+    // Verify that the remote node's send_counter matches our recv_counter
+    // This is to prevent replay attacks
+    // If the counter is not correct then we drop the connection
+    if (node->recv_counter != pkt->counter) {
+        logger(LOG_CRIT, "%s: Invalid counter: Expected %u but got %u",
+            node->addrw, node->recv_counter, pkt->counter);
         return false;
     }
+
+    // The counter is correct, increment it for the next packet
+    node->recv_counter += 1;
 
     // If the node is unauthenticated we only accept authentication packets,
     // nothing else will be accepted or forwarded, if the authentication encounters

@@ -376,12 +376,26 @@ void node_disconnect(node_t *node)
     }
 }
 
+// Free the send/recv keys and ciphers and reset their values to NULL
+static void node_reset_ciphers(node_t *node)
+{
+    pkey_free(node->send_key);
+    cipher_free(node->send_cipher);
+    pkey_free(node->recv_key);
+    cipher_free(node->recv_cipher);
+    node->send_key = NULL;
+    node->send_cipher = NULL;
+    node->recv_key = NULL;
+    node->recv_cipher = NULL;
+}
+
 // Free a node and all its resources
 void node_destroy(node_t *node)
 {
     node_disconnect(node);
     free(node->io.recvbuf);
     netbuffer_free(node->io.sendq);
+    node_reset_ciphers(node);
     free(node->reconnect_addr);
     free(node);
 }
@@ -447,17 +461,66 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
     uint8_t *payload, uint16_t payload_size)
 {
     uint8_t *slot;
+    oshpacket_hdr_t *hdr;
 
     if ((slot = netbuffer_reserve(node->io.sendq))) {
-        ((oshpacket_hdr_t *) slot)->magic = OSHPACKET_MAGIC;
-        ((oshpacket_hdr_t *) slot)->type = type;
-        ((oshpacket_hdr_t *) slot)->payload_size = htons(payload_size);
-        memcpy(((oshpacket_hdr_t *) slot)->src_node, oshd.name, NODE_NAME_SIZE);
-        if (dest)
-            memcpy(((oshpacket_hdr_t *) slot)->dest_node, dest, NODE_NAME_SIZE);
-        else
-            memset(((oshpacket_hdr_t *) slot)->dest_node, 0, NODE_NAME_SIZE);
+        hdr = (oshpacket_hdr_t *) slot;
+
+        // Public part of the header
+        hdr->magic = OSHPACKET_MAGIC;
+        hdr->payload_size = htons(payload_size);
+
+        // Private part of the header
+        hdr->type = type;
+        hdr->counter = htonl(node->send_counter);
+
+        // Increment the node's send_counter for next packets
+        node->send_counter += 1;
+
+        memcpy(hdr->src_node, oshd.name, sizeof(hdr->src_node));
+        memset(hdr->dest_node, 0, sizeof(hdr->dest_node));
+        if (dest) memcpy(hdr->dest_node, dest, strlen(dest));
+
+        // Copy the packet's payload to the buffer
         memcpy(slot + OSHPACKET_HDR_SIZE, payload, payload_size);
+
+        if (node->send_cipher) {
+            // The node expects all traffic to be encrypted
+            size_t original_size = OSHPACKET_PRIVATE_HDR_SIZE + payload_size;
+            size_t out_size;
+            logger_debug(DBG_ENCRYPTION, "%s: Encrypting packet of %zu bytes",
+                node->addrw, original_size);
+
+            // We are encrypting everything that comes after the public header
+            // The public header is never encrypted, it is the required minimum
+            // to correctly receive and decode all packets
+            // The private header part as well as the payload will be decrypted
+            // after successful reception before being processed.
+            // This is to protect more data, like the counter (used to prevent
+            // replay attacks) and the source and destination nodes
+            // If these aren't encrypted a MITM attack could modify those fields
+            // to cause trouble or spy on/target specific nodes
+            if (!cipher_encrypt(node->send_cipher, slot + OSHPACKET_PUBLIC_HDR_SIZE,
+                    &out_size, slot + OSHPACKET_PUBLIC_HDR_SIZE, original_size))
+            {
+                logger(LOG_ERR, "%s: Failed to encrypt packet", node->addrw);
+                return false;
+            }
+            if (out_size != original_size) {
+                // TODO: Handle this correctly for ciphers that pad encrypted data
+                logger(LOG_ERR, "%s: Encrypted packet has a different size (original: %zu, encrypted %zu)",
+                    node->addrw, original_size, out_size);
+                return false;
+            }
+        } else if (type != HANDSHAKE) {
+            // The node does not have a cipher to encrypt traffic
+            // This should only happen when sending HANDSHAKE packets which will
+            // initialize the ciphers
+            // Otherwise drop the packet
+            logger(LOG_CRIT, "%s: Cannot queue unencrypted %s packet",
+                node->addrw, oshpacket_type_name(type));
+            return false;
+        }
 
         // If there is no packet in the queue, put this one
         // Otherwise let the queue handle it
@@ -465,7 +528,6 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
             node->io.sendq_ptr = slot;
             node->io.sendq_packet_size = OSHPACKET_HDR_SIZE + payload_size;
         }
-
         return true;
     } else {
         logger(LOG_WARN, "%s: Dropping %s packet of %u bytes: send queue is full",
@@ -477,18 +539,66 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
 // Queue a forwarded packet without altering the source and destination nodes
 bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
 {
-    const uint16_t pkt_size = OSHPACKET_HDR_SIZE + pkt->payload_size;
     uint8_t *slot;
+    oshpacket_hdr_t *hdr;
+
+    // Forwarded packets should never be unencrypted, so if we can't encrypt it,
+    // drop it
+    if (!node->send_cipher) {
+        logger(LOG_WARN, "%s: Dropping forwarded %s packet of %u bytes: No send_cipher",
+            oshpacket_type_name(pkt->type), node->addrw, pkt->payload_size);
+        return false;
+    }
 
     if ((slot = netbuffer_reserve(node->io.sendq))) {
+        // Copy the packet's data to the slot
+        memcpy(slot, pkt, OSHPACKET_HDR_SIZE + pkt->payload_size);
+
+        hdr = (oshpacket_hdr_t *) slot;
+
+        // Write the payload size in the correct order
+        hdr->payload_size = htons(pkt->payload_size);
+
+        // The counter is not preserved, it is always set to the node we're
+        // sending the packet to
+        hdr->counter = htonl(node->send_counter);
+
+        // Increment the node's send_counter for next packets
+        node->send_counter += 1;
+
+        // The node expects all traffic to be encrypted
+        size_t original_size = OSHPACKET_PRIVATE_HDR_SIZE + pkt->payload_size;
+        size_t out_size;
+        logger_debug(DBG_ENCRYPTION, "%s: Encrypting forwarded packet of %zu bytes",
+            node->addrw, original_size);
+
+        // We are encrypting everything that comes after the public header
+        // The public header is never encrypted, it is the required minimum
+        // to correctly receive and decode all packets
+        // The private header part as well as the payload will be decrypted
+        // after successful reception before being processed.
+        // This is to protect more data, like the counter (used to prevent
+        // replay attacks) and the source and destination nodes
+        // If these aren't encrypted a MITM attack could modify those fields
+        // to cause trouble or spy on/target specific nodes
+        if (!cipher_encrypt(node->send_cipher, slot + OSHPACKET_PUBLIC_HDR_SIZE,
+                &out_size, slot + OSHPACKET_PUBLIC_HDR_SIZE, original_size))
+        {
+            logger(LOG_ERR, "%s: Failed to encrypt forwarded packet", node->addrw);
+            return false;
+        }
+        if (out_size != original_size) {
+            // TODO: Handle this correctly for ciphers that pad encrypted data
+            logger(LOG_ERR, "%s: Encrypted forwarded packet has a different size (original: %zu, encrypted %zu)",
+                node->addrw, original_size, out_size);
+            return false;
+        }
+
         // If there is no packet in the queue, put this one
         // Otherwise let the queue handle it
-        memcpy(slot, pkt, pkt_size);
-        ((oshpacket_hdr_t *) slot)->payload_size = htons(pkt->payload_size);
-
         if (!node->io.sendq_ptr) {
             node->io.sendq_ptr = slot;
-            node->io.sendq_packet_size = pkt_size;
+            node->io.sendq_packet_size = OSHPACKET_HDR_SIZE + pkt->payload_size;
         }
         return true;
     } else {
@@ -534,10 +644,10 @@ bool node_queue_hello(node_t *node)
     logger_debug(DBG_AUTHENTICATION, "Creating HELLO packet for %s", node->addrw);
     memcpy(payload.node_name, oshd.name, NODE_NAME_SIZE);
 
-    // Sign the HELLO payload (the node's name) using our private key
-    logger_debug(DBG_AUTHENTICATION, "Signing the node name");
-    if (!pkey_sign(oshd.privkey, (uint8_t *) payload.node_name,
-            sizeof(payload.node_name), &sig, &sig_size))
+    // Sign the HELLO payload using our private key
+    logger_debug(DBG_AUTHENTICATION, "Signing the HELLO payload");
+    if (!pkey_sign(oshd.privkey, (uint8_t *) &payload,
+            sizeof(payload) - sizeof(payload.sig), &sig, &sig_size))
     {
         return false;
     }
@@ -553,8 +663,57 @@ bool node_queue_hello(node_t *node)
     free(sig);
 
     logger_debug(DBG_AUTHENTICATION, "Queuing the HELLO packet for %s", node->addrw);
-    return node_queue_packet(node, node->id->name, HELLO,
-        (uint8_t *) &payload, sizeof(payload));
+    return node_queue_packet(node, NULL, HELLO, (uint8_t *) &payload, sizeof(payload));
+}
+
+// Queue HANDSHAKE request
+bool node_queue_handshake(node_t *node, bool initiator)
+{
+    oshpacket_handshake_t packet;
+
+    node->handshake_initiator = initiator;
+    logger_debug(DBG_HANDSHAKE, "Creating HANDSHAKE packet for %s", node->addrw);
+
+    // Make sure that there are no memory leaks
+    node_reset_ciphers(node);
+
+    // Generate random keys
+    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Generating send_key", node->addrw);
+    if (!(node->send_key = pkey_generate_x25519()))
+        return false;
+    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Generating recv_key", node->addrw);
+    if (!(node->recv_key = pkey_generate_x25519()))
+        return false;
+
+    uint8_t *pubkey;
+    size_t pubkey_size;
+
+    // Export the keys to the packet
+    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Exporting send_key", node->addrw);
+    if (!pkey_save_x25519_pubkey(node->send_key, &pubkey, &pubkey_size))
+        return false;
+    if (pubkey_size != sizeof(packet.send_pubkey)) {
+        free(pubkey);
+        logger(LOG_ERR, "%s: send_key size is invalid (%zu, but expected %u)",
+            pubkey_size, sizeof(packet.send_pubkey));
+        return false;
+    }
+    memcpy(packet.send_pubkey, pubkey, pubkey_size);
+    free(pubkey);
+
+    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Exporting recv_key", node->addrw);
+    if (!pkey_save_x25519_pubkey(node->recv_key, &pubkey, &pubkey_size))
+        return false;
+    if (pubkey_size != sizeof(packet.recv_pubkey)) {
+        free(pubkey);
+        logger(LOG_ERR, "%s: recv_key size is invalid (%zu, but expected %u)",
+            pubkey_size, sizeof(packet.recv_pubkey));
+        return false;
+    }
+    memcpy(packet.recv_pubkey, pubkey, pubkey_size);
+    free(pubkey);
+
+    return node_queue_packet(node, NULL, HANDSHAKE, (uint8_t *) &packet, sizeof(packet));
 }
 
 // Queue GOODBYE request
