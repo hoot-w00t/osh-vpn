@@ -31,11 +31,11 @@ static size_t pfd_count = 0;
 // Returns NULL on error
 EVP_PKEY *oshd_open_key(const char *name, bool private)
 {
-    const size_t filename_len = strlen(oshd.keys_dir) + strlen(name) + 6;
+    const size_t filename_len = strlen(oshd.keys_dir) + strlen(name) + 5;
     char *filename = xalloc(filename_len);
     EVP_PKEY *pkey;
 
-    snprintf(filename, filename_len, "%s/%s.%s", oshd.keys_dir, name,
+    snprintf(filename, filename_len, "%s%s.%s", oshd.keys_dir, name,
         private ? "key" : "pub");
     pkey = private ? pkey_load_privkey_pem(filename)
                    : pkey_load_pubkey_pem(filename);

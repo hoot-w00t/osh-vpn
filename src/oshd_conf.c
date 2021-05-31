@@ -57,6 +57,16 @@ static bool oshd_param_keysdir(ecp_t *ecp)
 {
     free(oshd.keys_dir);
     oshd.keys_dir = xstrdup(ecp_value(ecp));
+
+    // If the path does not end with a /, add one
+    size_t len = strlen(oshd.keys_dir);
+    if (len == 0 || oshd.keys_dir[len - 1] != '/') {
+        oshd.keys_dir = xrealloc(oshd.keys_dir, len + 2);
+        oshd.keys_dir[len] = '/';
+        oshd.keys_dir[len + 1] = '\0';
+    }
+
+    logger_debug(DBG_CONF, "Set keys dir to '%s'", oshd.keys_dir);
     return true;
 }
 
