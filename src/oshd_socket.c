@@ -326,7 +326,7 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
     memcpy(name, payload->node_name, NODE_NAME_SIZE);
 
     if (!node_valid_name(name)) {
-        logger(LOG_ERR, "%s: Invalid name", node->addrw);
+        logger(LOG_ERR, "%s: Authentication failed: Invalid name", node->addrw);
         return false;
     }
 
@@ -335,24 +335,26 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
     if (id->local_node) {
         // Disconnect the current socket if node tries to authenticate
         // as our local node
-        logger(LOG_ERR, "%s: Tried to authenticate as myself", node->addrw);
+        logger(LOG_ERR, "%s: Authentication failed: Tried to authenticate as myself",
+            node->addrw);
         return node_queue_goodbye(node);
     }
 
     // Try to load the remote node's public key
-    logger_debug(DBG_AUTHENTICATION, "Loading the public key for %s", name);
+    logger_debug(DBG_AUTHENTICATION, "%s: Authentication: Loading the public key for %s",
+        node->addrw, name);
     EVP_PKEY *remote_pubkey = oshd_open_key(id->name, false);
 
     if (!remote_pubkey) {
         // If we don't have a public key to verify the HELLO signature,
         // we can't authenticate the node
-        logger(LOG_ERR, "%s: %s: Authentication failed: No public key",
+        logger(LOG_ERR, "%s: Authentication failed: No public key for %s",
             node->addrw, name);
         return node_queue_goodbye(node);
     }
 
     // If the signature verification succeeds then the node is authenticated
-    logger_debug(DBG_AUTHENTICATION, "Verifying signature from %s (%s)",
+    logger_debug(DBG_AUTHENTICATION, "%s: Authentication: Verifying signature from %s",
         node->addrw, id->name);
     node->authenticated = pkey_verify(remote_pubkey, (uint8_t *) payload,
         sizeof(oshpacket_hello_t) - sizeof(payload->sig), payload->sig,
@@ -365,14 +367,14 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
     // The remote node did not sign the data using the private key
     // associated with the public key we have
     if (!node->authenticated) {
-        logger(LOG_ERR, "%s: %s: Authentication failed: Signature verification failed",
+        logger(LOG_ERR, "%s: Authentication failed: Failed to verify signature from %s",
             node->addrw, name);
         return node_queue_goodbye(node);
     }
 
     if (id->node_socket) {
         // Disconnect the current socket if node is already authenticated
-        logger(LOG_ERR, "%s: Another socket is already authenticated as %s",
+        logger(LOG_WARN, "%s: Another socket is already authenticated as %s",
             node->addrw, name);
 
         // This node should not be used
@@ -386,7 +388,7 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
             if (!id->node_socket->reconnect_addr) {
                 logger(LOG_INFO, "%s: Moving reconnection to %s:%u to %s (%s)",
                     node->addrw, node->reconnect_addr, node->reconnect_port,
-                    id->node_socket->addrw, id->name);
+                    id->name, id->node_socket->addrw);
                 node_reconnect_to(id->node_socket, node->reconnect_addr,
                     node->reconnect_port, node->reconnect_delay);
             } else {
