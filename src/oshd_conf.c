@@ -29,6 +29,7 @@ static char oshd_conf_error[256];
 static bool oshd_param_noserver(__attribute__((unused)) ecp_t *ecp)
 {
     oshd.server_enabled = false;
+    logger_debug(DBG_CONF, "Disabled server");
     return true;
 }
 
@@ -36,6 +37,7 @@ static bool oshd_param_noserver(__attribute__((unused)) ecp_t *ecp)
 static bool oshd_param_nodevice(__attribute__((unused)) ecp_t *ecp)
 {
     oshd.tuntap_used = false;
+    logger_debug(DBG_CONF, "Disabled TUN/TAP device");
     return true;
 }
 
@@ -48,7 +50,9 @@ static bool oshd_param_name(ecp_t *ecp)
             "Invalid node name");
         return false;
     }
+    memset(oshd.name, 0, sizeof(oshd.name));
     strncpy(oshd.name, ecp_value(ecp), NODE_NAME_SIZE);
+    logger_debug(DBG_CONF, "Set daemon name to '%s'", oshd.name);
     return true;
 }
 
@@ -65,7 +69,6 @@ static bool oshd_param_keysdir(ecp_t *ecp)
         oshd.keys_dir[len] = '/';
         oshd.keys_dir[len + 1] = '\0';
     }
-
     logger_debug(DBG_CONF, "Set keys dir to '%s'", oshd.keys_dir);
     return true;
 }
@@ -79,6 +82,7 @@ static bool oshd_param_port(ecp_t *ecp)
             "Invalid port: %s", ecp_value(ecp));
         return false;
     }
+    logger_debug(DBG_CONF, "Set server port to %u", oshd.server_port);
     return true;
 }
 
@@ -93,6 +97,7 @@ static bool oshd_param_mode(ecp_t *ecp)
         snprintf(oshd_conf_error, sizeof(oshd_conf_error), "Unknown mode");
         return false;
     }
+    logger_debug(DBG_CONF, "Set device mode to %s", oshd.is_tap ? "TAP" : "TUN");
     return true;
 }
 
@@ -101,6 +106,7 @@ static bool oshd_param_device(ecp_t *ecp)
 {
     memset(oshd.tuntap_dev, 0, sizeof(oshd.tuntap_dev));
     strncpy(oshd.tuntap_dev, ecp_value(ecp), sizeof(oshd.tuntap_dev) - 1);
+    logger_debug(DBG_CONF, "Set device name to %s", ecp_value(ecp));
     return true;
 }
 
@@ -108,6 +114,7 @@ static bool oshd_param_device(ecp_t *ecp)
 static bool oshd_param_devup(ecp_t *ecp)
 {
     oshd_cmd_set("DevUp", ecp_value(ecp));
+    logger_debug(DBG_CONF, "Set DevUp to %s", ecp_value(ecp));
     return true;
 }
 
@@ -115,6 +122,7 @@ static bool oshd_param_devup(ecp_t *ecp)
 static bool oshd_param_devdown(ecp_t *ecp)
 {
     oshd_cmd_set("DevDown", ecp_value(ecp));
+    logger_debug(DBG_CONF, "Set DevDown to %s", ecp_value(ecp));
     return true;
 }
 
@@ -167,6 +175,7 @@ static bool oshd_param_reconnectdelaymin(ecp_t *ecp)
             "ReconnectDelayMin cannot be of 0 seconds or less");
         return false;
     }
+    logger_debug(DBG_CONF, "Set ReconnectDelayMin to %li", oshd.reconnect_delay_min);
     return true;
 }
 
@@ -179,6 +188,7 @@ static bool oshd_param_reconnectdelaymax(ecp_t *ecp)
             "ReconnectDelayMax cannot be of 0 seconds or less");
         return false;
     }
+    logger_debug(DBG_CONF, "Set ReconnectDelayMax to %li", oshd.reconnect_delay_max);
     return true;
 }
 
@@ -238,6 +248,8 @@ bool oshd_load_conf(const char *filename)
     // Iterate through each configuration parameter
     ec_foreach(ecp, conf) {
         bool found = false;
+
+        logger_debug(DBG_CONF, "Processing parameter '%s'", ecp_name(ecp));
 
         // Find the corresponding handler for the parameter
         for (size_t i = 0; oshd_conf_params[i].name; ++i) {
