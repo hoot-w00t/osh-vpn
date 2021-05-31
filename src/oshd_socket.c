@@ -338,18 +338,9 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
         logger(LOG_ERR, "%s: Tried to authenticate as myself", node->addrw);
         return node_queue_goodbye(node);
     }
-    if (id->node_socket) {
-        // Disconnect the current socket if node is already authenticated
-        logger(LOG_ERR, "%s: Another socket is already authenticated as %s",
-            node->addrw, name);
-        return node_queue_goodbye(node);
-    }
-
-    node_id_t *me = node_id_add(oshd.name);
 
     // Try to load the remote node's public key
-    logger_debug(DBG_AUTHENTICATION, "Loading the public key for %s",
-        id->name);
+    logger_debug(DBG_AUTHENTICATION, "Loading the public key for %s", name);
     EVP_PKEY *remote_pubkey = oshd_open_key(id->name, false);
 
     if (!remote_pubkey) {
@@ -363,9 +354,9 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
     // If the signature verification succeeds then the node is authenticated
     logger_debug(DBG_AUTHENTICATION, "Verifying signature from %s (%s)",
         node->addrw, id->name);
-    node->authenticated = pkey_verify(remote_pubkey,
-        (uint8_t *) payload, sizeof(oshpacket_hello_t) - sizeof(payload->sig),
-        payload->sig, sizeof(payload->sig));
+    node->authenticated = pkey_verify(remote_pubkey, (uint8_t *) payload,
+        sizeof(oshpacket_hello_t) - sizeof(payload->sig), payload->sig,
+        sizeof(payload->sig));
 
     // We don't need the remote node's public key anymore
     pkey_free(remote_pubkey);
@@ -378,6 +369,37 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
             node->addrw, name);
         return node_queue_goodbye(node);
     }
+
+    if (id->node_socket) {
+        // Disconnect the current socket if node is already authenticated
+        logger(LOG_ERR, "%s: Another socket is already authenticated as %s",
+            node->addrw, name);
+
+        // This node should not be used
+        node->authenticated = false;
+
+        // If the node has a reconnection we will disable it to prevent
+        // duplicate connections (which will also be refused by the remote node)
+        if (node->reconnect_addr) {
+            // If the other authenticated socket does not have a reconnection
+            // set, we can set it to this node's
+            if (!id->node_socket->reconnect_addr) {
+                logger(LOG_INFO, "%s: Moving reconnection to %s:%u to %s (%s)",
+                    node->addrw, node->reconnect_addr, node->reconnect_port,
+                    id->node_socket->addrw, id->name);
+                node_reconnect_to(id->node_socket, node->reconnect_addr,
+                    node->reconnect_port, node->reconnect_delay);
+            } else {
+                // TODO: Add a way to try reconnecting to multiple addresses
+                logger(LOG_INFO, "%s: Disabling reconnection for %s:%u",
+                    node->addrw, node->reconnect_addr, node->reconnect_port);
+            }
+            node_reconnect_disable(node);
+        }
+        return node_queue_goodbye(node);
+    }
+
+    node_id_t *me = node_id_find(oshd.name);
 
     // The remote node is now authenticated
 
