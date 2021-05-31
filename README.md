@@ -18,3 +18,15 @@ You can also build and run unit tests with
 make test
 ```
 These unit tests require [Criterion](https://github.com/Snaipe/Criterion).
+
+## Installation
+It is possible to install or uninstall the built binary with
+```
+sudo make install
+sudo make uninstall
+```
+
+You can specify a custom prefix if you would like to install/uninstall it to/from a different location (don't put a slash at the end of the prefix)
+```
+sudo make install INSTALL_PREFIX=/usr
+```
