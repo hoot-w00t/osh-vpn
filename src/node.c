@@ -12,7 +12,7 @@
 node_id_t *node_id_find(const char *name)
 {
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
-        if (!strcmp(name, oshd.node_tree[i]->name))
+        if (!strncmp(name, oshd.node_tree[i]->name, NODE_NAME_SIZE))
             return oshd.node_tree[i];
     }
     return NULL;

@@ -713,57 +713,40 @@ bool oshd_process_packet(node_t *node)
     if (!node->authenticated)
         return oshd_process_unauthenticated(node, pkt, payload);
 
-    // We extract the destination node id from the packet header and see if the
-    // packet is meant for us or if we need to forward it
-    char src_node[NODE_NAME_SIZE + 1];
-    char dest_node[NODE_NAME_SIZE + 1];
-    memset(src_node, 0, sizeof(src_node));
-    memset(dest_node, 0, sizeof(dest_node));
-    strncpy(src_node, pkt->src_node, NODE_NAME_SIZE);
-    strncpy(dest_node, pkt->dest_node, NODE_NAME_SIZE);
-
-    if (!node_valid_name(src_node)) {
-        logger(LOG_ERR, "%s: %s: Invalid source node", node->addrw,
-            node->id->name);
-        return false;
-    }
-    if (!node_valid_name(dest_node)) {
-        logger(LOG_ERR, "%s: %s: Invalid destination node", node->addrw,
-            node->id->name);
-        return false;
-    }
-
-    // If the source node doesn't exist in the tree the remote node sent us
-    // invalid data, we drop the connection
-    node_id_t *src = node_id_find(src_node);
+    // If the source or destination nodes don't exist in the tree the remote
+    // node sent us invalid data, we drop the connection
+    node_id_t *src = node_id_find(pkt->src_node);
     if (!src) {
-        logger(LOG_ERR, "%s: %s: Unknown source node: %s", node->addrw,
-            node->id->name, src_node);
+        logger(LOG_ERR, "%s: %s: Unknown source node", node->addrw, node->id->name);
+        return false;
+    }
+
+    node_id_t *dest = node_id_find(pkt->dest_node);
+    if (!dest) {
+        logger(LOG_ERR, "%s: %s: Unknown destination node", node->addrw, node->id->name);
         return false;
     }
 
     // If the destination node is not the local node we'll forward this packet
-    if (strcmp(dest_node, oshd.name)) {
+    if (!dest->local_node) {
         if (pkt->type <= PONG) {
             logger(LOG_WARN, "Dropping %s packet from %s to %s: This type of packet cannot be forwarded",
-                oshpacket_type_name(pkt->type), src_node, dest_node);
+                oshpacket_type_name(pkt->type), src->name, dest->name);
             return true;
         }
-
-        node_id_t *dest = node_id_find(dest_node);
 
         if (dest) {
             if (dest->next_hop) {
                 logger_debug(DBG_ROUTING, "Forwarding %s packet from %s to %s through %s",
-                    oshpacket_type_name(pkt->type), src_node, dest_node, dest->next_hop->id->name);
+                    oshpacket_type_name(pkt->type), src->name, dest->name, dest->next_hop->id->name);
                 node_queue_packet_forward(dest->next_hop, pkt);
             } else {
                 logger(LOG_INFO, "Dropping %s packet from %s to %s: No route",
-                    oshpacket_type_name(pkt->type), src_node, dest_node);
+                    oshpacket_type_name(pkt->type), src->name, dest->name);
             }
         } else {
             logger(LOG_WARN, "Dropping %s packet from %s to %s: Unknown destination",
-                oshpacket_type_name(pkt->type), src_node, dest_node);
+                oshpacket_type_name(pkt->type), src->name, dest->name);
         }
         return true;
     }
