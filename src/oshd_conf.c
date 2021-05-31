@@ -206,6 +206,8 @@ void oshd_init_conf(void)
     memset(&oshd, 0, sizeof(oshd_t));
 
     // Everything that should not be zero by default is set
+    oshd.keys_dir = xstrdup("./");
+
     oshd.tuntap_used = true;
     oshd.tuntap_fd = -1;
 
@@ -267,10 +269,6 @@ bool oshd_load_conf(const char *filename)
 
     if (strlen(oshd.name) == 0) {
         logger(LOG_ERR, "The daemon must have a name");
-        return false;
-    }
-    if (!oshd.keys_dir) {
-        logger(LOG_ERR, "The daemon must have a keys directory");
         return false;
     }
     if (oshd.reconnect_delay_max < oshd.reconnect_delay_min) {
