@@ -18,6 +18,13 @@ node_id_t *node_id_find(const char *name)
     return NULL;
 }
 
+// Find the local node in the node tree
+// As of now the local node is always the first node in the tree
+node_id_t *node_id_find_local(void)
+{
+    return oshd.node_tree[0];
+}
+
 // Add node_id_t with *name to the node tree (doesn't do anything if it already
 // exists)
 node_id_t *node_id_add(const char *name)
@@ -345,7 +352,7 @@ void node_disconnect(node_t *node)
 {
     if (node->authenticated) {
         // Find our two nodes
-        node_id_t *src = node_id_find(oshd.name);
+        node_id_t *src = node_id_find_local();
         node_id_t *dest = node_id_find(node->id->name);
 
         // Make sure that we don't have a direct connection to this node

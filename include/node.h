@@ -109,6 +109,7 @@ struct node {
 };
 
 node_id_t *node_id_find(const char *name);
+node_id_t *node_id_find_local(void);
 node_id_t *node_id_add(const char *name);
 void node_id_free(node_id_t *nid);
 void node_id_add_edge(node_id_t *src, node_id_t *dest);

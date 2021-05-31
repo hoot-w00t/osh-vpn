@@ -401,7 +401,7 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
         return node_queue_goodbye(node);
     }
 
-    node_id_t *me = node_id_find(oshd.name);
+    node_id_t *me = node_id_find_local();
 
     // The remote node is now authenticated
 
