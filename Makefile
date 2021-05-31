@@ -3,8 +3,8 @@ PKG_CONFIG	=	pkg-config
 
 CFLAGS		=	-Wall -Wextra -Wshadow -O2 -g -pipe
 CFLAGS		+=	-Iinclude -Iinclude/easyconf
-CFLAGS		+=	$(shell $(PKG_CONFIG) --cflags openssl)
-LDFLAGS		=	$(shell $(PKG_CONFIG) --libs openssl)
+CFLAGS		+=	$(strip $(shell $(PKG_CONFIG) --cflags openssl))
+LDFLAGS		=	$(strip $(shell $(PKG_CONFIG) --libs openssl))
 
 VERSION_GIT_H	=	include/version_git.h
 VERSION_GIT	=	$(strip $(shell cat $(VERSION_GIT_H) 2>/dev/null))
@@ -12,6 +12,13 @@ HEAD_COMMIT	=	$(strip $(shell git describe --always --tags --abbrev=10))
 
 BIN		=	oshd
 TEST_BIN	=	oshd_tests
+
+INSTALL_PREFIX	=	/usr/local
+INSTALL_PRE_BIN	=	$(INSTALL_PREFIX)/bin
+INSTALL_PRE_ETC	=	$(INSTALL_PREFIX)/etc
+
+INSTALL_BIN	=	$(INSTALL_PRE_BIN)/$(BIN)
+INSTALL_ETC	=	$(INSTALL_PRE_ETC)/oshd
 
 SRC		=	src/crypto/cipher.c		\
 			src/crypto/pkey.c		\
@@ -57,12 +64,6 @@ TEST_DEP	=	$(TEST_OBJ:.o=.d)
 
 all:	update_version_git	$(BIN)
 
-$(BIN):	$(OBJ)
-	$(CC) -o $@ $^ $(LDFLAGS)
-
-$(TEST_BIN):	$(TEST_OBJ)
-	$(CC) -o $@ $^ $(LDFLAGS) -lcriterion
-
 update_version_git:
 ifneq ($(findstring $(HEAD_COMMIT), $(VERSION_GIT)), $(HEAD_COMMIT))
 	@echo Updating $(VERSION_GIT_H) with commit hash $(HEAD_COMMIT)
@@ -72,6 +73,15 @@ endif
 test:	$(TEST_BIN)
 	@./$(TEST_BIN)
 
+install:	$(BIN)
+	mkdir -p "$(INSTALL_PRE_BIN)"
+	mkdir -p "$(INSTALL_ETC)"
+	cp -i "$(BIN)" "$(INSTALL_BIN)"
+
+uninstall:
+	rm -i "$(INSTALL_BIN)"
+	rm -ri "$(INSTALL_ETC)"
+
 clean:
 	rm -rf obj *.gcda *.gcno
 
@@ -79,7 +89,13 @@ obj/%.o:	%.c
 	@mkdir -p "$(shell dirname $@)"
 	$(CC) -MMD $(CFLAGS) -c $<	-o $@
 
+$(BIN):	$(OBJ)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+$(TEST_BIN):	$(TEST_OBJ)
+	$(CC) -o $@ $^ $(LDFLAGS) -lcriterion
+
 -include $(DEP)
 -include $(TEST_DEP)
 
-.PHONY:	all	update_version_git	test	clean
+.PHONY:	all	update_version_git	test	install	uninstall	clean
