@@ -221,13 +221,14 @@ void node_tree_dump_digraph(void)
             style = "filled";
             snprintf(route, sizeof(route), "(local)");
         } else if (oshd.node_tree[i]->next_hop) {
-            // Direct and indirect nodes are outlined in green
-            color = "green";
+            // Direct and indirect nodes are outlined in either green or turquoise
             style = "solid";
             if (oshd.node_tree[i]->node_socket) {
+                color = "green";
                 snprintf(route, sizeof(route), "(direct, %ims)",
                     oshd.node_tree[i]->node_socket->rtt);
             } else {
+                color = "turquoise";
                 snprintf(route, sizeof(route), "(indirect through %s)",
                     oshd.node_tree[i]->next_hop->id->name);
             }
@@ -238,21 +239,21 @@ void node_tree_dump_digraph(void)
             snprintf(route, sizeof(route), "(no route)");
         }
 
-        printf("    %s [label=\"%s\\n%s\", color=%s, style=%s];\n", oshd.node_tree[i]->name,
+        printf("    \"%s\" [label=\"%s\\n%s\", color=%s, style=%s];\n", oshd.node_tree[i]->name,
             oshd.node_tree[i]->name, route, color, style);
     }
 
     // We define and label our local routes
     for (size_t i = 0; i < oshd.local_routes_count; ++i) {
         netaddr_ntop(addr, sizeof(addr), &oshd.local_routes[i]);
-        printf("    \"%s\" [label=\"%s\", color=blue, style=solid];\n",
+        printf("    \"%s\" [label=\"%s\", color=grey, style=solid];\n",
             addr, addr);
     }
 
     // We define and label the remote routes
     for (size_t i = 0; i < oshd.routes_count; ++i) {
         netaddr_ntop(addr, sizeof(addr), &oshd.routes[i]->addr);
-        printf("    \"%s\" [label=\"%s\", color=purple, style=solid];\n",
+        printf("    \"%s\" [label=\"%s\", color=grey, style=solid];\n",
             addr, addr);
     }
 
@@ -263,7 +264,7 @@ void node_tree_dump_digraph(void)
     // make the bi-directionnal connections
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
         for (ssize_t j = 0; j < oshd.node_tree[i]->edges_count; ++j) {
-            printf("    %s -> %s;\n", oshd.node_tree[i]->name,
+            printf("    \"%s\" -> \"%s\";\n", oshd.node_tree[i]->name,
                 oshd.node_tree[i]->edges[j]->name);
         }
     }
@@ -271,13 +272,13 @@ void node_tree_dump_digraph(void)
     // We connect our local node to its routes
     for (size_t i = 0; i < oshd.local_routes_count; ++i) {
         netaddr_ntop(addr, sizeof(addr), &oshd.local_routes[i]);
-        printf("    %s -> \"%s\";\n", oshd.name, addr);
+        printf("    \"%s\" -> \"%s\";\n", oshd.name, addr);
     }
 
     // We connect the remote routes to their destination nodes
     for (size_t i = 0; i < oshd.routes_count; ++i) {
         netaddr_ntop(addr, sizeof(addr), &oshd.routes[i]->addr);
-        printf("    %s -> \"%s\";\n", oshd.routes[i]->dest_node->name, addr);
+        printf("    \"%s\" -> \"%s\";\n", oshd.routes[i]->dest_node->name, addr);
     }
 
     printf("}\n");
