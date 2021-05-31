@@ -744,6 +744,12 @@ bool oshd_process_packet(node_t *node)
 
     // If the destination node is not the local node we'll forward this packet
     if (strcmp(dest_node, oshd.name)) {
+        if (pkt->type <= PONG) {
+            logger(LOG_WARN, "Dropping %s packet from %s to %s: This type of packet cannot be forwarded",
+                oshpacket_type_name(pkt->type), src_node, dest_node);
+            return true;
+        }
+
         node_id_t *dest = node_id_find(dest_node);
 
         if (dest) {

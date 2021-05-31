@@ -29,11 +29,11 @@
 typedef enum oshpacket_type {
     HELLO = 0,
     HANDSHAKE,
+    EDGE_EXG,
     GOODBYE,
     PING,
     PONG,
     DATA,
-    EDGE_EXG,
     ADD_EDGE,
     DEL_EDGE,
     ADD_ROUTE
