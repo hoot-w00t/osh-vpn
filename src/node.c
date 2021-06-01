@@ -794,6 +794,39 @@ bool node_queue_edge_broadcast(node_t *exclude, oshpacket_type_t type,
     }
 }
 
+// Dynamically append edges to *buf
+static void edge_exg_append(oshpacket_edge_t **buf, size_t *buf_count,
+    const char *src_node, const char *dest_node, const char *edge_type)
+{
+    const size_t alloc_count = 16;
+
+    // Trim repeating edges
+    // Including src -> dest and dest -> src
+    // The source and destination edges will be linked bidirectionally so we can
+    // send one direction only
+    for (size_t i = 0; i < (*buf_count); ++i) {
+        if (   !strcmp((*buf)[i].src_node, dest_node)
+            && !strcmp((*buf)[i].dest_node, src_node))
+        {
+            // This edge is already in the list in the other direction
+            logger_debug(DBG_NODETREE, "    %s: %s <=> %s (skipped, repeating)",
+                edge_type, src_node, dest_node);
+            return;
+        }
+    }
+
+    // Add this edge to the buffer
+    logger_debug(DBG_NODETREE, "    %s: %s <=> %s", edge_type, src_node, dest_node);
+
+    // Reallocate more alloc_count items in the buffer when we need more memory
+    if ((*buf_count) % alloc_count == 0)
+        *buf = xrealloc(*buf, sizeof(oshpacket_edge_t) * ((*buf_count) + alloc_count));
+
+    memcpy((*buf)[(*buf_count)].src_node, src_node, NODE_NAME_SIZE);
+    memcpy((*buf)[(*buf_count)].dest_node, dest_node, NODE_NAME_SIZE);
+    *buf_count += 1;
+}
+
 // Queue EDGE_EXG packets for *node with the whole network map
 bool node_queue_edge_exg(node_t *node)
 {
@@ -803,9 +836,6 @@ bool node_queue_edge_exg(node_t *node)
     /*
        TODO: We can also optimize this more by creating/updating this buffer
              on after a node_tree_update() instead of doing it here
-       TODO: We can optimize A LOT by allocating more entries at a time
-             to minimize memory reallocation latency
-       TODO: We can also trim repeating edges
     */
 
     logger_debug(DBG_NODETREE, "node_queue_edge_exg: Creating the edge map");
@@ -814,30 +844,13 @@ bool node_queue_edge_exg(node_t *node)
     // second element, because the first one will always be our local node
     for (size_t i = 1; i < oshd.node_tree_count; ++i) {
         // Direct edge
-        if (oshd.node_tree[i]->node_socket) {
-            logger_debug(DBG_NODETREE, "    Direct  : %s <=> %s",
-                oshd.name, oshd.node_tree[i]->name);
-
-            // Allocate memory to store the new edge and copy the edge names
-            buf = xrealloc(buf, sizeof(oshpacket_edge_t) * (buf_count + 1));
-            memcpy(buf[buf_count].src_node, oshd.name, NODE_NAME_SIZE);
-            memcpy(buf[buf_count].dest_node, oshd.node_tree[i]->name,
-                NODE_NAME_SIZE);
-            ++buf_count;
-        }
+        if (oshd.node_tree[i]->node_socket)
+            edge_exg_append(&buf, &buf_count, oshd.name, oshd.node_tree[i]->name, "Direct");
 
         // Indirect edges
         for (ssize_t j = 0; j < oshd.node_tree[i]->edges_count; ++j) {
-            logger_debug(DBG_NODETREE, "    Indirect: %s <=> %s",
-                oshd.node_tree[i]->name, oshd.node_tree[i]->edges[j]->name);
-
-            // Allocate memory to store the new edge and copy the edge names
-            buf = xrealloc(buf, sizeof(oshpacket_edge_t) * (buf_count + 1));
-            memcpy(buf[buf_count].src_node, oshd.node_tree[i]->name,
-                NODE_NAME_SIZE);
-            memcpy(buf[buf_count].dest_node, oshd.node_tree[i]->edges[j]->name,
-                NODE_NAME_SIZE);
-            ++buf_count;
+            edge_exg_append(&buf, &buf_count, oshd.node_tree[i]->name,
+                oshd.node_tree[i]->edges[j]->name, "Indirect");
         }
     }
 
