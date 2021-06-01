@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 
 // Find node_id_t with *name in the node tree
 node_id_t *node_id_find(const char *name)
@@ -204,12 +205,12 @@ iterate_queue:
     return next_hop;
 }
 
-// Digraph dump
-void node_tree_dump_digraph(void)
+// Digraph dump to *out
+static void node_tree_dump_digraph_to(FILE *out)
 {
     char addr[INET6_ADDRSTRLEN];
 
-    printf("digraph osh_node_tree {\n");
+    fprintf(out, "digraph osh_node_tree {\n");
 
     // We start by defining and labeling every node on the network
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
@@ -241,21 +242,21 @@ void node_tree_dump_digraph(void)
             snprintf(route, sizeof(route), "(no route)");
         }
 
-        printf("    \"%s\" [label=\"%s\\n%s\", color=%s, style=%s];\n", oshd.node_tree[i]->name,
-            oshd.node_tree[i]->name, route, color, style);
+        fprintf(out, "    \"%s\" [label=\"%s\\n%s\", color=%s, style=%s];\n",
+            oshd.node_tree[i]->name, oshd.node_tree[i]->name, route, color, style);
     }
 
     // We define and label our local routes
     for (size_t i = 0; i < oshd.local_routes_count; ++i) {
         netaddr_ntop(addr, sizeof(addr), &oshd.local_routes[i]);
-        printf("    \"%s\" [label=\"%s\", color=grey, style=solid];\n",
+        fprintf(out, "    \"%s\" [label=\"%s\", color=grey, style=solid];\n",
             addr, addr);
     }
 
     // We define and label the remote routes
     for (size_t i = 0; i < oshd.routes_count; ++i) {
         netaddr_ntop(addr, sizeof(addr), &oshd.routes[i]->addr);
-        printf("    \"%s\" [label=\"%s\", color=grey, style=solid];\n",
+        fprintf(out, "    \"%s\" [label=\"%s\", color=grey, style=solid];\n",
             addr, addr);
     }
 
@@ -266,7 +267,7 @@ void node_tree_dump_digraph(void)
     // make the bi-directionnal connections
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
         for (ssize_t j = 0; j < oshd.node_tree[i]->edges_count; ++j) {
-            printf("    \"%s\" -> \"%s\";\n", oshd.node_tree[i]->name,
+            fprintf(out, "    \"%s\" -> \"%s\";\n", oshd.node_tree[i]->name,
                 oshd.node_tree[i]->edges[j]->name);
         }
     }
@@ -274,16 +275,36 @@ void node_tree_dump_digraph(void)
     // We connect our local node to its routes
     for (size_t i = 0; i < oshd.local_routes_count; ++i) {
         netaddr_ntop(addr, sizeof(addr), &oshd.local_routes[i]);
-        printf("    \"%s\" -> \"%s\";\n", oshd.name, addr);
+        fprintf(out, "    \"%s\" -> \"%s\";\n", oshd.name, addr);
     }
 
     // We connect the remote routes to their destination nodes
     for (size_t i = 0; i < oshd.routes_count; ++i) {
         netaddr_ntop(addr, sizeof(addr), &oshd.routes[i]->addr);
-        printf("    \"%s\" -> \"%s\";\n", oshd.routes[i]->dest_node->name, addr);
+        fprintf(out, "    \"%s\" -> \"%s\";\n", oshd.routes[i]->dest_node->name, addr);
     }
 
-    printf("}\n");
+    fprintf(out, "}\n");
+    fflush(out);
+}
+
+// Digraph dump
+void node_tree_dump_digraph(void)
+{
+    if (oshd.digraph_file) {
+        FILE *fout = fopen(oshd.digraph_file, "w");
+
+        if (!fout) {
+            logger(LOG_ERR, "Failed to dump digraph to %s: %s", oshd.digraph_file,
+                strerror(errno));
+            return;
+        }
+        logger(LOG_INFO, "Dumping digraph to '%s'", oshd.digraph_file);
+        node_tree_dump_digraph_to(fout);
+        fclose(fout);
+    } else {
+        node_tree_dump_digraph_to(stdout);
+    }
 }
 
 // Dump the node tree

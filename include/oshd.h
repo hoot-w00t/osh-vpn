@@ -59,6 +59,9 @@ typedef struct oshd {
     time_t reconnect_delay_min;
     time_t reconnect_delay_max;
 
+    // Path to a file to dump the digraph to
+    char *digraph_file;
+
     // When set to false the daemon will stop
     bool run;
 } oshd_t;

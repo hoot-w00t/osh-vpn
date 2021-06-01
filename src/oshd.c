@@ -202,6 +202,7 @@ void oshd_free(void)
     free(oshd.keys_dir);
     pkey_free(oshd.privkey);
     pkey_free(oshd.pubkey);
+    free(oshd.digraph_file);
 }
 
 void oshd_loop(void)

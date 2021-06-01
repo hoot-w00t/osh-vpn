@@ -192,20 +192,30 @@ static bool oshd_param_reconnectdelaymax(ecp_t *ecp)
     return true;
 }
 
+// DigraphFile
+static bool oshd_param_digraphfile(ecp_t *ecp)
+{
+    free(oshd.digraph_file);
+    oshd.digraph_file = xstrdup(ecp_value(ecp));
+    logger_debug(DBG_CONF, "Set DigraphFile to '%s'", oshd.digraph_file);
+    return true;
+}
+
 // Array of all configuration parameters and their handlers
 static const oshd_conf_param_t oshd_conf_params[] = {
-    { .name = "NoServer", .type = VALUE_NONE, &oshd_param_noserver},
-    { .name = "NoDevice", .type = VALUE_NONE, &oshd_param_nodevice},
-    { .name = "Name", .type = VALUE_REQUIRED, &oshd_param_name},
-    { .name = "KeysDir", .type = VALUE_REQUIRED, &oshd_param_keysdir},
-    { .name = "Port", .type = VALUE_REQUIRED, &oshd_param_port},
-    { .name = "Mode", .type = VALUE_REQUIRED, &oshd_param_mode},
-    { .name = "Device", .type = VALUE_REQUIRED, &oshd_param_device},
-    { .name = "DevUp", .type = VALUE_REQUIRED, &oshd_param_devup},
-    { .name = "DevDown", .type = VALUE_REQUIRED, &oshd_param_devdown},
-    { .name = "Remote", .type = VALUE_REQUIRED, &oshd_param_remote},
-    { .name = "ReconnectDelayMin", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymin},
-    { .name = "ReconnectDelayMax", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymax},
+    { .name = "NoServer", .type = VALUE_NONE, &oshd_param_noserver },
+    { .name = "NoDevice", .type = VALUE_NONE, &oshd_param_nodevice },
+    { .name = "Name", .type = VALUE_REQUIRED, &oshd_param_name },
+    { .name = "KeysDir", .type = VALUE_REQUIRED, &oshd_param_keysdir },
+    { .name = "Port", .type = VALUE_REQUIRED, &oshd_param_port },
+    { .name = "Mode", .type = VALUE_REQUIRED, &oshd_param_mode },
+    { .name = "Device", .type = VALUE_REQUIRED, &oshd_param_device },
+    { .name = "DevUp", .type = VALUE_REQUIRED, &oshd_param_devup },
+    { .name = "DevDown", .type = VALUE_REQUIRED, &oshd_param_devdown },
+    { .name = "Remote", .type = VALUE_REQUIRED, &oshd_param_remote },
+    { .name = "ReconnectDelayMin", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymin },
+    { .name = "ReconnectDelayMax", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymax },
+    { .name = "DigraphFile", .type = VALUE_REQUIRED, &oshd_param_digraphfile },
     { NULL, 0, NULL }
 };
 
