@@ -209,7 +209,7 @@ void node_tree_dump_digraph(void)
 {
     char addr[INET6_ADDRSTRLEN];
 
-    printf("digraph %s_network_map {\n", oshd.name);
+    printf("digraph osh_node_tree {\n");
 
     // We start by defining and labeling every node on the network
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
