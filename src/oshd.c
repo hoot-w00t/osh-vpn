@@ -77,7 +77,7 @@ static void pfd_update(void)
 static void oshd_signal_exit(int sig)
 {
     if (oshd.run) {
-        logger_debug(DBG_OSHD, "Received exit signal, calling oshd_stop()");
+        logger_debug(DBG_OSHD, "Oshd: Received exit signal");
         oshd_stop();
     } else {
         logger(LOG_CRIT, "Uncaught exit signal: %s", strsignal(sig));
@@ -88,6 +88,7 @@ static void oshd_signal_exit(int sig)
 // When we get this signal, dump the digraph of the network to stdout
 static void oshd_signal_digraph(__attribute__((unused)) int sig)
 {
+    logger_debug(DBG_OSHD, "Oshd: Received digraph signal");
     node_tree_dump_digraph();
 }
 
@@ -96,6 +97,7 @@ static void oshd_signal_digraph(__attribute__((unused)) int sig)
 // Then for all nodes: disable reconnection and queue GOODBYE packets
 void oshd_stop(void)
 {
+    logger_debug(DBG_OSHD, "Oshd: Gracefully stopping");
     oshd.run = false;
     for (size_t i = 0; i < oshd.nodes_count; ++i) {
         node_reconnect_disable(oshd.nodes[i]);
@@ -219,11 +221,12 @@ void oshd_loop(void)
     // nodes
     // When oshd.run is set to false all nodes should gracefully close and the
     // nodes_count should get to 0 before the program can finally exit
+    logger_debug(DBG_OSHD, "Oshd: Entering main loop");
     while (oshd.run || oshd.nodes_count) {
         // Process queued events
         event_process_queued();
         if (oshd.nodes_updated) {
-            logger_debug(DBG_OSHD, "Nodes updated, resizing pfd");
+            logger_debug(DBG_OSHD, "Oshd: Nodes updated, resizing pfd");
             oshd.nodes_updated = false;
             pfd_resize();
         }
@@ -233,7 +236,6 @@ void oshd_loop(void)
 
         // Poll for events on all sockets and the TUN/TAP device
         events = poll(pfd, pfd_count, 100);
-
         if (events < 0) {
             // Polling errors can occur when receiving signals, in this case the
             // error isn't actually from the polling so we can ignore it
@@ -244,6 +246,8 @@ void oshd_loop(void)
             oshd_stop();
             return;
         }
+
+        logger_debug(DBG_OSHD, "Oshd: Polled %i/%zu events", events, pfd_count);
 
         // We then iterate over all our file descriptors to handle the events
         for (size_t i = 0; i < pfd_count; ++i) {
