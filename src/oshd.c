@@ -262,13 +262,21 @@ void oshd_loop(void)
                 // socket has finished connecting
                 oshd_connect_async(oshd.nodes[i - pfd_off]);
             } else {
-                if (pfd[i].revents & POLLIN) {
-                    // A node is ready to receive data
-                    node_recv_queued(oshd.nodes[i - pfd_off]);
-                }
-                if (pfd[i].revents & POLLOUT) {
-                    // A node is ready to send queued data
-                    node_send_queued(oshd.nodes[i - pfd_off]);
+                if (pfd[i].revents & (POLLERR | POLLHUP)) {
+                    logger(LOG_ERR, "%s: %s", oshd.nodes[i - pfd_off]->addrw,
+                        (pfd[i].revents & POLLHUP) ? "socket closed"
+                                                   : "socket error");
+
+                    event_queue_node_remove(oshd.nodes[i - pfd_off]);
+                } else {
+                    if (pfd[i].revents & POLLIN) {
+                        // A node is ready to receive data
+                        node_recv_queued(oshd.nodes[i - pfd_off]);
+                    }
+                    if (pfd[i].revents & POLLOUT) {
+                        // A node is ready to send queued data
+                        node_send_queued(oshd.nodes[i - pfd_off]);
+                    }
                 }
             }
         }
