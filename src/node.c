@@ -299,7 +299,7 @@ void node_tree_dump_digraph(void)
                 strerror(errno));
             return;
         }
-        logger(LOG_INFO, "Dumping digraph to '%s'", oshd.digraph_file);
+        logger_debug(DBG_OSHD, "Dumping digraph to '%s'", oshd.digraph_file);
         node_tree_dump_digraph_to(fout);
         fclose(fout);
     } else {
