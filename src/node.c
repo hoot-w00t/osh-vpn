@@ -105,10 +105,12 @@ void node_id_del_edge(node_id_t *src, node_id_t *dest)
 }
 
 // Dynamically resize array and add *n to the end, then increment the count
-// TODO: Optimize this, allocating memory for each item is very slow
 static void node_id_array_append(node_id_t ***arr, size_t *count, node_id_t *n)
 {
-    *arr = xrealloc(*arr, sizeof(node_id_t *) * ((*count) + 1));
+    const size_t alloc_count = 16;
+
+    if ((*count) % alloc_count == 0)
+        *arr = xrealloc(*arr, sizeof(node_id_t *) * ((*count) + alloc_count));
     (*arr)[(*count)] = n;
     *count += 1;
 }
