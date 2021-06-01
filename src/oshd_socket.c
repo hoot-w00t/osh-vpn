@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <netinet/tcp.h>
 
 // Set network socket options
 static bool oshd_setsockopts(int s)
@@ -21,6 +22,14 @@ static bool oshd_setsockopts(int s)
     optval = 1;
     if (setsockopt(s, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval)) < 0) {
         logger(LOG_ERR, "Failed to set SO_KEEPALIVE option on socket %i", s);
+        return false;
+    }
+
+    // Set socket timeout to 30 seconds
+    // The timeout value is in milliseconds
+    optval = 30000;
+    if (setsockopt(s, SOL_TCP, TCP_USER_TIMEOUT, &optval, sizeof(optval)) < 0) {
+        logger(LOG_ERR, "Failed to set TCP_USER_TIMEOUT option on socket %i", s);
         return false;
     }
 
