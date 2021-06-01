@@ -8,7 +8,18 @@ Although it has basic authentication and encryption it was not tested much and I
 ## Building
 It uses the [OpenSSL library](https://www.openssl.org/) for all cryptography work.
 
-Clone the repository and navigate to it, then just run
+Install the dependencies
+```
+# On Debian/Ubuntu
+sudo apt install make git gcc pkg-config libssl-dev
+```
+```
+# On Arch Linux
+sudo pacman -S --needed make git gcc pkgconf openssl
+```
+
+
+Clone the repository and navigate to it, then run
 ```
 make
 ```
