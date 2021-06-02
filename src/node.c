@@ -562,7 +562,7 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
         return true;
     } else {
         logger(LOG_WARN, "%s: Dropping %s packet of %u bytes: send queue is full",
-            oshpacket_type_name(type), node->addrw, payload_size);
+            node->addrw, oshpacket_type_name(type), payload_size);
         return false;
     }
 }
@@ -577,7 +577,7 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
     // drop it
     if (!node->send_cipher) {
         logger(LOG_WARN, "%s: Dropping forwarded %s packet of %u bytes: No send_cipher",
-            oshpacket_type_name(pkt->type), node->addrw, pkt->payload_size);
+            node->addrw, oshpacket_type_name(pkt->type), pkt->payload_size);
         return false;
     }
 
@@ -634,7 +634,7 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
         return true;
     } else {
         logger(LOG_WARN, "%s: Dropping forwarded %s packet of %u bytes: send queue is full",
-            oshpacket_type_name(pkt->type), node->addrw, pkt->payload_size);
+            node->addrw, oshpacket_type_name(pkt->type), pkt->payload_size);
         return false;
     }
 }
