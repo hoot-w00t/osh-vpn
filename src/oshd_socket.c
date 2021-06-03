@@ -94,8 +94,10 @@ bool oshd_connect_queue(const char *address, const uint16_t port, time_t delay)
     client_fd = tcp_outgoing_socket(address, port, d_addr, sizeof(d_addr),
         (struct sockaddr *) &d_sin, d_sin_len);
 
-    if (client_fd < 0)
+    if (client_fd < 0) {
+        event_queue_connect(address, port, delay * 2, delay);
         return false;
+    }
 
     // The socket was created successfully, we can initialize some of the node's
     // socket information
@@ -153,8 +155,10 @@ bool oshd_connect(const char *address, const uint16_t port, time_t delay)
     // These are the same steps as in the oshd_connect_queue function
     // but here we will have a connected socket when returning
     memset(d_addr, 0, sizeof(d_addr));
-    if ((client_fd = tcp_connect(address, port, d_addr, sizeof(d_addr))) < 0)
+    if ((client_fd = tcp_connect(address, port, d_addr, sizeof(d_addr))) < 0) {
+        event_queue_connect(address, port, delay * 2, delay);
         return false;
+    }
     netaddr_pton(&naddr, d_addr);
     node = node_init(client_fd, true, &naddr, port);
     node_reconnect_to(node, address, port, delay);
