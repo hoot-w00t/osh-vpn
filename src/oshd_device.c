@@ -10,7 +10,6 @@
 // Read network packets from the TUN/TAP device and send them to its destinations
 void oshd_read_tuntap_pkt(void)
 {
-read_again:
     ssize_t pkt_size;
     uint8_t pkt[OSHPACKET_PAYLOAD_MAXSIZE];
     netpacket_t pkt_hdr;
@@ -18,6 +17,7 @@ read_again:
     char pkt_dest[INET6_ADDRSTRLEN];
     netroute_t *route;
 
+read_again:
     if ((pkt_size = read(oshd.tuntap_fd, pkt, sizeof(pkt))) <= 0) {
         // When we can't read any more data, exit the function
         if (errno == EAGAIN || errno == EWOULDBLOCK)

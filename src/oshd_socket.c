@@ -202,10 +202,10 @@ bool node_send_queued(node_t *node)
 // Process the packet when received completely
 bool node_recv_queued(node_t *node)
 {
-recv_again:
     ssize_t recvd_size;
     oshpacket_hdr_t *pkt = (oshpacket_hdr_t *) node->io.recvbuf;
 
+recv_again:
     recvd_size = recv(node->fd, node->io.recvbuf + node->io.recv_bytes,
         node->io.recv_packet_size - node->io.recv_bytes, MSG_NOSIGNAL);
 
