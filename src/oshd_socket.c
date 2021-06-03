@@ -1,7 +1,7 @@
 #include "oshd.h"
 #include "oshd_device.h"
 #include "oshd_route.h"
-#include "node.h"
+#include "oshd_socket.h"
 #include "events.h"
 #include "netpacket.h"
 #include "tcp.h"

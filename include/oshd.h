@@ -73,7 +73,6 @@ int set_nonblocking(int fd);
 void oshd_stop(void);
 bool oshd_init(void);
 void oshd_free(void);
-bool oshd_process_packet(node_t *node);
 void oshd_loop(void);
 
 #endif
