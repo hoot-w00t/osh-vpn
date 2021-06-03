@@ -7,9 +7,10 @@
 #include <errno.h>
 #include <unistd.h>
 
-// Read a network packet from TUN/TAP device and send it to its destinations
+// Read network packets from the TUN/TAP device and send them to its destinations
 void oshd_read_tuntap_pkt(void)
 {
+read_again:
     ssize_t pkt_size;
     uint8_t pkt[OSHPACKET_PAYLOAD_MAXSIZE];
     netpacket_t pkt_hdr;
@@ -18,6 +19,10 @@ void oshd_read_tuntap_pkt(void)
     netroute_t *route;
 
     if ((pkt_size = read(oshd.tuntap_fd, pkt, sizeof(pkt))) <= 0) {
+        // When we can't read any more data, exit the function
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return;
+
         logger(LOG_CRIT, "%s: read(): %s", oshd.tuntap_dev, strerror(errno));
         oshd_stop();
         return;
@@ -48,6 +53,10 @@ void oshd_read_tuntap_pkt(void)
             oshd.tuntap_dev, oshd.name, pkt_src, pkt_dest, pkt_size);
         node_queue_packet_broadcast(NULL, DATA, pkt, (uint16_t) pkt_size);
     }
+
+    // This is the same as having a while(1) loop on the whole function, in the
+    // current case I find using goto cleaner than while
+    goto read_again;
 }
 
 // Write network packet to the TUN/TAP device
