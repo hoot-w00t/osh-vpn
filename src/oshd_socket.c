@@ -415,8 +415,6 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
 
     logger(LOG_INFO, "%s: %s: Authenticated successfully", node->addrw,
         node->id->name);
-    logger(LOG_INFO, "%s: %s: Exchanging the local network map",
-        node->addrw, node->id->name);
 
     if (!node_queue_edge_exg(node))
         return false;
