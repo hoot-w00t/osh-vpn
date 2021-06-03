@@ -202,6 +202,7 @@ bool node_send_queued(node_t *node)
 // Process the packet when received completely
 bool node_recv_queued(node_t *node)
 {
+recv_again:
     ssize_t recvd_size;
     oshpacket_hdr_t *pkt = (oshpacket_hdr_t *) node->io.recvbuf;
 
@@ -209,6 +210,7 @@ bool node_recv_queued(node_t *node)
         node->io.recv_packet_size - node->io.recv_bytes, MSG_NOSIGNAL);
 
     if (recvd_size > 0) {
+        logger_debug(DBG_SOCKETS, "%s: Received %zi bytes", node->addrw, recvd_size);
         node->io.recv_bytes += recvd_size;
         if (!node->io.recvd_hdr) {
             if (node->io.recv_bytes >= OSHPACKET_PUBLIC_HDR_SIZE) {
@@ -245,11 +247,15 @@ bool node_recv_queued(node_t *node)
             node->io.recv_bytes = 0;
         }
     } else if (recvd_size < 0) {
+        // There is no more data ready to be received on the socket, return
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return true;
+
         logger(LOG_ERR, "%s: recv: %s", node->addrw, strerror(errno));
         event_queue_node_remove(node);
         return false;
     }
-    return true;
+    goto recv_again;
 }
 
 // Iterate through all edges in *payload and add/delete them
