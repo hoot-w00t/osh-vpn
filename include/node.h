@@ -9,17 +9,14 @@
 #include <sys/time.h>
 #include <netinet/in.h>
 
-#ifndef NODE_SENDQ_SIZE
-// Allocate 2 MiB of buffer to the send queue at most
-#define NODE_SENDQ_SIZE (1024 * 1024 * 2)
+#ifndef NODE_SENDQ_MIN_SIZE
+// Allocate 2 MiB of buffer to the send queue at minimum
+#define NODE_SENDQ_MIN_SIZE (1024 * 1024 * 2)
 #endif
 
-#ifndef NODE_SENDQ_SLOTS
-#define NODE_SENDQ_SLOTS (NODE_SENDQ_SIZE / OSHPACKET_MAXSIZE)
-#endif
-
-#if (NODE_SENDQ_SLOTS <= 0)
-#error "NODE_SENDQ_SLOTS must have at least one slot"
+#ifndef NODE_SENDQ_ALIGNMENT
+// Align the send queue allocations on the minimum size
+#define NODE_SENDQ_ALIGNMENT NODE_SENDQ_MIN_SIZE
 #endif
 
 typedef struct node_id node_id_t;
@@ -33,8 +30,6 @@ struct node_io {
     bool recvd_hdr;            // true when the packet header was processed
 
     netbuffer_t *sendq;         // Network buffer for queuing packets
-    uint8_t *sendq_ptr;         // Buffer from which we are currently sending
-    uint16_t sendq_packet_size; // Amount of remaining bytes to send from the buffer
 };
 
 struct node_id {

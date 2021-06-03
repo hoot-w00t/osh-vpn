@@ -5,22 +5,30 @@
 #include <stddef.h>
 
 typedef struct netbuffer {
-    size_t slot_size;      // Size in bytes of each slot
-    size_t slot_count;     // Number of allocated slots
-    size_t next_available; // Index of the next available slot (netbuffer_reserve)
-    size_t next_taken;     // Index of the next taken slot (netbuffer_next)
-    uint8_t *data;         // Slots data
-    size_t data_size;      // Size of *data
-    uint8_t **slots;       // Pointers to the slots allocated in *data
-    uint8_t *slots_taken;  // Array of slot_count being non-zero or zero to
-                           // indicate which slots are reserved and which are
-                           // available. Non-zero means that the slot is taken,
-                           // zero means that the slot is available
+    uint8_t *data;       // Data buffer
+    size_t data_size;    // Size of the reserved data in the buffer
+
+    size_t min_size;     // Minimum allocated size of the data buffer
+    size_t current_size; // Currently allocated size of the data buffer
+    size_t alignment;    // Size to align reallocations to
 } netbuffer_t;
 
-netbuffer_t *netbuffer_alloc(size_t slot_count, size_t slot_size);
+// Data pointer of the netbuffer
+#define netbuffer_data(nbuf) ((nbuf)->data)
+
+// Returns the amount of bytes queued in nbuf->data
+#define netbuffer_data_size(nbuf) ((nbuf)->data_size)
+
+netbuffer_t *netbuffer_create(size_t min_size, size_t alignment);
 void netbuffer_free(netbuffer_t *nbuf);
-uint8_t *netbuffer_reserve(netbuffer_t *nbuf);
-uint8_t *netbuffer_next(netbuffer_t *nbuf);
+
+void netbuffer_expand(netbuffer_t *nbuf, size_t size);
+void netbuffer_shrink(netbuffer_t *nbuf);
+
+uint8_t *netbuffer_reserve(netbuffer_t *nbuf, size_t data_size);
+void netbuffer_cancel(netbuffer_t *nbuf, size_t data_size);
+#define netbuffer_clear(nbuf) netbuffer_cancel(nbuf, netbuffer_data_size(nbuf))
+void netbuffer_push(netbuffer_t *nbuf, const uint8_t *data, size_t data_size);
+size_t netbuffer_pop(netbuffer_t *nbuf, size_t size);
 
 #endif

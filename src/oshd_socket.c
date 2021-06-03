@@ -171,39 +171,26 @@ bool node_send_queued(node_t *node)
 {
     ssize_t sent_size;
 
-    if (node->io.sendq_packet_size > OSHPACKET_MAXSIZE) {
-        logger(LOG_ERR, "%s: Invalid packet size (send, %u bytes)",
-            node->addrw, node->io.sendq_packet_size);
-        event_queue_node_remove(node);
-        return false;
-    }
-
-    sent_size = send(node->fd, node->io.sendq_ptr, node->io.sendq_packet_size,
-        MSG_NOSIGNAL);
+    sent_size = send(node->fd, netbuffer_data(node->io.sendq),
+        netbuffer_data_size(node->io.sendq), MSG_NOSIGNAL);
 
     if (sent_size > 0) {
-        node->io.sendq_packet_size -= sent_size;
-        if (node->io.sendq_packet_size == 0) {
-            // We're done sending the current packet
-            // Move to the next packet in queue
-            if ((node->io.sendq_ptr = netbuffer_next(node->io.sendq))) {
-                // If we do have another packet in queue, retrieve its size
-                node->io.sendq_packet_size = OSHPACKET_HDR_SIZE + ntohs(((oshpacket_hdr_t *) node->io.sendq_ptr)->payload_size);
-            } else {
-                // The send queue is empty
-                // If we should disconnect, do it
-                if (node->finish_and_disconnect) {
-                    logger(LOG_INFO, "Gracefully disconnecting %s", node->addrw);
-                    event_queue_node_remove(node);
-                    return false;
-                }
+        logger_debug(DBG_SOCKETS, "%s: Sent %zi bytes", node->addrw, sent_size);
+        if (!netbuffer_pop(node->io.sendq, sent_size)) {
+            // The send queue is empty
+            // If we should disconnect, do it
+            if (node->finish_and_disconnect) {
+                logger(LOG_INFO, "Gracefully disconnecting %s", node->addrw);
+                event_queue_node_remove(node);
+                return false;
             }
-        } else {
-            // We're not done sending this packet, shift pointer to the remaining data
-            node->io.sendq_ptr += sent_size;
         }
     } else if (sent_size < 0) {
-        // There was a send() error
+        // send() would block, this is a safe error
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return true;
+
+        // Other errors need the connection to be dropped
         logger(LOG_ERR, "%s: send: %s", node->addrw, strerror(errno));
         event_queue_node_remove(node);
         return false;

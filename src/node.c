@@ -449,9 +449,7 @@ node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port)
     node->io.recvd_hdr = false;
     node->io.recv_bytes = 0;
     node->io.recv_packet_size = OSHPACKET_HDR_SIZE;
-    node->io.sendq = netbuffer_alloc(NODE_SENDQ_SLOTS, OSHPACKET_MAXSIZE);
-    node->io.sendq_ptr = NULL;
-    node->io.sendq_packet_size = 0;
+    node->io.sendq = netbuffer_create(NODE_SENDQ_MIN_SIZE, NODE_SENDQ_ALIGNMENT);
 
     return node;
 }
@@ -491,116 +489,33 @@ bool node_valid_name(const char *name)
 bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
     uint8_t *payload, uint16_t payload_size)
 {
-    uint8_t *slot;
-    oshpacket_hdr_t *hdr;
+    const size_t packet_size = OSHPACKET_HDR_SIZE + payload_size;
+    uint8_t *slot = netbuffer_reserve(node->io.sendq, packet_size);
+    oshpacket_hdr_t *hdr = (oshpacket_hdr_t *) slot;
 
-    if ((slot = netbuffer_reserve(node->io.sendq))) {
-        hdr = (oshpacket_hdr_t *) slot;
+    // Public part of the header
+    hdr->magic = OSHPACKET_MAGIC;
+    hdr->payload_size = htons(payload_size);
 
-        // Public part of the header
-        hdr->magic = OSHPACKET_MAGIC;
-        hdr->payload_size = htons(payload_size);
+    // Private part of the header
+    hdr->type = type;
+    hdr->counter = htonl(node->send_counter);
 
-        // Private part of the header
-        hdr->type = type;
-        hdr->counter = htonl(node->send_counter);
+    // Increment the node's send_counter for next packets
+    node->send_counter += 1;
 
-        // Increment the node's send_counter for next packets
-        node->send_counter += 1;
+    memcpy(hdr->src_node, oshd.name, sizeof(hdr->src_node));
+    memset(hdr->dest_node, 0, sizeof(hdr->dest_node));
+    if (dest) memcpy(hdr->dest_node, dest, strlen(dest));
 
-        memcpy(hdr->src_node, oshd.name, sizeof(hdr->src_node));
-        memset(hdr->dest_node, 0, sizeof(hdr->dest_node));
-        if (dest) memcpy(hdr->dest_node, dest, strlen(dest));
+    // Copy the packet's payload to the buffer
+    memcpy(slot + OSHPACKET_HDR_SIZE, payload, payload_size);
 
-        // Copy the packet's payload to the buffer
-        memcpy(slot + OSHPACKET_HDR_SIZE, payload, payload_size);
-
-        if (node->send_cipher) {
-            // The node expects all traffic to be encrypted
-            size_t original_size = OSHPACKET_PRIVATE_HDR_SIZE + payload_size;
-            size_t out_size;
-            logger_debug(DBG_ENCRYPTION, "%s: Encrypting packet of %zu bytes",
-                node->addrw, original_size);
-
-            // We are encrypting everything that comes after the public header
-            // The public header is never encrypted, it is the required minimum
-            // to correctly receive and decode all packets
-            // The private header part as well as the payload will be decrypted
-            // after successful reception before being processed.
-            // This is to protect more data, like the counter (used to prevent
-            // replay attacks) and the source and destination nodes
-            // If these aren't encrypted a MITM attack could modify those fields
-            // to cause trouble or spy on/target specific nodes
-            if (!cipher_encrypt(node->send_cipher, slot + OSHPACKET_PUBLIC_HDR_SIZE,
-                    &out_size, slot + OSHPACKET_PUBLIC_HDR_SIZE, original_size))
-            {
-                logger(LOG_ERR, "%s: Failed to encrypt packet", node->addrw);
-                return false;
-            }
-            if (out_size != original_size) {
-                // TODO: Handle this correctly for ciphers that pad encrypted data
-                logger(LOG_ERR, "%s: Encrypted packet has a different size (original: %zu, encrypted %zu)",
-                    node->addrw, original_size, out_size);
-                return false;
-            }
-        } else if (type != HANDSHAKE) {
-            // The node does not have a cipher to encrypt traffic
-            // This should only happen when sending HANDSHAKE packets which will
-            // initialize the ciphers
-            // Otherwise drop the packet
-            logger(LOG_CRIT, "%s: Cannot queue unencrypted %s packet",
-                node->addrw, oshpacket_type_name(type));
-            return false;
-        }
-
-        // If there is no packet in the queue, put this one
-        // Otherwise let the queue handle it
-        if (!node->io.sendq_ptr) {
-            node->io.sendq_ptr = slot;
-            node->io.sendq_packet_size = OSHPACKET_HDR_SIZE + payload_size;
-        }
-        return true;
-    } else {
-        logger(LOG_WARN, "%s: Dropping %s packet of %u bytes: send queue is full",
-            node->addrw, oshpacket_type_name(type), payload_size);
-        return false;
-    }
-}
-
-// Queue a forwarded packet without altering the source and destination nodes
-bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
-{
-    uint8_t *slot;
-    oshpacket_hdr_t *hdr;
-
-    // Forwarded packets should never be unencrypted, so if we can't encrypt it,
-    // drop it
-    if (!node->send_cipher) {
-        logger(LOG_WARN, "%s: Dropping forwarded %s packet of %u bytes: No send_cipher",
-            node->addrw, oshpacket_type_name(pkt->type), pkt->payload_size);
-        return false;
-    }
-
-    if ((slot = netbuffer_reserve(node->io.sendq))) {
-        // Copy the packet's data to the slot
-        memcpy(slot, pkt, OSHPACKET_HDR_SIZE + pkt->payload_size);
-
-        hdr = (oshpacket_hdr_t *) slot;
-
-        // Write the payload size in the correct order
-        hdr->payload_size = htons(pkt->payload_size);
-
-        // The counter is not preserved, it is always set to the node we're
-        // sending the packet to
-        hdr->counter = htonl(node->send_counter);
-
-        // Increment the node's send_counter for next packets
-        node->send_counter += 1;
-
+    if (node->send_cipher) {
         // The node expects all traffic to be encrypted
-        size_t original_size = OSHPACKET_PRIVATE_HDR_SIZE + pkt->payload_size;
+        size_t original_size = OSHPACKET_PRIVATE_HDR_SIZE + payload_size;
         size_t out_size;
-        logger_debug(DBG_ENCRYPTION, "%s: Encrypting forwarded packet of %zu bytes",
+        logger_debug(DBG_ENCRYPTION, "%s: Encrypting packet of %zu bytes",
             node->addrw, original_size);
 
         // We are encrypting everything that comes after the public header
@@ -615,28 +530,91 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
         if (!cipher_encrypt(node->send_cipher, slot + OSHPACKET_PUBLIC_HDR_SIZE,
                 &out_size, slot + OSHPACKET_PUBLIC_HDR_SIZE, original_size))
         {
-            logger(LOG_ERR, "%s: Failed to encrypt forwarded packet", node->addrw);
+            logger(LOG_ERR, "%s: Failed to encrypt packet", node->addrw);
+            netbuffer_cancel(node->io.sendq, packet_size);
             return false;
         }
         if (out_size != original_size) {
             // TODO: Handle this correctly for ciphers that pad encrypted data
-            logger(LOG_ERR, "%s: Encrypted forwarded packet has a different size (original: %zu, encrypted %zu)",
+            logger(LOG_ERR, "%s: Encrypted packet has a different size (original: %zu, encrypted %zu)",
                 node->addrw, original_size, out_size);
+            netbuffer_cancel(node->io.sendq, packet_size);
             return false;
         }
+    } else if (type != HANDSHAKE) {
+        // The node does not have a cipher to encrypt traffic
+        // This should only happen when sending HANDSHAKE packets which will
+        // initialize the ciphers
+        // Otherwise drop the packet
+        logger(LOG_CRIT, "%s: Cannot queue unencrypted %s packet",
+            node->addrw, oshpacket_type_name(type));
+        netbuffer_cancel(node->io.sendq, packet_size);
+        return false;
+    }
+    return true;
+}
 
-        // If there is no packet in the queue, put this one
-        // Otherwise let the queue handle it
-        if (!node->io.sendq_ptr) {
-            node->io.sendq_ptr = slot;
-            node->io.sendq_packet_size = OSHPACKET_HDR_SIZE + pkt->payload_size;
-        }
-        return true;
-    } else {
-        logger(LOG_WARN, "%s: Dropping forwarded %s packet of %u bytes: send queue is full",
+// Queue a forwarded packet without altering the source and destination nodes
+bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
+{
+    const size_t packet_size = OSHPACKET_HDR_SIZE + pkt->payload_size;
+    uint8_t *slot;
+    oshpacket_hdr_t *hdr;
+
+    // Forwarded packets should never be unencrypted, so if we can't encrypt it,
+    // drop it
+    if (!node->send_cipher) {
+        logger(LOG_WARN, "%s: Dropping forwarded %s packet of %u bytes: No send_cipher",
             node->addrw, oshpacket_type_name(pkt->type), pkt->payload_size);
         return false;
     }
+
+    slot = netbuffer_reserve(node->io.sendq, packet_size);
+    hdr = (oshpacket_hdr_t *) slot;
+
+    // Copy the packet's data to the slot
+    memcpy(slot, pkt, packet_size);
+
+    // Write the payload size in the correct order
+    hdr->payload_size = htons(pkt->payload_size);
+
+    // The counter is not preserved, it is always set to the node we're
+    // sending the packet to
+    hdr->counter = htonl(node->send_counter);
+
+    // Increment the node's send_counter for next packets
+    node->send_counter += 1;
+
+    // The node expects all traffic to be encrypted
+    size_t original_size = OSHPACKET_PRIVATE_HDR_SIZE + pkt->payload_size;
+    size_t out_size;
+    logger_debug(DBG_ENCRYPTION, "%s: Encrypting forwarded packet of %zu bytes",
+        node->addrw, original_size);
+
+    // We are encrypting everything that comes after the public header
+    // The public header is never encrypted, it is the required minimum
+    // to correctly receive and decode all packets
+    // The private header part as well as the payload will be decrypted
+    // after successful reception before being processed.
+    // This is to protect more data, like the counter (used to prevent
+    // replay attacks) and the source and destination nodes
+    // If these aren't encrypted a MITM attack could modify those fields
+    // to cause trouble or spy on/target specific nodes
+    if (!cipher_encrypt(node->send_cipher, slot + OSHPACKET_PUBLIC_HDR_SIZE,
+            &out_size, slot + OSHPACKET_PUBLIC_HDR_SIZE, original_size))
+    {
+        logger(LOG_ERR, "%s: Failed to encrypt forwarded packet", node->addrw);
+        netbuffer_cancel(node->io.sendq, packet_size);
+        return false;
+    }
+    if (out_size != original_size) {
+        // TODO: Handle this correctly for ciphers that pad encrypted data
+        logger(LOG_ERR, "%s: Encrypted forwarded packet has a different size (original: %zu, encrypted %zu)",
+            node->addrw, original_size, out_size);
+        netbuffer_cancel(node->io.sendq, packet_size);
+        return false;
+    }
+    return true;
 }
 
 // Broadcast a packet to all nodes

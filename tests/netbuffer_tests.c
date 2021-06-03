@@ -1,173 +1,150 @@
 #include "netbuffer.h"
+#include "xalloc.h"
+#include <string.h>
 #include <criterion/criterion.h>
 
-static void netbuffer_test_full(netbuffer_t *nbuf, const size_t slot_count, const size_t size)
+static void netbuffer_test(size_t min_size, size_t alignment, size_t test_size,
+    size_t push_size)
 {
-    uint8_t *slots[slot_count];
-    uint8_t *slot = NULL;
+    netbuffer_t *nbuf = netbuffer_create(min_size, alignment);
+    uint8_t *push = xalloc(push_size);
 
-    memset(slots, 0, sizeof(slots));
+    cr_assert_not_null(nbuf);
+    cr_assert_not_null(push);
+    for (size_t i = 0; i < push_size; ++i)
+        push[i] = i & 0xFF;
 
-    // No slots are reserved, so we should get a NULL pointer
-    cr_assert_null(netbuffer_next(nbuf));
+    size_t actual_size = 0;
+    for (; actual_size <= test_size; actual_size += push_size)
+        netbuffer_push(nbuf, push, push_size);
 
-    for (size_t i = 0; i < slot_count; ++i) {
-        slots[i] = netbuffer_reserve(nbuf);
-
-        // All the slots should return a pointer
-        cr_assert_not_null(slots[i]);
-
-        if (i == 0)
-            slot = slots[i];
-
-        for (size_t j = 0; j < size; ++j) {
-            slots[i][j] = (i & 0xFF);
-        }
+    cr_assert_eq(netbuffer_data_size(nbuf), actual_size);
+    if (actual_size > nbuf->min_size) {
+        cr_assert(nbuf->current_size > nbuf->min_size);
+    } else {
+        cr_assert(nbuf->current_size == nbuf->min_size);
     }
 
-    // No more slots should be available, this should return NULL
-    cr_assert_null(netbuffer_reserve(nbuf));
+    for (size_t i = 0; i < actual_size; i += push_size) {
+        uint8_t *data = netbuffer_data(nbuf);
+        size_t data_size = netbuffer_data_size(nbuf);
 
-    for (size_t i = 0; i < slot_count; ++i) {
-        for (size_t j = 0; j < slot_count; ++j) {
-            if (j == i) continue;
+        cr_assert_not_null(data);
+        cr_assert_eq(data_size, actual_size - i);
+        cr_assert(data_size >= push_size);
+        cr_assert(!memcmp(data, push, push_size));
 
-            // We shouldn't have duplicate pointers
-            cr_assert_neq(slots[i], slots[j]);
+        size_t new_size;
+        if (push_size > data_size) {
+            new_size = 0;
+        } else {
+            new_size = data_size - push_size;
         }
+        cr_assert_eq(netbuffer_pop(nbuf, 0), data_size);
+        cr_assert_eq(netbuffer_pop(nbuf, push_size), new_size);
     }
+    free(push);
 
-    for (size_t i = 0; i < slot_count; ++i, slot = netbuffer_next(nbuf)) {
-        // All the slots should return a pointer
-        cr_assert_not_null(slot);
-
-        for (size_t j = 0; j < size; ++j) {
-            // Test if we're getting the same values as before
-            cr_assert_eq(slot[j], (i & 0xFF));
-        }
-    }
-
-    // We should have processed every slot, this should return NULL
-    size_t slot_count_mul = slot_count * 2;
-    for (size_t i = 0; i < slot_count_mul; ++i)
-        cr_assert_null(netbuffer_next(nbuf));
-}
-
-static void netbuffer_test_chain(netbuffer_t *nbuf, const size_t loop_amount, const size_t size)
-{
-    uint8_t *prev = NULL;
-    uint8_t *slot = NULL;
-
-    // No slots are reserved, so we should get a NULL pointer
-    cr_assert_null(netbuffer_next(nbuf));
-
-    for (size_t i = 0; i < loop_amount; ++i, prev = slot) {
-        slot = netbuffer_reserve(nbuf);
-        cr_assert_not_null(slot);
-        cr_assert_null(netbuffer_next(nbuf));
-
-        for (size_t j = 0; j < size; ++j) {
-            slot[j] = (i & 0xFF);
-        }
-        if (prev) {
-            for (size_t j = 0; j < size; ++j) {
-                cr_assert_eq(prev[j], ((i - 1) & 0xFF));
-            }
-        }
-    }
-    if (prev) {
-        for (size_t j = 0; j < size; ++j) {
-            cr_assert_eq(prev[j], ((loop_amount - 1) & 0xFF));
-        }
-    }
-
-    // We should have processed every slot, this should return NULL
-    for (size_t i = 0; i < loop_amount; ++i)
-        cr_assert_null(netbuffer_next(nbuf));
-}
-
-Test(netbuffer, test_very_big)
-{
-    const size_t slot_count = 4096, size = 4096;
-    netbuffer_t *nbuf = netbuffer_alloc(slot_count, size);
-
-    for (size_t i = 0; i < 32; ++i)
-        netbuffer_test_full(nbuf, slot_count, size);
-    netbuffer_test_chain(nbuf, slot_count * 2, size);
-    netbuffer_test_chain(nbuf, slot_count - 1, size);
-    netbuffer_test_full(nbuf, slot_count, size);
-    netbuffer_free(nbuf);
-}
-
-Test(netbuffer, test_big)
-{
-    const size_t slot_count = 1024, size = 1024;
-    netbuffer_t *nbuf = netbuffer_alloc(slot_count, size);
-
-    for (size_t i = 0; i < 32; ++i)
-        netbuffer_test_full(nbuf, slot_count, size);
-    netbuffer_test_chain(nbuf, slot_count * 2, size);
-    netbuffer_test_chain(nbuf, slot_count - 1, size);
-    netbuffer_test_full(nbuf, slot_count, size);
+    cr_assert_eq(netbuffer_data_size(nbuf), 0);
+    cr_assert_eq(netbuffer_pop(nbuf, push_size), 0);
+    cr_assert_eq(nbuf->current_size, nbuf->min_size);
+    cr_assert_eq(nbuf->alignment, alignment);
     netbuffer_free(nbuf);
 }
 
 Test(netbuffer, test_small)
 {
-    const size_t slot_count = 32, size = 128;
-    netbuffer_t *nbuf = netbuffer_alloc(slot_count, size);
+    netbuffer_test(1024, 1024, 8192, 256);
+}
 
-    for (size_t i = 0; i < 32; ++i)
-        netbuffer_test_full(nbuf, slot_count, size);
-    netbuffer_test_chain(nbuf, slot_count * 2, size);
-    netbuffer_test_chain(nbuf, slot_count - 1, size);
-    netbuffer_test_full(nbuf, slot_count, size);
+Test(netbuffer, test_medium)
+{
+    netbuffer_test(4096, 4096, 16384, 512);
+}
+
+Test(netbuffer, test_big)
+{
+    netbuffer_test(8192, 16384, 65565, 1024);
+}
+
+Test(netbuffer, test_small_pushes)
+{
+    netbuffer_test(512, 256, 1024, 1);
+}
+
+Test(netbuffer, test_one_push)
+{
+    netbuffer_test(1024, 1024, 1024, 1024);
+}
+
+Test(netbuffer, test_small_size_and_alignment_push_1)
+{
+    netbuffer_test(1, 1, 1024, 1);
+}
+
+Test(netbuffer, test_small_size_and_alignment_push_quarter)
+{
+    netbuffer_test(1, 1, 1024, 256);
+}
+
+Test(netbuffer, test_small_size_and_alignment_push_max)
+{
+    netbuffer_test(1, 1, 1024, 1024);
+}
+
+Test(netbuffer, test_range)
+{
+    const size_t range_min = 1;
+    const size_t range_max = 4096;
+    const size_t test_size_max = 16384;
+
+    for (size_t min_size = range_min; min_size <= range_max; min_size *= 2)
+    for (size_t alignment = range_min; alignment <= range_max; alignment *= 2)
+    for (size_t test_size = range_min; test_size <= test_size_max; test_size *= 2)
+    for (size_t push_size = range_min; push_size <= range_max; push_size *= 2)
+        netbuffer_test(min_size, alignment, test_size, push_size);
+}
+
+Test(netbuffer, test_cancel)
+{
+    netbuffer_t *nbuf = netbuffer_create(32, 64);
+    uint8_t push[256];
+
+    cr_assert((sizeof(push) % 2) == 0);
+    cr_assert_not_null(nbuf);
+
+    for (size_t i = 0; i < sizeof(push); ++i)
+        push[i] = i & 0xFF;
+
+    netbuffer_push(nbuf, push, sizeof(push));
+    cr_assert_eq(netbuffer_data_size(nbuf), sizeof(push));
+    netbuffer_cancel(nbuf, sizeof(push) / 2);
+    cr_assert_eq(netbuffer_data_size(nbuf), sizeof(push) / 2);
+    memset(push + (sizeof(push) / 2), 0, sizeof(push) / 2);
+    cr_assert(!memcmp(netbuffer_data(nbuf), push, netbuffer_data_size(nbuf)));
+    netbuffer_cancel(nbuf, sizeof(push) / 2);
+    cr_assert_eq(netbuffer_data_size(nbuf), 0);
+    cr_assert_eq(nbuf->current_size, nbuf->min_size);
     netbuffer_free(nbuf);
 }
 
-Test(netbuffer, test_unaligned)
+Test(netbuffer, test_clear)
 {
-    const size_t slot_count = 7, size = 9;
-    netbuffer_t *nbuf = netbuffer_alloc(slot_count, size);
+    netbuffer_t *nbuf = netbuffer_create(32, 64);
+    uint8_t push[256];
 
-    for (size_t i = 0; i < 32; ++i)
-        netbuffer_test_full(nbuf, slot_count, size);
-    netbuffer_test_chain(nbuf, slot_count * 2, size);
-    netbuffer_test_chain(nbuf, slot_count - 1, size);
-    netbuffer_test_full(nbuf, slot_count, size);
+    cr_assert_not_null(nbuf);
+    netbuffer_push(nbuf, push, sizeof(push));
+    cr_assert_eq(netbuffer_data_size(nbuf), sizeof(push));
+    netbuffer_clear(nbuf);
+    cr_assert_eq(netbuffer_data_size(nbuf), 0);
+    cr_assert_eq(nbuf->current_size, nbuf->min_size);
     netbuffer_free(nbuf);
 }
 
-Test(netbuffer, test_one_slot_one_byte)
+Test(netbuffer, test_error_cases)
 {
-    const size_t slot_count = 1, size = 1;
-    netbuffer_t *nbuf = netbuffer_alloc(slot_count, size);
-
-    for (size_t i = 0; i < 32; ++i)
-        netbuffer_test_full(nbuf, slot_count, size);
-    netbuffer_free(nbuf);
-}
-
-Test(netbuffer, error_cases)
-{
-    cr_assert_null(netbuffer_alloc(0, 1024));
-    cr_assert_null(netbuffer_alloc(1, 0));
-}
-
-Test(netbuffer, range_test_slot_counts_and_sizes)
-{
-    const size_t max_slots = 64, max_size = 256;
-
-    for (size_t slot_count = 1; slot_count <= max_slots; ++slot_count) {
-        for (size_t size = 1; size <= max_size; ++size) {
-            netbuffer_t *nbuf = netbuffer_alloc(slot_count, size);
-            netbuffer_test_full(nbuf, slot_count, size);
-            if (slot_count > 1 && size > 1) {
-                netbuffer_test_chain(nbuf, slot_count * 2, size);
-                netbuffer_test_chain(nbuf, slot_count - 1, size);
-            }
-            netbuffer_test_full(nbuf, slot_count, size);
-            netbuffer_free(nbuf);
-        }
-    }
+    cr_assert_null(netbuffer_create(0, 1));
+    cr_assert_null(netbuffer_create(1, 0));
+    cr_assert_null(netbuffer_create(0, 0));
 }

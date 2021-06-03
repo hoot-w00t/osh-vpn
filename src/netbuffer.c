@@ -4,95 +4,132 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Allocate network buffer
-netbuffer_t *netbuffer_alloc(size_t slot_count, size_t slot_size)
+#define align(size, alignment) (((((size) - 1) / (alignment)) + 1) * (alignment))
+
+// Create an empty netbuffer
+// Memory allocations will be aligned to alignment
+// min_size will also be aligned
+// Returns NULL if min_size or alignment is 0
+netbuffer_t *netbuffer_create(size_t min_size, size_t alignment)
 {
     netbuffer_t *nbuf;
 
-    if (!slot_count || !slot_size)
+    if (!min_size || !alignment) {
+        logger(LOG_CRIT, "netbuffer_create: min_size and alignment cannot be 0");
         return NULL;
+    }
 
     nbuf = xzalloc(sizeof(netbuffer_t));
-    logger_debug(DBG_NETBUFFER, "Netbuffer: Allocated %p for %zu slots of %zu bytes",
-        slot_count, slot_size);
-
-    nbuf->slot_size = slot_size;
-    nbuf->slot_count = slot_count;
-
-    nbuf->data_size = slot_count * slot_size;
-    nbuf->data = xzalloc(nbuf->data_size);
-    nbuf->slots = xalloc(slot_count * sizeof(uint8_t *));
-    nbuf->slots_taken = xzalloc(slot_count * sizeof(bool));
-    for (size_t i = 0; i < slot_count; ++i)
-        nbuf->slots[i] = nbuf->data + (i * slot_size);
-
-    logger_debug(DBG_NETBUFFER, "Netbuffer: %p: Allocated data %p (%zu bytes)",
-        nbuf->data, nbuf->data_size);
+    nbuf->alignment = alignment;
+    nbuf->min_size = align(min_size, alignment);
+    nbuf->current_size = nbuf->min_size;
+    nbuf->data = xalloc(nbuf->current_size);
+    logger_debug(DBG_NETBUFFER, "Created netbuffer %p of %zu bytes, aligned to %zu bytes",
+        nbuf, nbuf->current_size, nbuf->alignment);
     return nbuf;
 }
 
-// Free network buffer
+// Free netbuffer
 void netbuffer_free(netbuffer_t *nbuf)
 {
-    logger_debug(DBG_NETBUFFER, "Freeing netbuffer %p (%zu slots of %zu bytes)",
-        nbuf, nbuf->slot_count, nbuf->slot_size);
+    logger_debug(DBG_NETBUFFER, "Netbuffer %p: Freeing %zu bytes", nbuf,
+        nbuf->current_size);
     free(nbuf->data);
-    free(nbuf->slots);
-    free(nbuf->slots_taken);
     free(nbuf);
 }
 
-// Returns pointer to the next available slot
-// If netbuffer is full, returns NULL
-uint8_t *netbuffer_reserve(netbuffer_t *nbuf)
+// Reallocate at least size bytes in the netbuffer
+void netbuffer_expand(netbuffer_t *nbuf, size_t size)
 {
-    uint8_t *slot;
+    const size_t aligned_size = align(size, nbuf->alignment);
 
-    // If the next available index is at the end of the slots, go back to the
-    // beginning
-    if (nbuf->next_available >= nbuf->slot_count)
-        nbuf->next_available = 0;
-
-    // If the next available slot is taken already the netbuffer is full and
-    // cannot reserve any more data
-    if (nbuf->slots_taken[nbuf->next_available])
-        return NULL;
-
-    // The next available slot is not taken, so take it
-    nbuf->slots_taken[nbuf->next_available] = 1;
-    slot = nbuf->slots[nbuf->next_available];
-
-    // Move to the next slot for future calls
-    nbuf->next_available += 1;
-
-    logger_debug(DBG_NETBUFFER, "Netbuffer %p reserved slot %p", nbuf, slot);
-    return slot;
+    logger_debug(DBG_NETBUFFER, "Netbuffer %p: Expanding %zu bytes (unaligned %zu)",
+        nbuf, aligned_size, size);
+    nbuf->current_size += aligned_size;
+    nbuf->data = xrealloc(nbuf->data, nbuf->current_size);
 }
 
-// Returns pointer to the next slot in queue
-// If netbuffer is empty, returns NULL
-uint8_t *netbuffer_next(netbuffer_t *nbuf)
+// Reallocate netbuffer to its minimum size
+void netbuffer_shrink(netbuffer_t *nbuf)
 {
-    // If the current slot is not taken then there are no other slots taken,
-    // the netbuffer is empty
-    if (!nbuf->slots_taken[nbuf->next_taken])
-        return NULL;
+    logger_debug(DBG_NETBUFFER, "Netbuffer %p: Shrinking to %zu bytes (from %zu bytes)",
+        nbuf, nbuf->min_size, nbuf->current_size);
+    nbuf->current_size = nbuf->min_size;
+    nbuf->data = xrealloc(nbuf->data, nbuf->current_size);
+}
 
-    // The current slot is taken, we move to the next one and make this one
-    // available again
-    nbuf->slots_taken[nbuf->next_taken] = 0;
-    nbuf->next_taken += 1;
+// Reserve data_size bytes at the end of the netbuffer
+// Dynamically allocates memory if needed
+uint8_t *netbuffer_reserve(netbuffer_t *nbuf, size_t data_size)
+{
+    uint8_t *dataptr;
 
-    // If the next taken index is at the end of the slots, go back to the
-    // beginning
-    if (nbuf->next_taken >= nbuf->slot_count)
-        nbuf->next_taken = 0;
+    // If the new data size is bigger than the allocated buffer, expand it
+    if ((nbuf->data_size + data_size) > nbuf->current_size)
+        netbuffer_expand(nbuf, data_size);
 
-    // If the next queued slot is taken, we can return it
-    // Otherwise it means that the netbuffer is now empty
-    if (nbuf->slots_taken[nbuf->next_taken]) {
-        return nbuf->slots[nbuf->next_taken];
+    // The data pointer can change during reallocation so we need to calculate
+    // it after it was done
+    dataptr = nbuf->data + nbuf->data_size;
+    nbuf->data_size += data_size;
+
+    logger_debug(DBG_NETBUFFER, "Netbuffer %p: Reserved %zu bytes (%p)",
+        nbuf, data_size, dataptr);
+    return dataptr;
+}
+
+// Cancel the last data_size bytes from the netbuffer
+// Can be used to cancel reserved bytes
+void netbuffer_cancel(netbuffer_t *nbuf, size_t data_size)
+{
+    if (data_size >= nbuf->data_size) {
+        logger_debug(DBG_NETBUFFER, "Netbuffer %p: Cancelled the last %zu bytes",
+            nbuf->data_size);
+
+        nbuf->data_size = 0;
+
+        // Shrink the netbuffer to reduce memory usage
+        if (nbuf->current_size > nbuf->min_size)
+            netbuffer_shrink(nbuf);
     } else {
-        return NULL;
+        logger_debug(DBG_NETBUFFER, "Netbuffer %p: Cancelled %zu bytes",
+            data_size);
+        nbuf->data_size -= data_size;
     }
+}
+
+// Reserve data_size bytes and copy data to the reserved space
+void netbuffer_push(netbuffer_t *nbuf, const uint8_t *data, size_t data_size)
+{
+    uint8_t *dataptr = netbuffer_reserve(nbuf, data_size);
+
+    memcpy(dataptr, data, data_size);
+    logger_debug(DBG_NETBUFFER, "Netbuffer %p: Pushed %zu bytes (%p)",
+        nbuf, data_size, dataptr);
+}
+
+// Remove size bytes from the start of the data pointer
+// Returns the new data_size of the netbuffer
+size_t netbuffer_pop(netbuffer_t *nbuf, size_t size)
+{
+    // If we pop the last bytes of the buffer we will reset the data_size and
+    // shrink the netbuffer if necessary
+    if (size >= nbuf->data_size) {
+        logger_debug(DBG_NETBUFFER, "Netbuffer %p: Popped the last %zu bytes",
+            nbuf, nbuf->data_size);
+
+        nbuf->data_size = 0;
+
+        // Shrink the netbuffer to reduce memory usage
+        if (nbuf->current_size > nbuf->min_size)
+            netbuffer_shrink(nbuf);
+    } else {
+        // Otherwise we shift the data by size bytes and decrement the data_size
+        logger_debug(DBG_NETBUFFER, "Netbuffer %p: Popped %zu/%zu bytes",
+            nbuf, size, nbuf->data_size);
+
+        nbuf->data_size -= size;
+        memmove(nbuf->data, nbuf->data + size, nbuf->data_size);
+    }
+    return nbuf->data_size;
 }

@@ -64,7 +64,7 @@ static void pfd_update(void)
 {
     for (size_t i = 0; i < oshd.nodes_count; ++i) {
         pfd[i + pfd_off].fd = oshd.nodes[i]->fd;
-        if (oshd.nodes[i]->io.sendq_ptr) {
+        if (netbuffer_data_size(oshd.nodes[i]->io.sendq)) {
             pfd[i + pfd_off].events = POLLIN | POLLOUT;
         } else {
             pfd[i + pfd_off].events = POLLIN;
