@@ -59,7 +59,7 @@ typedef struct __attribute__((__packed__)) oshpacket_hello {
     uint8_t sig[HELLO_SIG_SIZE];
 } oshpacket_hello_t;
 
-typedef struct __attribute__((__packed__)) oshpacket_key_exg {
+typedef struct __attribute__((__packed__)) oshpacket_handshake {
     // Public X25519 key to derive for sending packets to the other node
     uint8_t send_pubkey[HANDSHAKE_KEY_SIZE];
 
