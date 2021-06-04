@@ -69,8 +69,7 @@ bool netaddr_dton(netaddr_t *dest, netaddr_type_t type, const void *data)
             memset(dest->data + 4, 0, sizeof(dest->data) - 4);
             return true;
         case IP6:
-            memcpy(dest->data, ((struct in6_addr *) data)->__in6_u.__u6_addr8,
-                sizeof(((struct in6_addr *) data)->__in6_u.__u6_addr8));
+            memcpy(dest->data, data, sizeof(struct in6_addr));
             return true;
         default:
             return false;
