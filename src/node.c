@@ -392,7 +392,17 @@ void node_disconnect(node_t *node)
 
     if (node->fd > 0) {
         logger(LOG_INFO, "Disconnecting %s", node->addrw);
-        close(node->fd);
+        if (shutdown(node->fd, SHUT_RDWR) < 0) {
+            logger(LOG_ERR, "%s: shutdown(%i): %s", node->addrw, node->fd,
+                strerror(errno));
+        }
+
+        while (close(node->fd) < 0) {
+            logger(LOG_ERR, "%s: close(%i): %s", node->addrw, node->fd,
+                strerror(errno));
+            if (errno != EINTR)
+                break;
+        }
         node->fd = -1;
     } else {
         logger(LOG_WARN, "%s: Already disconnected", node->addrw);
