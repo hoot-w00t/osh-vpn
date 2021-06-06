@@ -91,5 +91,6 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 #define OSHPACKET_MAXSIZE (OSHPACKET_HDR_SIZE + OSHPACKET_PAYLOAD_MAXSIZE)
 
 const char *oshpacket_type_name(oshpacket_type_t type);
+bool oshpacket_type_valid(oshpacket_type_t type);
 
 #endif

@@ -16,3 +16,8 @@ const char *oshpacket_type_name(oshpacket_type_t type)
              default  : return "UNKNOWN";
     }
 }
+
+bool oshpacket_type_valid(oshpacket_type_t type)
+{
+    return type >= HELLO && type <= ADD_ROUTE;
+}
