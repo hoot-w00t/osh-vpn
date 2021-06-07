@@ -378,7 +378,7 @@ void node_tree_update(void)
     node_tree_update_next_hops();
 
     // We also need to delete all routes to orphan nodes
-    netroute_del_orphan_routes();
+    oshd_route_del_orphan_routes();
 
     if (logger_is_debugged(DBG_NODETREE))
         node_tree_dump();

@@ -312,7 +312,7 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
             return false;
         }
         memcpy(addr.data, payload[i].addr_data, 16);
-        netroute_add(&addr, src_node);
+        oshd_route_add(&addr, src_node);
     }
     return true;
 }

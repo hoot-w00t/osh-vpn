@@ -3,9 +3,9 @@
 
 #include "node.h"
 
-typedef struct netroute netroute_t;
+typedef struct oshd_route oshd_route_t;
 
-struct netroute {
+struct oshd_route {
     // Network address
     netaddr_t addr;
 
@@ -13,14 +13,14 @@ struct netroute {
     node_id_t *dest_node;
 };
 
-void netroute_dump(void);
-void netroute_dump_local(void);
+void oshd_route_dump(void);
+void oshd_route_dump_local(void);
 
-netroute_t *netroute_find(const netaddr_t *addr);
-netroute_t *netroute_add(const netaddr_t *addr, node_id_t *dest_node);
-void netroute_free(netroute_t *route);
-void netroute_del_orphan_routes(void);
+oshd_route_t *oshd_route_find(const netaddr_t *addr);
+oshd_route_t *oshd_route_add(const netaddr_t *addr, node_id_t *dest_node);
+void oshd_route_free(oshd_route_t *route);
+void oshd_route_del_orphan_routes(void);
 
-bool netroute_add_local(const netaddr_t *addr);
+bool oshd_route_add_local(const netaddr_t *addr);
 
 #endif

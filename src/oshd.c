@@ -241,7 +241,7 @@ void oshd_free(void)
 
     free(oshd.local_routes);
     for (size_t i = 0; i < oshd.routes_count; ++i)
-        netroute_free(oshd.routes[i]);
+        oshd_route_free(oshd.routes[i]);
     free(oshd.routes);
 
     event_cancel_queue();

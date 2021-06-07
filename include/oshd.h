@@ -54,7 +54,7 @@ typedef struct oshd {
 
     // Array of the network routes of remote nodes on the network
     // This is our routing table
-    netroute_t **routes;
+    oshd_route_t **routes;
     size_t routes_count;
 
     // Minimum and maximum reconnection delays (in seconds)

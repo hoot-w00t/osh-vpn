@@ -15,7 +15,7 @@ void oshd_read_tuntap_pkt(void)
     netpacket_t pkt_hdr;
     char pkt_src[INET6_ADDRSTRLEN];
     char pkt_dest[INET6_ADDRSTRLEN];
-    netroute_t *route;
+    oshd_route_t *route;
 
 read_again:
     if ((pkt_size = read(oshd.tuntap_fd, pkt, sizeof(pkt))) <= 0) {
@@ -37,10 +37,10 @@ read_again:
 
     // If the source address was not in our local routes, broadcast the new
     // route to the network
-    if (netroute_add_local(&pkt_hdr.src))
+    if (oshd_route_add_local(&pkt_hdr.src))
         node_queue_route_add_broadcast(NULL, &pkt_hdr.src, 1);
 
-    if ((route = netroute_find(&pkt_hdr.dest))) {
+    if ((route = oshd_route_find(&pkt_hdr.dest))) {
         // We have a route for this network destination
         logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%i bytes, to %s)",
             oshd.tuntap_dev, oshd.name, pkt_src, pkt_dest, pkt_size,
