@@ -48,6 +48,7 @@ node_id_t *node_id_add(const char *name)
 // Free resources allocated to *nid and the structure
 void node_id_free(node_id_t *nid)
 {
+    pkey_free(nid->pubkey);
     free(nid->edges);
     free(nid);
 }
@@ -103,6 +104,18 @@ void node_id_del_edge(node_id_t *src, node_id_t *dest)
 {
     node_id_del_edge_internal(src, dest);
     node_id_del_edge_internal(dest, src);
+}
+
+// Load a remote public key for *nid
+// If a public key was already loaded it will not be loaded
+bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
+    size_t pubkey_size)
+{
+    if (nid->pubkey)
+        return true;
+    nid->pubkey = pkey_load_ed25519_pubkey(pubkey, pubkey_size);
+    nid->pubkey_local = false;
+    return nid->pubkey != NULL;
 }
 
 // Dynamically resize array and add *n to the end, then increment the count

@@ -36,6 +36,13 @@ struct node_id {
     // Node name (which serves as its unique ID)
     char name[NODE_NAME_SIZE + 1];
 
+    // Node's public key for authentication
+    EVP_PKEY *pubkey;
+
+    // true if *pubkey is a local key loaded from the keys directory
+    // false otherwise
+    bool pubkey_local;
+
     // The node socket associated to this ID (if we have a direct connection)
     node_t *node_socket;
 
@@ -109,6 +116,8 @@ node_id_t *node_id_add(const char *name);
 void node_id_free(node_id_t *nid);
 void node_id_add_edge(node_id_t *src, node_id_t *dest);
 void node_id_del_edge(node_id_t *src, node_id_t *dest);
+bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
+    size_t pubkey_size);
 
 void node_tree_dump_digraph(void);
 void node_tree_dump(void);

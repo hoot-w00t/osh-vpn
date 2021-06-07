@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
+#include <dirent.h>
 
 // Global variable
 oshd_t oshd;
@@ -37,10 +38,53 @@ EVP_PKEY *oshd_open_key(const char *name, bool private)
 
     snprintf(filename, filename_len, "%s%s.%s", oshd.keys_dir, name,
         private ? "key" : "pub");
+    logger_debug(DBG_OSHD, "Oshd: Opening %s key '%s'",
+        private ? "private" : "public", filename);
     pkey = private ? pkey_load_privkey_pem(filename)
                    : pkey_load_pubkey_pem(filename);
     free(filename);
     return pkey;
+}
+
+// Load public keys from the keys directory
+// Returns false on error
+bool oshd_open_keys(const char *dirname)
+{
+    DIR *dir = opendir(dirname);
+    struct dirent *ent;
+
+    if (!dir) {
+        logger(LOG_ERR, "Failed to open %s: %s", dirname, strerror(errno));
+        return false;
+    }
+
+    while ((ent = readdir(dir))) {
+        char *filename = xstrdup(ent->d_name);
+        char *ext = strrchr(filename, '.');
+
+        if (ext && !strcmp(ext, ".pub")) {
+            // This is a public key file, we extract the node's name by
+            // removing the extension
+            *ext = 0;
+
+            // filename now contains the node's name
+            if (node_valid_name(filename)) {
+                node_id_t *id;
+
+                logger_debug(DBG_OSHD, "Oshd: Opening public key for %s", filename);
+                id = node_id_add(filename);
+                pkey_free(id->pubkey);
+                if ((id->pubkey = oshd_open_key(filename, false)))
+                    id->pubkey_local = true;
+            } else {
+                logger(LOG_ERR, "Failed to open public key for '%s': Invalid name",
+                    filename);
+            }
+        }
+        free(filename);
+    }
+    closedir(dir);
+    return true;
 }
 
 // Set file descriptor flag O_NONBLOCK
@@ -148,9 +192,12 @@ bool oshd_init(void)
     // We are the one and only local node
     me->local_node = true;
 
+    // Load our local node's private
     if (!(oshd.privkey = oshd_open_key(oshd.name, true)))
         return false;
-    if (!(oshd.pubkey = oshd_open_key(oshd.name, false)))
+
+    // Load all public keys in the keys directory
+    if (!oshd_open_keys(oshd.keys_dir))
         return false;
 
     signal(SIGINT, oshd_signal_exit);
@@ -201,7 +248,6 @@ void oshd_free(void)
 
     free(oshd.keys_dir);
     pkey_free(oshd.privkey);
-    pkey_free(oshd.pubkey);
     free(oshd.digraph_file);
 }
 

@@ -18,7 +18,6 @@ typedef struct oshd {
 
     // The local node's private and public keys
     EVP_PKEY *privkey;
-    EVP_PKEY *pubkey;
 
     // TUN/TAP device information
     bool tuntap_used;    // true if the device will be opened and used
@@ -67,6 +66,7 @@ typedef struct oshd {
 } oshd_t;
 
 EVP_PKEY *oshd_open_key(const char *name, bool private);
+bool oshd_open_keys(const char *dirname);
 
 int set_nonblocking(int fd);
 

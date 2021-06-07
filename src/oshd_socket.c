@@ -347,11 +347,7 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
     }
 
     // Try to load the remote node's public key
-    logger_debug(DBG_AUTHENTICATION, "%s: Authentication: Loading the public key for %s",
-        node->addrw, name);
-    EVP_PKEY *remote_pubkey = oshd_open_key(id->name, false);
-
-    if (!remote_pubkey) {
+    if (!id->pubkey) {
         // If we don't have a public key to verify the HELLO signature,
         // we can't authenticate the node
         logger(LOG_ERR, "%s: Authentication failed: No public key for %s",
@@ -359,15 +355,15 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
         return node_queue_goodbye(node);
     }
 
+    logger_debug(DBG_AUTHENTICATION, "%s: Authentication: %s has a %s public key",
+        node->addrw, name, id->pubkey_local ? "local" : "remote");
+
     // If the signature verification succeeds then the node is authenticated
     logger_debug(DBG_AUTHENTICATION, "%s: Authentication: Verifying signature from %s",
         node->addrw, id->name);
-    node->authenticated = pkey_verify(remote_pubkey, (uint8_t *) payload,
+    node->authenticated = pkey_verify(id->pubkey, (uint8_t *) payload,
         sizeof(oshpacket_hello_t) - sizeof(payload->sig), payload->sig,
         sizeof(payload->sig));
-
-    // We don't need the remote node's public key anymore
-    pkey_free(remote_pubkey);
 
     // If the node is not authenticated, the signature verification failed
     // The remote node did not sign the data using the private key
