@@ -491,8 +491,11 @@ bool node_valid_name(const char *name)
 {
     const char valid_charset[] = \
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-";
+    const size_t name_len = strlen(name);
 
-    return strspn(name, valid_charset) == strlen(name);
+    return    name_len > 0
+           && name_len <= NODE_NAME_SIZE
+           && name_len == strspn(name, valid_charset);
 }
 
 // Queue a packet to the *node socket for *dest node
