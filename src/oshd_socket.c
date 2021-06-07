@@ -307,7 +307,7 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
     for (size_t i = 0; i < entries; ++i) {
         addr.type = payload[i].addr_type;
         if (addr.type > IP6) {
-            logger(LOG_ERR, "%s: %s: Invalid ADD_ROUTE address type",
+            logger(LOG_ERR, "%s: %s: Invalid ROUTE_ADD address type",
                 node->addrw, node->id->name);
             return false;
         }
@@ -426,7 +426,7 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
 
     if (!node_queue_edge_exg(node))
         return false;
-    if (!node_queue_edge_broadcast(node, ADD_EDGE, oshd.name, name))
+    if (!node_queue_edge_broadcast(node, EDGE_ADD, oshd.name, name))
         return false;
     return node_queue_ping(node);
 }
@@ -585,8 +585,8 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
             return true;
 
         case EDGE_EXG:
-        case ADD_EDGE:
-        case DEL_EDGE: {
+        case EDGE_ADD:
+        case EDGE_DEL: {
             if (    pkt->payload_size < sizeof(oshpacket_edge_t)
                 || (pkt->payload_size % sizeof(oshpacket_edge_t)) != 0)
             {
@@ -602,12 +602,12 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                 // TODO: Only do it if our map doesn't share any edge with the
                 //       remote node's map
                 // Broadcast remote node's edges to our end of the network
-                node_queue_packet_broadcast(node, ADD_EDGE, payload,
+                node_queue_packet_broadcast(node, EDGE_ADD, payload,
                     pkt->payload_size);
 
                 success = oshd_process_edge(node, pkt,
                     (oshpacket_edge_t *) payload, true);
-            } else if (pkt->type == ADD_EDGE) {
+            } else if (pkt->type == EDGE_ADD) {
                 success = oshd_process_edge(node, pkt,
                     (oshpacket_edge_t *) payload, true);
             } else {
@@ -618,16 +618,16 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
 
             // Make sure that all nodes's routing tables are up to date with our
             // local routes
-            node_queue_add_route_broadcast(NULL, oshd.local_routes,
+            node_queue_route_add_broadcast(NULL, oshd.local_routes,
                 oshd.local_routes_count);
             return success;
         }
 
-        case ADD_ROUTE: {
+        case ROUTE_ADD: {
             if (    pkt->payload_size < sizeof(oshpacket_route_t)
                 || (pkt->payload_size % sizeof(oshpacket_route_t)) != 0)
             {
-                logger(LOG_ERR, "%s: %s: Invalid ADD_ROUTE size: %u bytes",
+                logger(LOG_ERR, "%s: %s: Invalid ROUTE_ADD size: %u bytes",
                     node->addrw, node->id->name, pkt->payload_size);
                 return false;
             }

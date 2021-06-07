@@ -38,7 +38,7 @@ read_again:
     // If the source address was not in our local routes, broadcast the new
     // route to the network
     if (netroute_add_local(&pkt_hdr.src))
-        node_queue_add_route_broadcast(NULL, &pkt_hdr.src, 1);
+        node_queue_route_add_broadcast(NULL, &pkt_hdr.src, 1);
 
     if ((route = netroute_find(&pkt_hdr.dest))) {
         // We have a route for this network destination

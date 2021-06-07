@@ -10,14 +10,14 @@ const char *oshpacket_type_name(oshpacket_type_t type)
         case PONG     : return "PONG";
         case DATA     : return "DATA";
         case EDGE_EXG : return "EDGE_EXG";
-        case ADD_EDGE : return "ADD_EDGE";
-        case DEL_EDGE : return "DEL_EDGE";
-        case ADD_ROUTE: return "ADD_ROUTE";
+        case EDGE_ADD : return "EDGE_ADD";
+        case EDGE_DEL : return "EDGE_DEL";
+        case ROUTE_ADD: return "ROUTE_ADD";
              default  : return "UNKNOWN";
     }
 }
 
 bool oshpacket_type_valid(oshpacket_type_t type)
 {
-    return type >= HELLO && type <= ADD_ROUTE;
+    return type >= HELLO && type <= ROUTE_ADD;
 }

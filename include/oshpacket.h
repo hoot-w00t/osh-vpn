@@ -29,14 +29,14 @@
 typedef enum oshpacket_type {
     HELLO = 0,
     HANDSHAKE,
-    EDGE_EXG,
     GOODBYE,
     PING,
     PONG,
     DATA,
-    ADD_EDGE,
-    DEL_EDGE,
-    ADD_ROUTE
+    EDGE_EXG,
+    EDGE_ADD,
+    EDGE_DEL,
+    ROUTE_ADD
 } oshpacket_type_t;
 
 // For a total of 40 bytes

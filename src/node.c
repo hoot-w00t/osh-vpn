@@ -399,7 +399,7 @@ void node_disconnect(node_t *node)
         node_id_del_edge(src, dest);
 
         // We broadcast this change to the rest of the network
-        node_queue_edge_broadcast(node, DEL_EDGE, oshd.name, node->id->name);
+        node_queue_edge_broadcast(node, EDGE_DEL, oshd.name, node->id->name);
         node_tree_update();
     }
 
@@ -777,15 +777,15 @@ bool node_queue_pong(node_t *node)
     return node_queue_packet(node, node->id->name, PONG, &buf, 1);
 }
 
-// Queue ADD_EDGE or DEL_EDGE request
+// Queue EDGE_ADD or EDGE_DEL request
 bool node_queue_edge(node_t *node, oshpacket_type_t type,
     const char *src, const char *dest)
 {
     oshpacket_edge_t buf;
 
     switch (type) {
-        case ADD_EDGE:
-        case DEL_EDGE:
+        case EDGE_ADD:
+        case EDGE_DEL:
             memcpy(buf.src_node, src,  NODE_NAME_SIZE);
             memcpy(buf.dest_node, dest, NODE_NAME_SIZE);
             return node_queue_packet(node, node->id->name, type,
@@ -798,15 +798,15 @@ bool node_queue_edge(node_t *node, oshpacket_type_t type,
     }
 }
 
-// Broadcast ADD_EDGE or DEL_EDGE request
+// Broadcast EDGE_ADD or EDGE_DEL request
 bool node_queue_edge_broadcast(node_t *exclude, oshpacket_type_t type,
     const char *src, const char *dest)
 {
     oshpacket_edge_t buf;
 
     switch (type) {
-        case ADD_EDGE:
-        case DEL_EDGE:
+        case EDGE_ADD:
+        case EDGE_DEL:
             memcpy(buf.src_node, src,  NODE_NAME_SIZE);
             memcpy(buf.dest_node, dest, NODE_NAME_SIZE);
             return node_queue_packet_broadcast(exclude, type,
@@ -921,8 +921,8 @@ bool node_queue_edge_exg(node_t *node)
     return success;
 }
 
-// Broadcast ADD_ROUTE request
-bool node_queue_add_route_broadcast(node_t *exclude, const netaddr_t *addrs,
+// Broadcast ROUTE_ADD request
+bool node_queue_route_add_broadcast(node_t *exclude, const netaddr_t *addrs,
     size_t count)
 {
     if (count == 0)
@@ -957,8 +957,8 @@ bool node_queue_add_route_broadcast(node_t *exclude, const netaddr_t *addrs,
         size = entries * sizeof(oshpacket_route_t);
 
         // Broadcast the packet
-        if (node_queue_packet_broadcast(exclude, ADD_ROUTE, curr_buf, size)) {
-            logger_debug(DBG_ROUTING, "Broadcast ADD_ROUTE with %zu routes (%zu bytes)",
+        if (node_queue_packet_broadcast(exclude, ROUTE_ADD, curr_buf, size)) {
+            logger_debug(DBG_ROUTING, "Broadcast ROUTE_ADD with %zu routes (%zu bytes)",
                 entries, size);
         } else {
             success = false;
