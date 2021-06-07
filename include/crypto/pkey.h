@@ -24,6 +24,9 @@ EVP_PKEY *pkey_load_pubkey_pem(const char *filename);
 
 bool pkey_save_x25519_pubkey(const EVP_PKEY *pubkey, uint8_t **dest,
     size_t *dest_size);
+bool pkey_save_ed25519_pubkey(const EVP_PKEY *pubkey, uint8_t **dest,
+    size_t *dest_size);
 EVP_PKEY *pkey_load_x25519_pubkey(const uint8_t *pubkey, size_t pubkey_size);
+EVP_PKEY *pkey_load_ed25519_pubkey(const uint8_t *pubkey, size_t pubkey_size);
 
 #endif

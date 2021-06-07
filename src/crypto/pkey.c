@@ -289,6 +289,15 @@ bool pkey_save_x25519_pubkey(const EVP_PKEY *pubkey, uint8_t **dest,
     return pkey_save_pubkey("X25519", pubkey, dest, dest_size);
 }
 
+// Save a public Ed25519 key to memory
+// Dynamically allocates *dest to hold the key
+// Returns false on error
+bool pkey_save_ed25519_pubkey(const EVP_PKEY *pubkey, uint8_t **dest,
+    size_t *dest_size)
+{
+    return pkey_save_pubkey("Ed25519", pubkey, dest, dest_size);
+}
+
 // Load a public key from memory
 static EVP_PKEY *pkey_load_pubkey(int id, const char *id_name,
     const uint8_t *pubkey, size_t pubkey_size)
@@ -305,4 +314,11 @@ static EVP_PKEY *pkey_load_pubkey(int id, const char *id_name,
 EVP_PKEY *pkey_load_x25519_pubkey(const uint8_t *pubkey, size_t pubkey_size)
 {
     return pkey_load_pubkey(EVP_PKEY_X25519, "X25519", pubkey, pubkey_size);
+}
+
+// Load a public Ed25519 key from memory
+// Returns NULL on error
+EVP_PKEY *pkey_load_ed25519_pubkey(const uint8_t *pubkey, size_t pubkey_size)
+{
+    return pkey_load_pubkey(EVP_PKEY_ED25519, "Ed25519", pubkey, pubkey_size);
 }
