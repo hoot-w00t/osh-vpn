@@ -16,6 +16,9 @@ typedef struct oshd {
     // Keys directory to fetch all private and public keys from
     char *keys_dir;
 
+    // true of authentication using remote keys is allowed
+    bool remote_auth;
+
     // The local node's private and public keys
     EVP_PKEY *privkey;
 

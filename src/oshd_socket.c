@@ -346,11 +346,19 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
         return node_queue_goodbye(node);
     }
 
-    // Try to load the remote node's public key
     if (!id->pubkey) {
         // If we don't have a public key to verify the HELLO signature,
         // we can't authenticate the node
         logger(LOG_ERR, "%s: Authentication failed: No public key for %s",
+            node->addrw, name);
+        return node_queue_goodbye(node);
+    }
+
+    // If the public key is local we will always use it, but if it is a remote
+    // key and remote authentication is not authorized then we can't
+    // authenticate the node
+    if (!id->pubkey_local && !oshd.remote_auth) {
+        logger(LOG_ERR, "%s: Authentication failed: No local public key for %s",
             node->addrw, name);
         return node_queue_goodbye(node);
     }
