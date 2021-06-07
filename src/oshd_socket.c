@@ -561,6 +561,11 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                 node->addrw, node->id->name);
             return false;
 
+        case HANDSHAKE:
+            logger(LOG_ERR, "%s: %s: Handshake after authentication is not supported",
+                node->addrw, node->id->name);
+            return false;
+
         case GOODBYE:
             logger(LOG_INFO, "%s: %s: Gracefully disconnecting", node->addrw,
                 node->id->name);
