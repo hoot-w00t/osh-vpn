@@ -28,5 +28,7 @@ jobs:
           sudo make install
 
       - uses: actions/checkout@v2
+        with:
+          submodules: true
       - name: Build and run unit tests
         run: make test

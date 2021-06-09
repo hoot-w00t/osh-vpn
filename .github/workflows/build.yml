@@ -15,5 +15,7 @@ jobs:
           sudo apt-get install -yq build-essential git libssl-dev
 
       - uses: actions/checkout@v2
+        with:
+          submodules: true
       - name: Build project
         run: make
