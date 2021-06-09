@@ -6,7 +6,7 @@ Osh is an experimental mesh VPN made as a fun and learning project.
 Although it has basic authentication and encryption it was not tested much and I'm no expert in those fields, so if you are looking for a reliable and safe VPN, don't use Osh.
 
 ## Building
-It uses the [OpenSSL library](https://www.openssl.org/) for all cryptography work.
+It uses the [OpenSSL library](https://www.openssl.org/) for all cryptography work, and [easyconf](https://github.com/hoot-w00t/easyconf/) to handle configuration files (it is a submodule of this repository).
 
 Install the dependencies
 ```
@@ -21,6 +21,7 @@ sudo pacman -S --needed make git gcc pkgconf openssl
 
 Clone the repository and navigate to it, then run
 ```
+git submodule update --init
 make
 ```
 

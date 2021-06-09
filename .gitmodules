@@ -1,0 +1,3 @@
+[submodule "easyconf"]
+	path = easyconf
+	url = https://github.com/hoot-w00t/easyconf

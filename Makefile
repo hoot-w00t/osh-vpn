@@ -1,10 +1,15 @@
 CC		=	cc
 PKG_CONFIG	=	pkg-config
 
+EASYCONF_ROOT	=	./easyconf
+EASYCONF_INC	=	$(EASYCONF_ROOT)/include
+EASYCONF_STATIC	=	$(EASYCONF_ROOT)/libeasyconf.a
+
 CFLAGS		=	-Wall -Wextra -Wshadow -O2 -g -pipe
-CFLAGS		+=	-Iinclude -Iinclude/easyconf
+CFLAGS		+=	-Iinclude -I$(EASYCONF_INC)
 CFLAGS		+=	$(strip $(shell $(PKG_CONFIG) --cflags openssl))
-LDFLAGS		=	$(strip $(shell $(PKG_CONFIG) --libs openssl))
+LDFLAGS		=	$(EASYCONF_STATIC)
+LDFLAGS		+=	$(strip $(shell $(PKG_CONFIG) --libs openssl))
 
 VERSION_GIT_H	=	include/version_git.h
 VERSION_GIT	=	$(strip $(shell cat $(VERSION_GIT_H) 2>/dev/null))
@@ -23,9 +28,6 @@ INSTALL_ETC	=	$(INSTALL_PRE_ETC)/oshd
 SRC		=	src/crypto/cipher.c		\
 			src/crypto/pkey.c		\
 			src/crypto/sha3.c		\
-			src/easyconf/easyconf.c		\
-			src/easyconf/getline.c		\
-			src/easyconf/parameter.c	\
 			src/events.c			\
 			src/logger.c			\
 			src/main.c			\
@@ -44,16 +46,10 @@ SRC		=	src/crypto/cipher.c		\
 			src/tuntap.c			\
 			src/xalloc.c
 
-TEST_SRC	=	src/easyconf/easyconf.c			\
-			src/easyconf/getline.c			\
-			src/easyconf/parameter.c		\
-			src/logger.c				\
+TEST_SRC	=	src/logger.c				\
 			src/xalloc.c				\
 			src/netaddr.c				\
 			src/netbuffer.c				\
-			tests/easyconf/easyconf_tests.c		\
-			tests/easyconf/getline_tests.c		\
-			tests/easyconf/parameter_tests.c	\
 			tests/netaddr_tests.c			\
 			tests/netbuffer_tests.c
 
@@ -89,13 +85,16 @@ obj/%.o:	%.c
 	@mkdir -p "$(shell dirname $@)"
 	$(CC) -MMD $(CFLAGS) -c $<	-o $@
 
-$(BIN):	$(OBJ)
+$(BIN):	$(EASYCONF_STATIC)	$(OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
-$(TEST_BIN):	$(TEST_OBJ)
+$(TEST_BIN):	$(EASYCONF_STATIC)	$(TEST_OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS) -lcriterion
+
+$(EASYCONF_STATIC):
+	$(MAKE) -C $(EASYCONF_ROOT)
 
 -include $(DEP)
 -include $(TEST_DEP)
 
-.PHONY:	all	update_version_git	test	install	uninstall	clean
+.PHONY:	all	update_version_git	$(EASYCONF_STATIC)	test	install	uninstall	clean
