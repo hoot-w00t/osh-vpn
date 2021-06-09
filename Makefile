@@ -58,7 +58,7 @@ TEST_OBJ	=	$(TEST_SRC:%.c=obj/%.o)
 DEP		=	$(OBJ:.o=.d)
 TEST_DEP	=	$(TEST_OBJ:.o=.d)
 
-all:	update_version_git	make_easyconf	$(BIN)
+all:	update_version_git	$(BIN)
 
 update_version_git:
 ifneq ($(findstring $(HEAD_COMMIT), $(VERSION_GIT)), $(HEAD_COMMIT))
@@ -93,6 +93,8 @@ $(BIN):	$(EASYCONF_STATIC)	$(OBJ)
 
 $(TEST_BIN):	$(EASYCONF_STATIC)	$(TEST_OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS) -lcriterion
+
+$(EASYCONF_STATIC):	make_easyconf
 
 -include $(DEP)
 -include $(TEST_DEP)
