@@ -574,9 +574,16 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
         // This should only happen when sending HANDSHAKE packets which will
         // initialize the ciphers
         // Otherwise drop the packet
+        // GOODBYE packets should close the connection so if there's no data
+        // queued after a failed GOODBYE we can remove the node
         logger(LOG_CRIT, "%s: Cannot queue unencrypted %s packet",
             node->addrw, oshpacket_type_name(type));
         netbuffer_cancel(node->io.sendq, packet_size);
+
+        if (type == GOODBYE) {
+            if (netbuffer_data_size(node->io.sendq) == 0)
+                event_queue_node_remove(node);
+        }
         return false;
     }
     return true;
