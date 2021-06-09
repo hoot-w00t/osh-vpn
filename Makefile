@@ -58,13 +58,16 @@ TEST_OBJ	=	$(TEST_SRC:%.c=obj/%.o)
 DEP		=	$(OBJ:.o=.d)
 TEST_DEP	=	$(TEST_OBJ:.o=.d)
 
-all:	update_version_git	$(BIN)
+all:	update_version_git	make_easyconf	$(BIN)
 
 update_version_git:
 ifneq ($(findstring $(HEAD_COMMIT), $(VERSION_GIT)), $(HEAD_COMMIT))
 	@echo Updating $(VERSION_GIT_H) with commit hash $(HEAD_COMMIT)
 	@echo "#define OSH_COMMIT_HASH \"$(HEAD_COMMIT)\"" > $(VERSION_GIT_H)
 endif
+
+make_easyconf:
+	@$(MAKE) -C $(EASYCONF_ROOT)
 
 test:	$(TEST_BIN)
 	@./$(TEST_BIN)
@@ -91,10 +94,7 @@ $(BIN):	$(EASYCONF_STATIC)	$(OBJ)
 $(TEST_BIN):	$(EASYCONF_STATIC)	$(TEST_OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS) -lcriterion
 
-$(EASYCONF_STATIC):
-	$(MAKE) -C $(EASYCONF_ROOT)
-
 -include $(DEP)
 -include $(TEST_DEP)
 
-.PHONY:	all	update_version_git	$(EASYCONF_STATIC)	test	install	uninstall	clean
+.PHONY:	all	update_version_git	make_easyconf	test	install	uninstall	clean
