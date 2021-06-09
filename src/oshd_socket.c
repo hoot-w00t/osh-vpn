@@ -207,59 +207,94 @@ bool node_send_queued(node_t *node)
 bool node_recv_queued(node_t *node)
 {
     ssize_t recvd_size;
-    oshpacket_hdr_t *pkt = (oshpacket_hdr_t *) node->io.recvbuf;
 
-recv_again:
-    recvd_size = recv(node->fd, node->io.recvbuf + node->io.recv_bytes,
-        node->io.recv_packet_size - node->io.recv_bytes, MSG_NOSIGNAL);
+    recvd_size = recv(node->fd, node->io.recvbuf + node->io.recvbuf_size,
+        NODE_RECVBUF_SIZE - node->io.recvbuf_size, MSG_NOSIGNAL);
 
     if (recvd_size > 0) {
         logger_debug(DBG_SOCKETS, "%s: Received %zi bytes", node->addrw, recvd_size);
-        node->io.recv_bytes += recvd_size;
+        node->io.recvbuf_size += recvd_size;
+    } else if (recvd_size < 0) {
+        if (errno != EAGAIN && errno != EWOULDBLOCK) {
+            logger(LOG_ERR, "%s: recv: %s", node->addrw, strerror(errno));
+            event_queue_node_remove(node);
+            return false;
+        }
+    }
+
+    // There is no more data ready to be received on the socket, process the
+    // received data
+
+    uint8_t *curr_packet = node->io.recvbuf;
+    oshpacket_hdr_t *curr_hdr = (oshpacket_hdr_t *) curr_packet;
+    size_t remaining_size = node->io.recvbuf_size;
+
+    while (1) {
         if (!node->io.recvd_hdr) {
-            if (node->io.recv_bytes >= OSHPACKET_PUBLIC_HDR_SIZE) {
+            // If we have enough data to decode the next header, we decode it
+            if (remaining_size >= OSHPACKET_PUBLIC_HDR_SIZE) {
                 // If the magic number is invalid something is wrong
-                if (pkt->magic != OSHPACKET_MAGIC) {
+                if (curr_hdr->magic != OSHPACKET_MAGIC) {
                     logger(LOG_ERR, "%s: Received invalid magic number 0x%X",
-                        node->addrw, pkt->magic);
+                        node->addrw, curr_hdr->magic);
                     event_queue_node_remove(node);
                     return false;
                 }
 
                 // Switch payload size to host byte order
-                pkt->payload_size = ntohs(pkt->payload_size);
+                curr_hdr->payload_size = ntohs(curr_hdr->payload_size);
 
-                node->io.recv_packet_size = OSHPACKET_HDR_SIZE + pkt->payload_size;
-                if (node->io.recv_packet_size <= OSHPACKET_PUBLIC_HDR_SIZE || node->io.recv_packet_size > OSHPACKET_MAXSIZE) {
-                    logger(LOG_ERR, "%s: Invalid packet size (recv, %u bytes)", node->addrw, node->io.recv_packet_size);
+                node->io.recv_pkt_size = OSHPACKET_HDR_SIZE + curr_hdr->payload_size;
+                if (node->io.recv_pkt_size > OSHPACKET_MAXSIZE) {
+                    logger(LOG_ERR, "%s: Invalid packet size (recv, %u bytes)",
+                        node->addrw, node->io.recv_pkt_size);
                     event_queue_node_remove(node);
                     return false;
                 }
+
+                // We decoded the public header so now we are ready to receive
+                // the packet and process it after it was completely received
                 node->io.recvd_hdr = true;
+            } else {
+                // No more data is ready to be processed, we break the loop
+                break;
             }
-        } else if (node->io.recv_bytes == node->io.recv_packet_size) {
-            if (!oshd_process_packet(node)) {
-                // There was an error while processing the packet, we drop the
-                // connection
-                event_queue_node_remove(node);
-                return false;
-            }
+        } else {
+            // If we fully received the decoded packet we can process it
+            if (remaining_size >= node->io.recv_pkt_size) {
+                if (!oshd_process_packet(node, curr_packet)) {
+                    // There was an error while processing the packet, we drop the
+                    // connection
+                    event_queue_node_remove(node);
+                    return false;
+                }
 
-            // Prepare to receive the next packet
-            node->io.recvd_hdr = false;
-            node->io.recv_packet_size = OSHPACKET_PUBLIC_HDR_SIZE;
-            node->io.recv_bytes = 0;
+                // Prepare to process the next packet
+                node->io.recvd_hdr = false;
+
+                // Shift the current packet pointer to the next
+                remaining_size -= node->io.recv_pkt_size;
+                curr_packet += node->io.recv_pkt_size;
+                curr_hdr = (oshpacket_hdr_t *) curr_packet;
+            } else {
+                // We haven't fully received the packet and no more data is
+                // ready to be processed, we break the loop
+                break;
+            }
         }
-    } else if (recvd_size < 0) {
-        // There is no more data ready to be received on the socket, return
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return true;
-
-        logger(LOG_ERR, "%s: recv: %s", node->addrw, strerror(errno));
-        event_queue_node_remove(node);
-        return false;
     }
-    goto recv_again;
+
+    // Shift the unprocessed data for the next recv()
+    if (remaining_size == 0) {
+        // Everything in the buffer was processed
+        node->io.recvbuf_size = 0;
+    } else {
+        // We have some unprocessed data left in the buffer, shift it to the
+        // start of it
+        memmove(node->io.recvbuf, curr_packet, remaining_size);
+        node->io.recvbuf_size = remaining_size;
+    }
+    return true;
 }
 
 // Iterate through all edges in *payload and add/delete them
@@ -734,15 +769,15 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
 
 // Returns true if packet was processed without an error
 // Returns false if node should be disconnected
-bool oshd_process_packet(node_t *node)
+bool oshd_process_packet(node_t *node, uint8_t *packet)
 {
-    oshpacket_hdr_t *pkt = (oshpacket_hdr_t *) node->io.recvbuf;
-    uint8_t *payload = node->io.recvbuf + OSHPACKET_HDR_SIZE;
+    oshpacket_hdr_t *hdr = (oshpacket_hdr_t *) packet;
+    uint8_t *payload = packet + OSHPACKET_HDR_SIZE;
 
     // If we have a recv_cipher, the private header and payload are encrypted,
     // so we need to decrypt it before we can process the data
     if (node->recv_cipher) {
-        const size_t encrypted_size = OSHPACKET_PRIVATE_HDR_SIZE + pkt->payload_size;
+        const size_t encrypted_size = OSHPACKET_PRIVATE_HDR_SIZE + hdr->payload_size;
         size_t decrypted_size;
 
         logger_debug(DBG_ENCRYPTION, "%s: Decrypting packet of %zu bytes",
@@ -753,8 +788,8 @@ bool oshd_process_packet(node_t *node)
         // TODO: If the cipher does not support this, decrypt in a temporary
         //       buffer and then copy the decrypted data back in the recvbuf
         if (!cipher_decrypt(node->recv_cipher,
-                ((uint8_t *) pkt) + OSHPACKET_PUBLIC_HDR_SIZE, &decrypted_size,
-                ((uint8_t *) pkt) + OSHPACKET_PUBLIC_HDR_SIZE, encrypted_size))
+                packet + OSHPACKET_PUBLIC_HDR_SIZE, &decrypted_size,
+                packet + OSHPACKET_PUBLIC_HDR_SIZE, encrypted_size))
         {
             logger(LOG_ERR, "%s: Failed to decrypt packet", node->addrw);
             return false;
@@ -769,14 +804,14 @@ bool oshd_process_packet(node_t *node)
     }
 
     // Retrieve the packet's counter value
-    pkt->counter = ntohl(pkt->counter);
+    hdr->counter = ntohl(hdr->counter);
 
     // Verify that the remote node's send_counter matches our recv_counter
     // This is to prevent replay attacks
     // If the counter is not correct then we drop the connection
-    if (node->recv_counter != pkt->counter) {
+    if (node->recv_counter != hdr->counter) {
         logger(LOG_CRIT, "%s: Invalid counter: Expected %u but got %u",
-            node->addrw, node->recv_counter, pkt->counter);
+            node->addrw, node->recv_counter, hdr->counter);
         return false;
     }
 
@@ -787,17 +822,17 @@ bool oshd_process_packet(node_t *node)
     // nothing else will be accepted or forwarded, if the authentication encounters
     // an error the connection is terminated
     if (!node->authenticated)
-        return oshd_process_unauthenticated(node, pkt, payload);
+        return oshd_process_unauthenticated(node, hdr, payload);
 
     // If the source or destination nodes don't exist in the tree the remote
     // node sent us invalid data, we drop the connection
-    node_id_t *src = node_id_find(pkt->src_node);
+    node_id_t *src = node_id_find(hdr->src_node);
     if (!src) {
         logger(LOG_ERR, "%s: %s: Unknown source node", node->addrw, node->id->name);
         return false;
     }
 
-    node_id_t *dest = node_id_find(pkt->dest_node);
+    node_id_t *dest = node_id_find(hdr->dest_node);
     if (!dest) {
         logger(LOG_ERR, "%s: %s: Unknown destination node", node->addrw, node->id->name);
         return false;
@@ -805,28 +840,28 @@ bool oshd_process_packet(node_t *node)
 
     // If the destination node is not the local node we'll forward this packet
     if (!dest->local_node) {
-        if (pkt->type <= PONG) {
+        if (hdr->type <= PONG) {
             logger(LOG_WARN, "Dropping %s packet from %s to %s: This type of packet cannot be forwarded",
-                oshpacket_type_name(pkt->type), src->name, dest->name);
+                oshpacket_type_name(hdr->type), src->name, dest->name);
             return true;
         }
 
         if (dest) {
             if (dest->next_hop) {
                 logger_debug(DBG_ROUTING, "Forwarding %s packet from %s to %s through %s",
-                    oshpacket_type_name(pkt->type), src->name, dest->name, dest->next_hop->id->name);
-                node_queue_packet_forward(dest->next_hop, pkt);
+                    oshpacket_type_name(hdr->type), src->name, dest->name, dest->next_hop->id->name);
+                node_queue_packet_forward(dest->next_hop, hdr);
             } else {
                 logger(LOG_INFO, "Dropping %s packet from %s to %s: No route",
-                    oshpacket_type_name(pkt->type), src->name, dest->name);
+                    oshpacket_type_name(hdr->type), src->name, dest->name);
             }
         } else {
             logger(LOG_WARN, "Dropping %s packet from %s to %s: Unknown destination",
-                oshpacket_type_name(pkt->type), src->name, dest->name);
+                oshpacket_type_name(hdr->type), src->name, dest->name);
         }
         return true;
     }
 
     // Otherwise the packet is for us
-    return oshd_process_authenticated(node, pkt, payload, src);
+    return oshd_process_authenticated(node, hdr, payload, src);
 }

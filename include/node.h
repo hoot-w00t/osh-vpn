@@ -19,17 +19,26 @@
 #define NODE_SENDQ_ALIGNMENT NODE_SENDQ_MIN_SIZE
 #endif
 
+#ifndef NODE_RECVBUF_SIZE
+// Size of the receive buffer, 1 MiB
+#define NODE_RECVBUF_SIZE (1024 * 1024 * 1)
+#endif
+
+#if (NODE_RECVBUF_SIZE < OSHPACKET_MAXSIZE)
+#error "NODE_RECVBUF_SIZE must be OSHPACKET_MAXSIZE or higher"
+#endif
+
 typedef struct node_id node_id_t;
 typedef struct node node_t;
 
 // Network data buffers
 struct node_io {
-    uint8_t *recvbuf;          // Buffer to receive packets to
-    uint16_t recv_bytes;       // Amount of received bytes in *recvbuf
-    uint16_t recv_packet_size; // Amount of bytes to receive in total
-    bool recvd_hdr;            // true when the packet header was processed
+    uint8_t *recvbuf;     // Buffer for received packets
+    size_t recvbuf_size;  // Size of the data in recvbuf
+    bool recvd_hdr;       // true when the packet header was processed
+    size_t recv_pkt_size; // Size of the next packet to receive
 
-    netbuffer_t *sendq;         // Network buffer for queuing packets
+    netbuffer_t *sendq;   // Network buffer for queuing packets
 };
 
 struct node_id {
