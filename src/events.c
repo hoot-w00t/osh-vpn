@@ -238,6 +238,12 @@ void event_queue_node_remove(node_t *node)
 {
     struct timeval trigger;
 
+    if (node->remove_queued) {
+        logger(LOG_WARN, "node_remove event for %p is already queued", node);
+        return;
+    }
+    node->remove_queued = true;
+
     // Always trigger when processing the event queue
     memset(&trigger, 0, sizeof(trigger));
     event_queue(event_create(node_remove_event_handler,
