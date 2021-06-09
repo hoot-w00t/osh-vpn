@@ -42,6 +42,7 @@ SRC		=	src/crypto/cipher.c		\
 			src/oshd_socket.c		\
 			src/oshd.c			\
 			src/oshpacket.c			\
+			src/random.c			\
 			src/tcp.c			\
 			src/tuntap.c			\
 			src/xalloc.c

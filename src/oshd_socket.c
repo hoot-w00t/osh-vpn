@@ -317,12 +317,12 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
     return true;
 }
 
-// Process HELLO packet to authenticate a node
-static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
-    oshpacket_hello_t *payload)
+// Process HELLO_CHALLENGE packet
+static bool oshd_process_hello_challenge(node_t *node, oshpacket_hdr_t *pkt,
+    oshpacket_hello_challenge_t *payload)
 {
-    if (pkt->payload_size != sizeof(oshpacket_hello_t)) {
-        logger(LOG_ERR, "%s: Invalid HELLO size: %u bytes", node->addrw,
+    if (pkt->payload_size != sizeof(oshpacket_hello_challenge_t)) {
+        logger(LOG_ERR, "%s: Invalid HELLO_CHALLENGE size: %u bytes", node->addrw,
             pkt->payload_size);
         return false;
     }
@@ -346,46 +346,98 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
         return node_queue_goodbye(node);
     }
 
-    if (!id->pubkey) {
+    node->hello_id = id;
+
+    uint8_t *sig;
+    size_t sig_size;
+    oshpacket_hello_response_t response;
+
+    // Sign the challenge using our private key
+    logger_debug(DBG_AUTHENTICATION, "%s: %s: Authentication: Signing challenge",
+        node->addrw, node->hello_id->name);
+    if (!pkey_sign(oshd.privkey,
+                   (uint8_t *) payload, sizeof(oshpacket_hello_challenge_t),
+                   &sig, &sig_size))
+    {
+        logger(LOG_ERR, "%s: %s: Failed to sign the HELLO challenge",
+            node->addrw, node->hello_id->name);
+        return false;
+    }
+
+    // Make sure that the signature size is the same as the response packet expects
+    if (sig_size != sizeof(response.sig)) {
+        free(sig);
+        logger(LOG_ERR, "%s: %s: Signature size is invalid (%zu bytes)",
+            node->addrw, node->hello_id->name, sig_size);
+        return false;
+    }
+
+    // Initialize and queue the response packet
+    memcpy(response.sig, sig, sizeof(response.sig));
+    free(sig);
+
+    return node_queue_packet(node, NULL, HELLO_RESPONSE, (uint8_t *) &response,
+        sizeof(oshpacket_hello_response_t));
+}
+
+// Process HELLO_RESPONSE packet
+static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
+    oshpacket_hello_response_t *payload)
+{
+    if (pkt->payload_size != sizeof(oshpacket_hello_response_t)) {
+        logger(LOG_ERR, "%s: Invalid HELLO_RESPONSE size: %u bytes", node->addrw,
+            pkt->payload_size);
+        return false;
+    }
+
+    if (!node->hello_chall) {
+        // If we don't have a hello_chall packet, authentication cannot proceed
+        logger(LOG_ERR, "%s: Received HELLO_RESPONSE but no HELLO_CHALLENGE was sent",
+            node->addrw);
+        return node_queue_goodbye(node);
+    }
+
+    if (!node->hello_id->pubkey) {
         // If we don't have a public key to verify the HELLO signature,
         // we can't authenticate the node
         logger(LOG_ERR, "%s: Authentication failed: No public key for %s",
-            node->addrw, name);
+            node->addrw, node->hello_id->name);
         return node_queue_goodbye(node);
     }
 
     // If the public key is local we will always use it, but if it is a remote
     // key and remote authentication is not authorized then we can't
     // authenticate the node
-    if (!id->pubkey_local && !oshd.remote_auth) {
+    if (!node->hello_id->pubkey_local && !oshd.remote_auth) {
         logger(LOG_ERR, "%s: Authentication failed: No local public key for %s",
-            node->addrw, name);
+            node->addrw, node->hello_id->name);
         return node_queue_goodbye(node);
     }
 
     logger_debug(DBG_AUTHENTICATION, "%s: Authentication: %s has a %s public key",
-        node->addrw, name, id->pubkey_local ? "local" : "remote");
+        node->addrw, node->hello_id->name,
+        node->hello_id->pubkey_local ? "local" : "remote");
 
     // If the signature verification succeeds then the node is authenticated
     logger_debug(DBG_AUTHENTICATION, "%s: Authentication: Verifying signature from %s",
-        node->addrw, id->name);
-    node->authenticated = pkey_verify(id->pubkey, (uint8_t *) payload,
-        sizeof(oshpacket_hello_t) - sizeof(payload->sig), payload->sig,
-        sizeof(payload->sig));
+        node->addrw, node->hello_id->name);
+    node->authenticated = pkey_verify(node->hello_id->pubkey,
+        (uint8_t *) node->hello_chall, sizeof(oshpacket_hello_challenge_t),
+        payload->sig, sizeof(payload->sig));
 
     // If the node is not authenticated, the signature verification failed
     // The remote node did not sign the data using the private key
     // associated with the public key we have
     if (!node->authenticated) {
         logger(LOG_ERR, "%s: Authentication failed: Failed to verify signature from %s",
-            node->addrw, name);
+            node->addrw, node->hello_id->name);
         return node_queue_goodbye(node);
     }
 
-    if (id->node_socket) {
+    if (node->hello_id->node_socket) {
         // Disconnect the current socket if node is already authenticated
         logger(LOG_WARN, "%s: Another socket is already authenticated as %s",
-            node->addrw, name);
+            node->addrw, node->hello_id->name);
 
         // This node should not be used
         node->authenticated = false;
@@ -395,11 +447,11 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
         if (node->reconnect_addr) {
             // If the other authenticated socket does not have a reconnection
             // set, we can set it to this node's
-            if (!id->node_socket->reconnect_addr) {
+            if (!node->hello_id->node_socket->reconnect_addr) {
                 logger(LOG_INFO, "%s: Moving reconnection to %s:%u to %s (%s)",
                     node->addrw, node->reconnect_addr, node->reconnect_port,
-                    id->name, id->node_socket->addrw);
-                node_reconnect_to(id->node_socket, node->reconnect_addr,
+                    node->hello_id->name, node->hello_id->node_socket->addrw);
+                node_reconnect_to(node->hello_id->node_socket, node->reconnect_addr,
                     node->reconnect_port, node->reconnect_delay);
             } else {
                 // TODO: Add a way to try reconnecting to multiple addresses
@@ -415,10 +467,15 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
 
     // The remote node is now authenticated
 
-    id->node_socket = node;
-    node->id = id;
+    node->id = node->hello_id;
+    node->id->node_socket = node;
 
-    node_id_add_edge(me, id);
+    // Cleanup the temporary hello variables
+    node->hello_id = NULL;
+    free(node->hello_chall);
+    node->hello_chall = NULL;
+
+    node_id_add_edge(me, node->id);
     node_tree_update();
 
     logger(LOG_INFO, "%s: %s: Authenticated successfully", node->addrw,
@@ -426,7 +483,7 @@ static bool oshd_process_hello(node_t *node, oshpacket_hdr_t *pkt,
 
     if (!node_queue_edge_exg(node))
         return false;
-    if (!node_queue_edge_broadcast(node, EDGE_ADD, oshd.name, name))
+    if (!node_queue_edge_broadcast(node, EDGE_ADD, oshd.name, node->id->name))
         return false;
     return node_queue_ping(node);
 }
@@ -528,7 +585,7 @@ static bool oshd_process_handshake(node_t *node, oshpacket_hdr_t *pkt,
     // We were able to create ciphers to encrypt traffic, so we can
     // proceed to the authentication part, if the node is not yet authenticated
     if (!node->authenticated)
-        return node_queue_hello(node);
+        return node_queue_hello_challenge(node);
     return true;
 }
 
@@ -537,8 +594,13 @@ static bool oshd_process_unauthenticated(node_t *node, oshpacket_hdr_t *pkt,
     uint8_t *payload)
 {
     switch (pkt->type) {
-        case HELLO:
-            return oshd_process_hello(node, pkt, (oshpacket_hello_t *) payload);
+        case HELLO_CHALLENGE:
+            return oshd_process_hello_challenge(node, pkt,
+                (oshpacket_hello_challenge_t *) payload);
+
+        case HELLO_RESPONSE:
+            return oshd_process_hello_response(node, pkt,
+                (oshpacket_hello_response_t *) payload);
 
         case HANDSHAKE:
             return oshd_process_handshake(node, pkt, (oshpacket_handshake_t *) payload);
@@ -560,9 +622,10 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
     uint8_t *payload, node_id_t *src_node)
 {
     switch (pkt->type) {
-        case HELLO:
-            logger(LOG_ERR, "%s: %s: Already authenticated but received HELLO",
-                node->addrw, node->id->name);
+        case HELLO_CHALLENGE:
+        case HELLO_RESPONSE:
+            logger(LOG_ERR, "%s: %s: Already authenticated but received %s",
+                node->addrw, node->id->name, oshpacket_type_name(pkt->type));
             return false;
 
         case HANDSHAKE:

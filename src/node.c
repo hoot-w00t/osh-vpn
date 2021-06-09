@@ -3,6 +3,7 @@
 #include "events.h"
 #include "logger.h"
 #include "xalloc.h"
+#include "random.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -447,6 +448,7 @@ static void node_reset_ciphers(node_t *node)
 void node_destroy(node_t *node)
 {
     node_disconnect(node);
+    free(node->hello_chall);
     free(node->io.recvbuf);
     netbuffer_free(node->io.sendq);
     node_reset_ciphers(node);
@@ -669,36 +671,18 @@ bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
     return true;
 }
 
-// Queue HELLO request
-bool node_queue_hello(node_t *node)
+// Queue HELLO_CHALLENGE request
+bool node_queue_hello_challenge(node_t *node)
 {
-    oshpacket_hello_t payload;
-    uint8_t *sig;
-    size_t sig_size;
+    free(node->hello_chall);
+    node->hello_chall = xalloc(sizeof(oshpacket_hello_challenge_t));
 
-    logger_debug(DBG_AUTHENTICATION, "Creating HELLO packet for %s", node->addrw);
-    memcpy(payload.node_name, oshd.name, NODE_NAME_SIZE);
-
-    // Sign the HELLO payload using our private key
-    logger_debug(DBG_AUTHENTICATION, "%s: Authentication: Signing the HELLO payload", node->addrw);
-    if (!pkey_sign(oshd.privkey, (uint8_t *) &payload,
-            sizeof(payload) - sizeof(payload.sig), &sig, &sig_size))
-    {
-        logger(LOG_ERR, "%s: Failed to sign the HELLO payload", node->addrw);
+    memcpy(node->hello_chall->node_name, oshd.name, NODE_NAME_SIZE);
+    if (!read_random_bytes(node->hello_chall->challenge, sizeof(node->hello_chall->challenge)))
         return false;
-    }
 
-    // Make sure that the signature size is the same as the HELLO packet expects
-    if (sig_size != sizeof(payload.sig)) {
-        free(sig);
-        logger(LOG_ERR, "%s: Signature size is invalid (%zu bytes)",
-            node->addrw, sig_size);
-        return false;
-    }
-    memcpy(payload.sig, sig, sizeof(payload.sig));
-    free(sig);
-
-    return node_queue_packet(node, NULL, HELLO, (uint8_t *) &payload, sizeof(payload));
+    return node_queue_packet(node, NULL, HELLO_CHALLENGE, (uint8_t *) node->hello_chall,
+        sizeof(oshpacket_hello_challenge_t));
 }
 
 // Queue HANDSHAKE request

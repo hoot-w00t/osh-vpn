@@ -26,8 +26,11 @@
 #define HANDSHAKE_KEY_SIZE (32)
 #endif
 
+#define OSHPACKET_PAYLOAD_MAXSIZE (2048)
+
 typedef enum oshpacket_type {
-    HELLO = 0,
+    HELLO_CHALLENGE = 0,
+    HELLO_RESPONSE,
     HANDSHAKE,
     GOODBYE,
     PING,
@@ -54,10 +57,14 @@ typedef struct __attribute__((__packed__)) oshpacket_hdr {
     char             dest_node[NODE_NAME_SIZE];
 } oshpacket_hdr_t;
 
-typedef struct __attribute__((__packed__)) oshpacket_hello {
+typedef struct __attribute__((__packed__)) oshpacket_hello_challenge {
     char node_name[NODE_NAME_SIZE];
+    uint8_t challenge[OSHPACKET_PAYLOAD_MAXSIZE - NODE_NAME_SIZE];
+} oshpacket_hello_challenge_t;
+
+typedef struct __attribute__((__packed__)) oshpacket_hello_response {
     uint8_t sig[HELLO_SIG_SIZE];
-} oshpacket_hello_t;
+} oshpacket_hello_response_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_handshake {
     // Public X25519 key to derive for sending packets to the other node
@@ -86,8 +93,6 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 // Total size of the header
 #define OSHPACKET_HDR_SIZE (OSHPACKET_PUBLIC_HDR_SIZE + OSHPACKET_PRIVATE_HDR_SIZE)
 
-// TODO: Define a proper payload size
-#define OSHPACKET_PAYLOAD_MAXSIZE (2048)
 #define OSHPACKET_MAXSIZE (OSHPACKET_HDR_SIZE + OSHPACKET_PAYLOAD_MAXSIZE)
 
 const char *oshpacket_type_name(oshpacket_type_t type);

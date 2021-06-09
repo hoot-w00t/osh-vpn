@@ -74,6 +74,15 @@ struct node {
                         // But it will be NULL before the node has successfully
                         // authenticated
 
+    // This is the node ID the remote socket pretends to be, used only during
+    // authentication in HELLO packets
+    node_id_t *hello_id;
+
+    // This is the local node's challenge packet sent to the other node during
+    // authentication, it is kept in memory to verify the signed challenge data
+    // by the remote node
+    oshpacket_hello_challenge_t *hello_chall;
+
     // X25519 keys, ciphers and counters to encrypt/decrypt traffic
     // The send cipher will be used to encrypt outgoing packets
     // The recv cipher will be used to decrypt incoming packets
@@ -138,7 +147,7 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt);
 bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
     uint8_t *payload, uint16_t payload_size);
 
-bool node_queue_hello(node_t *node);
+bool node_queue_hello_challenge(node_t *node);
 bool node_queue_handshake(node_t *node, bool initiator);
 bool node_queue_goodbye(node_t *node);
 bool node_queue_ping(node_t *node);
