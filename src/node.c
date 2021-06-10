@@ -467,7 +467,8 @@ node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port)
 
     // Write the node's address:port
     netaddr_ntop(addrp, sizeof(addrp), addr);
-    snprintf(node->addrw, sizeof(node->addrw), "%s:%u", addrp, port);
+    snprintf(node->addrw, sizeof(node->addrw),
+        (addr->type == IP6) ? "[%s]:%u" : "%s:%u", addrp, port);
 
     // Initialize network buffers
     node->io.recvbuf = xalloc(NODE_RECVBUF_SIZE);
