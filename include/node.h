@@ -31,6 +31,10 @@
 typedef struct node_id node_id_t;
 typedef struct node node_t;
 
+// We need to manually define the event_t type for the node_t structure to
+// prevent mutually including events.h and node.h (events.h includes node.h)
+typedef struct event event_t;
+
 // Network data buffers
 struct node_io {
     uint8_t *recvbuf;     // Buffer for received packets
@@ -83,6 +87,9 @@ struct node {
                         // pointer will never be NULL
                         // But it will be NULL before the node has successfully
                         // authenticated
+
+    // node_auth_timeout event queued in node_init
+    event_t *auth_timeout_event;
 
     // This is the node ID the remote socket pretends to be, used only during
     // authentication in HELLO packets

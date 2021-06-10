@@ -473,6 +473,11 @@ node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port)
     node->io.recvbuf = xalloc(NODE_RECVBUF_SIZE);
     node->io.sendq = netbuffer_create(NODE_SENDQ_MIN_SIZE, NODE_SENDQ_ALIGNMENT);
 
+    // Queue the authentication timeout event for the node
+    // When it triggers if the socket is not authenticated it will be
+    // disconnected
+    event_queue_node_auth_timeout(node, 30);
+
     return node;
 }
 

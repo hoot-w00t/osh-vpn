@@ -116,6 +116,36 @@ void event_cancel_queue(void)
     event_queue_head = NULL;
 }
 
+// Cancel a single event from the queue, if the event is not queued nothing is
+// done
+void event_cancel(event_t *event)
+{
+    event_t **i = &event_queue_head;
+
+    // We will loop through all the queued events until we find the one we want
+    // to cancel
+    while (*i) {
+        if ((*i) == event) {
+            // We found the event to cancel
+            logger_debug(DBG_EVENTS, "Canceling event %p at %s", event,
+                event->trigger_fmt);
+
+            // Replace the next event pointed to by i to the one that will come
+            // after and then free the canceled event
+            *i = (*i)->next;
+            event_free(event);
+            return;
+        }
+
+        // Otherwise we iterate until the end of the queue
+        i = &(*i)->next;
+    }
+
+    // If we get here the event could not be found, this should not happen
+    logger(LOG_ERR, "Failed to cancel event %p at %s: It was not found in the queue",
+        event, event->trigger_fmt);
+}
+
 // Queue connect event
 typedef struct connect_event_data {
     char *addr;
@@ -244,8 +274,42 @@ void event_queue_node_remove(node_t *node)
     }
     node->remove_queued = true;
 
+    if (node->auth_timeout_event)
+        event_cancel(node->auth_timeout_event);
+
     // Always trigger when processing the event queue
     memset(&trigger, 0, sizeof(trigger));
     event_queue(event_create(node_remove_event_handler,
         node_remove_event_freedata, node, &trigger));
+}
+
+
+// Queue node authentication timeout event
+static void node_auth_timeout_event_handler(void *data)
+{
+    node_t *node = (node_t *) data;
+
+    if (!node->authenticated) {
+        logger(LOG_WARN, "%s: Authentication timed out", node->addrw);
+        node->auth_timeout_event = NULL;
+        event_queue_node_remove(node);
+    }
+}
+
+static void node_auth_timeout_event_freedata(void *data,
+    __attribute__((unused)) bool handled)
+{
+    ((node_t *) data)->auth_timeout_event = NULL;
+}
+
+void event_queue_node_auth_timeout(node_t *node, time_t timeout_delay)
+{
+    struct timeval trigger;
+    event_t *event;
+
+    tv_delay(&trigger, timeout_delay);
+    event = event_create(node_auth_timeout_event_handler,
+        node_auth_timeout_event_freedata, node, &trigger);
+    node->auth_timeout_event = event;
+    event_queue(event);
 }
