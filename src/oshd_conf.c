@@ -33,14 +33,6 @@ static bool oshd_param_noserver(__attribute__((unused)) ecp_t *ecp)
     return true;
 }
 
-// NoDevice
-static bool oshd_param_nodevice(__attribute__((unused)) ecp_t *ecp)
-{
-    oshd.tuntap_used = false;
-    logger_debug(DBG_CONF, "Disabled TUN/TAP device");
-    return true;
-}
-
 // Name
 static bool oshd_param_name(ecp_t *ecp)
 {
@@ -97,15 +89,23 @@ static bool oshd_param_port(ecp_t *ecp)
 // Mode
 static bool oshd_param_mode(ecp_t *ecp)
 {
-    if (!strcmp(ecp_value(ecp), "tap")) {
-        oshd.is_tap = true;
-    } else if (!strcmp(ecp_value(ecp), "tun")) {
-        oshd.is_tap = false;
+    if (!strcasecmp(ecp_value(ecp), "NoDevice")) {
+        oshd.device_mode = MODE_NODEVICE;
+    } else if (!strcasecmp(ecp_value(ecp), "TAP")) {
+        oshd.device_mode = MODE_TAP;
+    } else if (!strcasecmp(ecp_value(ecp), "TUN")) {
+        oshd.device_mode = MODE_TUN;
     } else {
         snprintf(oshd_conf_error, sizeof(oshd_conf_error), "Unknown mode");
         return false;
     }
-    logger_debug(DBG_CONF, "Set device mode to %s", oshd.is_tap ? "TAP" : "TUN");
+    oshd.tuntap_used = oshd.device_mode != MODE_NODEVICE;
+    oshd.is_tap = oshd.device_mode == MODE_TAP;
+
+    logger_debug(DBG_CONF, "Set device mode to %s (%s, %s)",
+        device_mode_name(oshd.device_mode),
+        oshd.tuntap_used ? "used" : "unused",
+        oshd.is_tap ? "TAP" : "TUN");
     return true;
 }
 
@@ -212,7 +212,6 @@ static bool oshd_param_digraphfile(ecp_t *ecp)
 // Array of all configuration parameters and their handlers
 static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "NoServer", .type = VALUE_NONE, &oshd_param_noserver },
-    { .name = "NoDevice", .type = VALUE_NONE, &oshd_param_nodevice },
     { .name = "Name", .type = VALUE_REQUIRED, &oshd_param_name },
     { .name = "KeysDir", .type = VALUE_REQUIRED, &oshd_param_keysdir },
     { .name = "RemoteAuth", .type = VALUE_NONE, &oshd_param_remoteauth },

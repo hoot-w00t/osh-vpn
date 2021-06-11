@@ -27,6 +27,17 @@ static struct pollfd *pfd = NULL;
 static size_t pfd_off = 0;
 static size_t pfd_count = 0;
 
+// Return the name of the device mode
+const char *device_mode_name(device_mode_t devmode)
+{
+    switch (devmode) {
+        case MODE_NODEVICE: return "NoDevice";
+        case MODE_TAP     : return "TAP";
+        case MODE_TUN     : return "TUN";
+             default      : return "Unknown mode";
+    }
+}
+
 // Load a private or a public key from the keys directory
 // name should be a node's name
 // Returns NULL on error

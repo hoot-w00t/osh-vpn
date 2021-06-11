@@ -9,6 +9,14 @@
 
 #define OSHD_DEFAULT_PORT (9270)
 
+typedef enum device_mode {
+    MODE_NODEVICE = 0, // No TUN/TAP device will be opened and used
+                       // This daemon will only relay network packets
+
+    MODE_TAP,          // Open the device in TAP mode (Layer 2)
+    MODE_TUN           // Open the device in TUN mode (Layer 3)
+} device_mode_t;
+
 typedef struct oshd {
     // Name of the local node
     char name[NODE_NAME_SIZE + 1];
@@ -23,11 +31,12 @@ typedef struct oshd {
     EVP_PKEY *privkey;
 
     // TUN/TAP device information
-    bool tuntap_used;    // true if the device will be opened and used
-    int tuntap_fd;       // File descriptor of the device
-    char tuntap_dev[17]; // Name of the device interface
-    bool is_tap;         // true if the device is running in Layer 2 (TAP)
-                         // Otherwise the device is in Layer 3 (TUN)
+    device_mode_t device_mode; // The mode of the TUN/TAP device
+    bool tuntap_used;          // true if the TUN/TAP device will be used
+    int tuntap_fd;             // File descriptor of the device
+    char tuntap_dev[17];       // Name of the device interface
+    bool is_tap;               // true if the device is running in Layer 2 (TAP)
+                               // Otherwise the device is in Layer 3 (TUN)
 
     int server_fd;        // TCP server socket
     uint16_t server_port; // TCP server port
@@ -67,6 +76,8 @@ typedef struct oshd {
     // When set to false the daemon will stop
     bool run;
 } oshd_t;
+
+const char *device_mode_name(device_mode_t devmode);
 
 EVP_PKEY *oshd_open_key(const char *name, bool private);
 bool oshd_open_keys(const char *dirname);
