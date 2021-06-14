@@ -681,6 +681,55 @@ bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
     return true;
 }
 
+// Queue packet with a fragmented payload
+// If the payload is too big for one packet it will be fragmented and sent with
+// as many packets as needed
+// This can only be used for repeating payloads, like edges and routes which
+// are processed as a flat array
+// If broadcast is true, *node is a node to exclude from the broadcast (can be
+// NULL)
+// Otherwise the fragmented packet will be sent to *node (should be
+// authenticated)
+static bool node_queue_packet_fragmented(node_t *node, oshpacket_type_t type,
+    void *payload, size_t payload_size, size_t entry_size, bool broadcast)
+{
+    size_t max_entries = OSHPACKET_PAYLOAD_MAXSIZE / entry_size;
+    size_t remaining_entries = payload_size / entry_size;
+    uint8_t *curr_buf = (uint8_t *) payload;
+
+    while (remaining_entries > 0) {
+        size_t entries;
+        size_t size;
+
+        // Calculate how many entries from the payload we can send
+        if (remaining_entries > max_entries)
+            entries = max_entries;
+        else
+            entries = remaining_entries;
+
+        // Calculate the fragmented payload size
+        size = entries * entry_size;
+
+        // Send the fragmented packet
+        if (broadcast) {
+            logger_debug(DBG_SOCKETS, "Broadcasting fragmented %s packet with %zu entries (%zu bytes)",
+                oshpacket_type_name(type), entries, size);
+            if (!node_queue_packet_broadcast(node, type, curr_buf, size))
+                return false;
+        } else {
+            logger_debug(DBG_SOCKETS, "%s: %s: Queuing fragmented %s packet with %zu entries (%zu bytes)",
+                node->addrw, node->id->name, oshpacket_type_name(type), entries, size);
+            if (!node_queue_packet(node, node->id->name, type, curr_buf, size))
+                return false;
+        }
+
+        // Iterate to the next entries
+        remaining_entries -= entries;
+        curr_buf += size;
+    }
+    return true;
+}
+
 // Queue HANDSHAKE request
 bool node_queue_handshake(node_t *node, bool initiator)
 {
@@ -892,42 +941,9 @@ bool node_queue_edge_exg(node_t *node)
         }
     }
 
-    // Calculate the maximum number of edges we can send in one packet
-    size_t max_entries = OSHPACKET_PAYLOAD_MAXSIZE / sizeof(oshpacket_edge_t);
-    size_t remaining_entries = buf_count;
-    uint8_t *curr_buf = (uint8_t *) buf;
-    bool success = true;
-
-    logger_debug(DBG_NODETREE,
-        "    Queuing EDGE_ADD packets for %zu edges (%zu bytes)",
-        buf_count, sizeof(oshpacket_edge_t) * buf_count);
-
-    // Queue all edges in the buffer
-    while (remaining_entries > 0) {
-        size_t entries;
-        size_t size;
-
-        // Calculate how many entries to send on the packet
-        if (remaining_entries > max_entries)
-            entries = max_entries;
-        else
-            entries = remaining_entries;
-
-        // Calculate the payload size
-        size = entries * sizeof(oshpacket_edge_t);
-
-        // Queue the packet
-        if (node_queue_packet(node, node->id->name, EDGE_ADD, curr_buf, size)) {
-            logger_debug(DBG_NODETREE,
-                "    Queued EDGE_ADD with %zu edges (%zu bytes)", entries, size);
-        } else {
-            success = false;
-        }
-
-        // Iterate to the next entries
-        remaining_entries -= entries;
-        curr_buf += size;
-    }
+    size_t buf_size = buf_count * sizeof(oshpacket_edge_t);
+    bool success = node_queue_packet_fragmented(node, EDGE_ADD, buf, buf_size,
+        sizeof(oshpacket_edge_t), false);
 
     // We need to free the memory before returning
     free(buf);
@@ -951,37 +967,8 @@ bool node_queue_route_add_local(node_t *exclude, const netaddr_t *addrs,
         memcpy(buf[i].addr_data, addrs[i].data, 16);
     }
 
-    size_t max_entries = OSHPACKET_PAYLOAD_MAXSIZE / sizeof(oshpacket_route_t);
-    size_t remaining_entries = count;
-    uint8_t *curr_buf = (uint8_t *) buf;
-    bool success = true;
-
-    // Queue all routes in the buffer
-    while (remaining_entries > 0) {
-        size_t entries;
-        size_t size;
-
-        // Calculate how many entries to send on the packet
-        if (remaining_entries > max_entries)
-            entries = max_entries;
-        else
-            entries = remaining_entries;
-
-        // Calculate the payload size
-        size = entries * sizeof(oshpacket_route_t);
-
-        // Broadcast the packet
-        if (node_queue_packet_broadcast(exclude, ROUTE_ADD, curr_buf, size)) {
-            logger_debug(DBG_ROUTING, "Broadcast ROUTE_ADD with %zu local routes (%zu bytes)",
-                entries, size);
-        } else {
-            success = false;
-        }
-
-        // Iterate to the next entries
-        remaining_entries -= entries;
-        curr_buf += size;
-    }
+    bool success = node_queue_packet_fragmented(exclude, ROUTE_ADD, buf, buf_size,
+        sizeof(oshpacket_route_t), true);
 
     // We need to free the memory before returning
     free(buf);
@@ -1016,37 +1003,8 @@ bool node_queue_route_exg(node_t *node)
         memcpy(buf[i].addr_data, oshd.routes[j]->addr.data, 16);
     }
 
-    size_t max_entries = OSHPACKET_PAYLOAD_MAXSIZE / sizeof(oshpacket_route_t);
-    size_t remaining_entries = count;
-    uint8_t *curr_buf = (uint8_t *) buf;
-    bool success = true;
-
-    // Queue all routes in the buffer
-    while (remaining_entries > 0) {
-        size_t entries;
-        size_t size;
-
-        // Calculate how many entries to send on the packet
-        if (remaining_entries > max_entries)
-            entries = max_entries;
-        else
-            entries = remaining_entries;
-
-        // Calculate the payload size
-        size = entries * sizeof(oshpacket_route_t);
-
-        // Broadcast the packet
-        if (node_queue_packet(node, node->id->name, ROUTE_ADD, curr_buf, size)) {
-            logger_debug(DBG_ROUTING, "Queued ROUTE_ADD with %zu local routes (%zu bytes) (state exchange)",
-                entries, size);
-        } else {
-            success = false;
-        }
-
-        // Iterate to the next entries
-        remaining_entries -= entries;
-        curr_buf += size;
-    }
+    bool success = node_queue_packet_fragmented(node, ROUTE_ADD, buf, buf_size,
+        sizeof(oshpacket_route_t), false);
 
     // We need to free the memory before returning
     free(buf);
