@@ -13,8 +13,6 @@ void oshd_read_tuntap_pkt(void)
     ssize_t pkt_size;
     uint8_t pkt[OSHPACKET_PAYLOAD_MAXSIZE];
     netpacket_t pkt_hdr;
-    char pkt_src[INET6_ADDRSTRLEN];
-    char pkt_dest[INET6_ADDRSTRLEN];
     oshd_route_t *route;
 
 read_again:
@@ -32,9 +30,6 @@ read_again:
         return;
     }
 
-    netaddr_ntop(pkt_src, sizeof(pkt_src), &pkt_hdr.src);
-    netaddr_ntop(pkt_dest, sizeof(pkt_dest), &pkt_hdr.dest);
-
     // If the source address was not in our local routes, broadcast the new
     // route to the network
     if (oshd_route_add_local(&pkt_hdr.src))
@@ -42,16 +37,28 @@ read_again:
 
     if ((route = oshd_route_find(&pkt_hdr.dest))) {
         // We have a route for this network destination
-        logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%i bytes, to %s)",
-            oshd.tuntap_dev, oshd.name, pkt_src, pkt_dest, pkt_size,
-            route->dest_node->name);
         node_queue_packet(route->dest_node->next_hop, route->dest_node->name,
             DATA, pkt, (uint16_t) pkt_size);
     } else {
         // We don't have a route for this network destination so we broadcast it
-        logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%i bytes, broadcast)",
-            oshd.tuntap_dev, oshd.name, pkt_src, pkt_dest, pkt_size);
         node_queue_packet_broadcast(NULL, DATA, pkt, (uint16_t) pkt_size);
+    }
+
+    if (logger_is_debugged(DBG_TUNTAP)) {
+        char pkt_src[INET6_ADDRSTRLEN];
+        char pkt_dest[INET6_ADDRSTRLEN];
+
+        netaddr_ntop(pkt_src, sizeof(pkt_src), &pkt_hdr.src);
+        netaddr_ntop(pkt_dest, sizeof(pkt_dest), &pkt_hdr.dest);
+
+        if (route) {
+            logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%i bytes, to %s)",
+                oshd.tuntap_dev, oshd.name, pkt_src, pkt_dest, pkt_size,
+                route->dest_node->name);
+        } else {
+            logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%i bytes, broadcast)",
+                oshd.tuntap_dev, oshd.name, pkt_src, pkt_dest, pkt_size);
+        }
     }
 
     // This is the same as having a while(1) loop on the whole function, in the

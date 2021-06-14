@@ -449,8 +449,6 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                 return true;
 
             netpacket_t netpkt;
-            char netpkt_src[INET6_ADDRSTRLEN];
-            char netpkt_dest[INET6_ADDRSTRLEN];
 
             if (!netpacket_from_data(&netpkt, payload, oshd.is_tap)) {
                 logger(LOG_ERR, "%s: %s: Failed to decode received tunnel packet",
@@ -458,12 +456,16 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                 return false;
             }
 
-            netaddr_ntop(netpkt_src, sizeof(netpkt_src), &netpkt.src);
-            netaddr_ntop(netpkt_dest, sizeof(netpkt_dest), &netpkt.dest);
+            if (logger_is_debugged(DBG_TUNTAP)) {
+                char netpkt_src[INET6_ADDRSTRLEN];
+                char netpkt_dest[INET6_ADDRSTRLEN];
 
-            logger_debug(DBG_TUNTAP, "%s: %s: %s <- %s (%u bytes, from %s)",
-                node->addrw, node->id->name, netpkt_dest, netpkt_src,
-                pkt->payload_size, src_node->name);
+                netaddr_ntop(netpkt_src, sizeof(netpkt_src), &netpkt.src);
+                netaddr_ntop(netpkt_dest, sizeof(netpkt_dest), &netpkt.dest);
+                logger_debug(DBG_TUNTAP, "%s: %s: %s <- %s (%u bytes, from %s)",
+                    node->addrw, node->id->name, netpkt_dest, netpkt_src,
+                    pkt->payload_size, src_node->name);
+            }
 
             if (!oshd_write_tuntap_pkt(payload, pkt->payload_size))
                 return false;
