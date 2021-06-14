@@ -101,9 +101,9 @@ bool netaddr_eq(const netaddr_t *s1, const netaddr_t *s2)
         case MAC:
             return !memcmp(s1->data, s2->data, 6);
         case IP4:
-            return *((in_addr_t *) s1->data) == *((in_addr_t *) s2->data);
+            return !memcmp(s1->data, s2->data, 4);
         case IP6:
-            return IN6_ARE_ADDR_EQUAL(s1->data, s2->data);
+            return !memcmp(s1->data, s2->data, 16);
         default:
             return false;
     }
