@@ -316,21 +316,69 @@ static bool oshd_process_edge(node_t *node, oshpacket_hdr_t *pkt,
 
 // Iterate through all routes in *payload and add them
 static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
-    oshpacket_route_t *payload, node_id_t *src_node)
+    oshpacket_route_t *payload)
 {
     const size_t entries = pkt->payload_size / sizeof(oshpacket_route_t);
+    char node_name[NODE_NAME_SIZE + 1];
     netaddr_t addr;
+    node_id_t *id;
 
+    if (    pkt->payload_size < sizeof(oshpacket_route_t)
+        || (pkt->payload_size % sizeof(oshpacket_route_t)) != 0)
+    {
+        logger(LOG_ERR, "%s: %s: Invalid %s size: %u bytes",
+            node->addrw, node->id->name, oshpacket_type_name(pkt->type),
+            pkt->payload_size);
+        return false;
+    }
+
+    memset(node_name, 0, sizeof(node_name));
     for (size_t i = 0; i < entries; ++i) {
+        // Extract and verify the node's name
+        memcpy(node_name, payload[i].node_name, NODE_NAME_SIZE);
+        if (!node_valid_name(node_name)) {
+            logger(LOG_ERR, "%s: %s: Add route: Invalid name",
+                node->addrw, node->id->name);
+            return false;
+        }
+
+        // Make sure that the node exists
+        if (!(id = node_id_find(node_name))) {
+            logger(LOG_ERR, "%s: %s: Add route: Unknown node '%s'",
+                node->addrw, node->id->name, node_name);
+            return false;
+        }
+
+        // If we don't have a route to forward packets to the destination node,
+        // continue processing the other routes skipping this one.
+        if (!id->next_hop) {
+            logger(LOG_WARN, "%s: %s: Add route: Node '%s' has no route",
+                node->addrw, node->id->name, node_name);
+            continue;
+        }
+
+        // Extract and verify the network address
         addr.type = payload[i].addr_type;
         if (addr.type > IP6) {
-            logger(LOG_ERR, "%s: %s: Invalid ROUTE_ADD address type",
+            logger(LOG_ERR, "%s: %s: Add route: Invalid address type",
                 node->addrw, node->id->name);
             return false;
         }
         memcpy(addr.data, payload[i].addr_data, 16);
-        oshd_route_add(&addr, src_node);
+
+        // Add a route to node_name for the network address
+        if (logger_is_debugged(DBG_ROUTING)) {
+            char addr_str[INET6_ADDRSTRLEN];
+
+            netaddr_ntop(addr_str, sizeof(addr_str), &addr);
+            logger_debug(DBG_ROUTING, "%s: %s: Add route: %s -> %s", node->addrw,
+                node->id->name, addr_str, id->name);
+        }
+        oshd_route_add(&addr, id);
     }
+
+    if (logger_is_debugged(DBG_ROUTING))
+        oshd_route_dump();
     return true;
 }
 
@@ -427,22 +475,13 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
 
             // Make sure that all nodes's routing tables are up to date with our
             // local routes
-            node_queue_route_add_broadcast(NULL, oshd.local_routes,
+            node_queue_route_add_local(NULL, oshd.local_routes,
                 oshd.local_routes_count);
             return success;
         }
 
-        case ROUTE_ADD: {
-            if (    pkt->payload_size < sizeof(oshpacket_route_t)
-                || (pkt->payload_size % sizeof(oshpacket_route_t)) != 0)
-            {
-                logger(LOG_ERR, "%s: %s: Invalid ROUTE_ADD size: %u bytes",
-                    node->addrw, node->id->name, pkt->payload_size);
-                return false;
-            }
-            return oshd_process_route(node, pkt, (oshpacket_route_t *) payload,
-                    src_node);
-        }
+        case ROUTE_ADD:
+            return oshd_process_route(node, pkt, (oshpacket_route_t *) payload);
 
         case DATA: {
             if (!oshd.tuntap_used)

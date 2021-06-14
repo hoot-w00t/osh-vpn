@@ -80,6 +80,7 @@ typedef struct __attribute__((__packed__)) oshpacket_edge {
 } oshpacket_edge_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_route {
+    char node_name[NODE_NAME_SIZE];
     netaddr_type_t addr_type : 8;
     uint8_t addr_data[16];
 } oshpacket_route_t;

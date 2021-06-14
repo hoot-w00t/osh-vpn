@@ -58,9 +58,6 @@ oshd_route_t *oshd_route_add(const netaddr_t *addr, node_id_t *dest_node)
         netaddr_cpy(&route->addr, addr);
     }
     route->dest_node = dest_node;
-
-    if (logger_is_debugged(DBG_ROUTING))
-        oshd_route_dump();
     return route;
 }
 

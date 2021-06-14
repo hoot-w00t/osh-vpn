@@ -915,8 +915,8 @@ bool node_queue_edge_exg(node_t *node)
     return success;
 }
 
-// Broadcast ROUTE_ADD request
-bool node_queue_route_add_broadcast(node_t *exclude, const netaddr_t *addrs,
+// Broadcast ROUTE_ADD request with one or more local routes
+bool node_queue_route_add_local(node_t *exclude, const netaddr_t *addrs,
     size_t count)
 {
     if (count == 0)
@@ -927,6 +927,7 @@ bool node_queue_route_add_broadcast(node_t *exclude, const netaddr_t *addrs,
 
     // Format the addresses's type and data into buf
     for (size_t i = 0; i < count; ++i) {
+        memcpy(buf[i].node_name, oshd.name, NODE_NAME_SIZE);
         buf[i].addr_type = addrs[i].type;
         memcpy(buf[i].addr_data, addrs[i].data, 16);
     }
@@ -952,7 +953,7 @@ bool node_queue_route_add_broadcast(node_t *exclude, const netaddr_t *addrs,
 
         // Broadcast the packet
         if (node_queue_packet_broadcast(exclude, ROUTE_ADD, curr_buf, size)) {
-            logger_debug(DBG_ROUTING, "Broadcast ROUTE_ADD with %zu routes (%zu bytes)",
+            logger_debug(DBG_ROUTING, "Broadcast ROUTE_ADD with %zu local routes (%zu bytes)",
                 entries, size);
         } else {
             success = false;
