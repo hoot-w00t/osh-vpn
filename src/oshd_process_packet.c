@@ -341,6 +341,7 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
 {
     const size_t entries = pkt->payload_size / sizeof(oshpacket_route_t);
     char node_name[NODE_NAME_SIZE + 1];
+    char addr_str[INET6_ADDRSTRLEN];
     netaddr_t addr;
     node_id_t *id;
 
@@ -364,6 +365,15 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
 
     memset(node_name, 0, sizeof(node_name));
     for (size_t i = 0; i < entries; ++i) {
+        // Extract and verify the network address
+        addr.type = payload[i].addr_type;
+        if (addr.type > IP6) {
+            logger(LOG_ERR, "%s: %s: Add route: Invalid address type",
+                node->addrw, node->id->name);
+            return false;
+        }
+        memcpy(addr.data, payload[i].addr_data, 16);
+
         // Extract and verify the node's name
         memcpy(node_name, payload[i].node_name, NODE_NAME_SIZE);
         if (!node_valid_name(node_name)) {
@@ -382,24 +392,22 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
         // If we don't have a route to forward packets to the destination node,
         // continue processing the other routes skipping this one.
         if (!id->next_hop) {
-            logger(LOG_WARN, "%s: %s: Add route: Node '%s' has no route",
-                node->addrw, node->id->name, node_name);
+            // We don't log route errors if they are local
+            // In many scenarios we will get route broadcasts of our own routes,
+            // we can ignore those silently
+            netaddr_ntop(addr_str, sizeof(addr_str), &addr);
+            if (id->local_node) {
+                logger_debug(DBG_ROUTING, "%s: %s: Add route: Skipping local route %s",
+                    node->addrw, node->id->name, addr_str);
+            } else {
+                logger(LOG_WARN, "%s: %s: Add route: %s -> %s: No route",
+                    node->addrw, node->id->name, addr_str, node_name);
+            }
             continue;
         }
 
-        // Extract and verify the network address
-        addr.type = payload[i].addr_type;
-        if (addr.type > IP6) {
-            logger(LOG_ERR, "%s: %s: Add route: Invalid address type",
-                node->addrw, node->id->name);
-            return false;
-        }
-        memcpy(addr.data, payload[i].addr_data, 16);
-
         // Add a route to node_name for the network address
         if (logger_is_debugged(DBG_ROUTING)) {
-            char addr_str[INET6_ADDRSTRLEN];
-
             netaddr_ntop(addr_str, sizeof(addr_str), &addr);
             logger_debug(DBG_ROUTING, "%s: %s: Add route: %s -> %s", node->addrw,
                 node->id->name, addr_str, id->name);
