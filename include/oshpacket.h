@@ -2,6 +2,7 @@
 #define _OSH_OSHPACKET_H
 
 #include "netaddr.h"
+#include "oshd_device_mode.h"
 #include <stdint.h>
 
 #ifndef OSHPACKET_MAGIC
@@ -32,6 +33,7 @@ typedef enum oshpacket_type {
     HANDSHAKE = 0,
     HELLO_CHALLENGE,
     HELLO_RESPONSE,
+    DEVMODE,
     STATEEXG_END,
     GOODBYE,
     PING,
@@ -65,6 +67,10 @@ typedef struct __attribute__((__packed__)) oshpacket_hello_challenge {
 typedef struct __attribute__((__packed__)) oshpacket_hello_response {
     uint8_t sig[HELLO_SIG_SIZE];
 } oshpacket_hello_response_t;
+
+typedef struct __attribute__((__packed__)) oshpacket_devmode {
+    device_mode_t devmode : 8;
+} oshpacket_devmode_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_handshake {
     // Public X25519 key to derive for sending packets to the other node

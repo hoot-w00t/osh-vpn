@@ -276,6 +276,10 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
         node->addrw, node->id->name);
     node->state_exg = true;
 
+    // Make sure that we are our device modes are compatible
+    if (!node_queue_devmode(node))
+        return false;
+
     // We start by exchanging our network map
     if (!node_queue_edge_exg(node))
         return false;
@@ -440,6 +444,30 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
             logger(LOG_ERR, "%s: %s: Already authenticated but received %s",
                 node->addrw, node->id->name, oshpacket_type_name(pkt->type));
             return false;
+
+        case DEVMODE: {
+            if (pkt->payload_size != sizeof(oshpacket_devmode_t)) {
+                logger(LOG_ERR, "%s: %s: Invalid DEVMODE size: %u bytes",
+                    node->addrw, node->id->name, pkt->payload_size);
+                return false;
+            }
+
+            oshpacket_devmode_t *remote = (oshpacket_devmode_t *) payload;
+
+            // If both nodes have a TUN/TAP device but don't use the same mode
+            // they are incompatible
+            if (   oshd.device_mode != MODE_NODEVICE
+                && remote->devmode  != MODE_NODEVICE
+                && remote->devmode  != oshd.device_mode)
+            {
+                logger(LOG_ERR, "%s: %s: Incompatible device modes (local: %s, remote: %s)",
+                    node->addrw, node->id->name, device_mode_name(oshd.device_mode),
+                    device_mode_name(remote->devmode));
+                return false;
+            }
+
+            return true;
+        }
 
         case STATEEXG_END:
             logger_debug(DBG_STATEEXG, "%s: %s: Finished state exchange",

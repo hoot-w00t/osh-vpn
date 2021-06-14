@@ -173,6 +173,7 @@ bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
 
 bool node_queue_handshake(node_t *node, bool initiator);
 bool node_queue_hello_challenge(node_t *node);
+bool node_queue_devmode(node_t *node);
 bool node_queue_stateexg_end(node_t *node);
 bool node_queue_goodbye(node_t *node);
 bool node_queue_ping(node_t *node);

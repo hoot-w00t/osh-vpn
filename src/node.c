@@ -745,6 +745,16 @@ bool node_queue_hello_challenge(node_t *node)
         sizeof(oshpacket_hello_challenge_t));
 }
 
+// Queue DEVMODE packet
+bool node_queue_devmode(node_t *node)
+{
+    oshpacket_devmode_t packet;
+
+    packet.devmode = oshd.device_mode;
+    return node_queue_packet(node, node->id->name, DEVMODE,
+        (uint8_t *) &packet, sizeof(packet));
+}
+
 // Queue STATEEXG_END packet
 bool node_queue_stateexg_end(node_t *node)
 {
