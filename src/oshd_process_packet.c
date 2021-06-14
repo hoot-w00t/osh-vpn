@@ -272,10 +272,23 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
     logger(LOG_INFO, "%s: %s: Authenticated successfully", node->addrw,
         node->id->name);
 
+    logger_debug(DBG_STATEEXG, "%s: %s: Starting state exchange",
+        node->addrw, node->id->name);
+    node->state_exg = true;
+
+    // We start by exchanging our network map
     if (!node_queue_edge_exg(node))
         return false;
+
+    // We broadcast the new connection to our end of the network
     if (!node_queue_edge_broadcast(node, EDGE_ADD, oshd.name, node->id->name))
         return false;
+
+    // We finished queuing our state exchange packets
+    if (!node_queue_stateexg_end(node))
+        return false;
+
+    // Update the node's latency
     return node_queue_ping(node);
 }
 
@@ -388,6 +401,10 @@ static bool oshd_process_unauthenticated(node_t *node, oshpacket_hdr_t *pkt,
     uint8_t *payload)
 {
     switch (pkt->type) {
+        case HANDSHAKE:
+            return oshd_process_handshake(node, pkt,
+                (oshpacket_handshake_t *) payload);
+
         case HELLO_CHALLENGE:
             return oshd_process_hello_challenge(node, pkt,
                 (oshpacket_hello_challenge_t *) payload);
@@ -395,9 +412,6 @@ static bool oshd_process_unauthenticated(node_t *node, oshpacket_hdr_t *pkt,
         case HELLO_RESPONSE:
             return oshd_process_hello_response(node, pkt,
                 (oshpacket_hello_response_t *) payload);
-
-        case HANDSHAKE:
-            return oshd_process_handshake(node, pkt, (oshpacket_handshake_t *) payload);
 
         case GOODBYE:
             logger(LOG_INFO, "%s: Gracefully disconnecting", node->addrw);
@@ -416,16 +430,22 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
     uint8_t *payload, node_id_t *src_node)
 {
     switch (pkt->type) {
+        case HANDSHAKE:
+            logger(LOG_ERR, "%s: %s: Handshake after authentication is not supported",
+                node->addrw, node->id->name);
+            return false;
+
         case HELLO_CHALLENGE:
         case HELLO_RESPONSE:
             logger(LOG_ERR, "%s: %s: Already authenticated but received %s",
                 node->addrw, node->id->name, oshpacket_type_name(pkt->type));
             return false;
 
-        case HANDSHAKE:
-            logger(LOG_ERR, "%s: %s: Handshake after authentication is not supported",
+        case STATEEXG_END:
+            logger_debug(DBG_STATEEXG, "%s: %s: Finished state exchange",
                 node->addrw, node->id->name);
-            return false;
+            node->state_exg = false;
+            return true;
 
         case GOODBYE:
             logger(LOG_INFO, "%s: %s: Gracefully disconnecting", node->addrw,
@@ -441,7 +461,6 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
 
             return true;
 
-        case EDGE_EXG:
         case EDGE_ADD:
         case EDGE_DEL: {
             if (    pkt->payload_size < sizeof(oshpacket_edge_t)
@@ -455,16 +474,18 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
 
             bool success;
 
-            if (pkt->type == EDGE_EXG) {
-                // TODO: Only do it if our map doesn't share any edge with the
-                //       remote node's map
-                // Broadcast remote node's edges to our end of the network
-                node_queue_packet_broadcast(node, EDGE_ADD, payload,
-                    pkt->payload_size);
+            if (pkt->type == EDGE_ADD) {
+                if (node->state_exg) {
+                    // TODO: Only do it if our map doesn't share any edge with the
+                    //       remote node's map
+                    // Broadcast remote node's edges to our end of the network
+                    logger_debug(DBG_STATEEXG,
+                        "%s: %s: State exchange: Relaying EDGE_ADD packet",
+                        node->addrw, node->id->name);
+                    node_queue_packet_broadcast(node, EDGE_ADD, payload,
+                        pkt->payload_size);
+                }
 
-                success = oshd_process_edge(node, pkt,
-                    (oshpacket_edge_t *) payload, true);
-            } else if (pkt->type == EDGE_ADD) {
                 success = oshd_process_edge(node, pkt,
                     (oshpacket_edge_t *) payload, true);
             } else {

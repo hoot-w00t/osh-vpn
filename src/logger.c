@@ -16,7 +16,8 @@ static const char *debug_names[debug_what_size] = {
     "events",
     "authentication",
     "encryption",
-    "handshake"
+    "handshake",
+    "stateexg"
 };
 
 static const char *level_names[loglevel_size] = {

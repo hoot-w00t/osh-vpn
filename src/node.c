@@ -681,20 +681,6 @@ bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
     return true;
 }
 
-// Queue HELLO_CHALLENGE request
-bool node_queue_hello_challenge(node_t *node)
-{
-    free(node->hello_chall);
-    node->hello_chall = xalloc(sizeof(oshpacket_hello_challenge_t));
-
-    memcpy(node->hello_chall->node_name, oshd.name, NODE_NAME_SIZE);
-    if (!read_random_bytes(node->hello_chall->challenge, sizeof(node->hello_chall->challenge)))
-        return false;
-
-    return node_queue_packet(node, NULL, HELLO_CHALLENGE, (uint8_t *) node->hello_chall,
-        sizeof(oshpacket_hello_challenge_t));
-}
-
 // Queue HANDSHAKE request
 bool node_queue_handshake(node_t *node, bool initiator)
 {
@@ -743,6 +729,28 @@ bool node_queue_handshake(node_t *node, bool initiator)
     free(pubkey);
 
     return node_queue_packet(node, NULL, HANDSHAKE, (uint8_t *) &packet, sizeof(packet));
+}
+
+// Queue HELLO_CHALLENGE request
+bool node_queue_hello_challenge(node_t *node)
+{
+    free(node->hello_chall);
+    node->hello_chall = xalloc(sizeof(oshpacket_hello_challenge_t));
+
+    memcpy(node->hello_chall->node_name, oshd.name, NODE_NAME_SIZE);
+    if (!read_random_bytes(node->hello_chall->challenge, sizeof(node->hello_chall->challenge)))
+        return false;
+
+    return node_queue_packet(node, NULL, HELLO_CHALLENGE, (uint8_t *) node->hello_chall,
+        sizeof(oshpacket_hello_challenge_t));
+}
+
+// Queue STATEEXG_END packet
+bool node_queue_stateexg_end(node_t *node)
+{
+    uint8_t buf = 0;
+
+    return node_queue_packet(node, node->id->name, STATEEXG_END, &buf, sizeof(buf));
 }
 
 // Queue GOODBYE request
@@ -846,7 +854,7 @@ static void edge_exg_append(oshpacket_edge_t **buf, size_t *buf_count,
     *buf_count += 1;
 }
 
-// Queue EDGE_EXG packets for *node with the whole network map
+// Queue EDGE_ADD packets for *node with the whole network map
 bool node_queue_edge_exg(node_t *node)
 {
     size_t buf_count = 0;
@@ -857,7 +865,8 @@ bool node_queue_edge_exg(node_t *node)
              on after a node_tree_update() instead of doing it here
     */
 
-    logger_debug(DBG_NODETREE, "node_queue_edge_exg: Creating the edge map");
+    logger_debug(DBG_NODETREE, "%s: %s: Creating EDGE_ADD packets (state exchange)",
+        node->addrw, node->id->name);
 
     // We skip the local node because it is useless, by starting with the
     // second element, because the first one will always be our local node
@@ -880,7 +889,7 @@ bool node_queue_edge_exg(node_t *node)
     bool success = true;
 
     logger_debug(DBG_NODETREE,
-        "    Queuing EDGE_EXG packets for %zu edges (%zu bytes)",
+        "    Queuing EDGE_ADD packets for %zu edges (%zu bytes)",
         buf_count, sizeof(oshpacket_edge_t) * buf_count);
 
     // Queue all edges in the buffer
@@ -898,9 +907,9 @@ bool node_queue_edge_exg(node_t *node)
         size = entries * sizeof(oshpacket_edge_t);
 
         // Queue the packet
-        if (node_queue_packet(node, node->id->name, EDGE_EXG, curr_buf, size)) {
+        if (node_queue_packet(node, node->id->name, EDGE_ADD, curr_buf, size)) {
             logger_debug(DBG_NODETREE,
-                "    Queued EDGE_EXG with %zu edges (%zu bytes)", entries, size);
+                "    Queued EDGE_ADD with %zu edges (%zu bytes)", entries, size);
         } else {
             success = false;
         }

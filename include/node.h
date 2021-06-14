@@ -117,6 +117,13 @@ struct node {
     // This is to know when to reply to a handshake request
     bool handshake_initiator;
 
+    // This is set to true after authentication to indicate that all the
+    // informations about the other node's network map should also be relayed to
+    // our end of the network
+    // This is to merge two nodes' current states when they connect and relay
+    // all of the information to both ends of the network
+    bool state_exg;
+
     // If this is true disconnect and remove the node after the send queue is
     // empty. Used for GOODBYE packets
     bool finish_and_disconnect;
@@ -164,8 +171,9 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt);
 bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
     uint8_t *payload, uint16_t payload_size);
 
-bool node_queue_hello_challenge(node_t *node);
 bool node_queue_handshake(node_t *node, bool initiator);
+bool node_queue_hello_challenge(node_t *node);
+bool node_queue_stateexg_end(node_t *node);
 bool node_queue_goodbye(node_t *node);
 bool node_queue_ping(node_t *node);
 bool node_queue_pong(node_t *node);

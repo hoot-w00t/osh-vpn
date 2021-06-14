@@ -29,14 +29,14 @@
 #define OSHPACKET_PAYLOAD_MAXSIZE (2048)
 
 typedef enum oshpacket_type {
-    HELLO_CHALLENGE = 0,
+    HANDSHAKE = 0,
+    HELLO_CHALLENGE,
     HELLO_RESPONSE,
-    HANDSHAKE,
+    STATEEXG_END,
     GOODBYE,
     PING,
     PONG,
     DATA,
-    EDGE_EXG,
     EDGE_ADD,
     EDGE_DEL,
     ROUTE_ADD
