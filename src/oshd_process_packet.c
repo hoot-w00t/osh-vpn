@@ -288,6 +288,10 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
     if (!node_queue_edge_broadcast(node, EDGE_ADD, oshd.name, node->id->name))
         return false;
 
+    // We exchange all known network routes
+    if (!node_queue_route_exg(node))
+        return false;
+
     // We finished queuing our state exchange packets
     if (!node_queue_stateexg_end(node))
         return false;
@@ -347,6 +351,15 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
             node->addrw, node->id->name, oshpacket_type_name(pkt->type),
             pkt->payload_size);
         return false;
+    }
+
+    if (node->state_exg) {
+        // Broadcast remote node's routes to our end of the network
+        logger_debug(DBG_STATEEXG,
+            "%s: %s: State exchange: Relaying ROUTE_ADD packet",
+            node->addrw, node->id->name);
+        node_queue_packet_broadcast(node, ROUTE_ADD, (uint8_t *) payload,
+            pkt->payload_size);
     }
 
     memset(node_name, 0, sizeof(node_name));
@@ -521,11 +534,6 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                     (oshpacket_edge_t *) payload, false);
             }
             node_tree_update();
-
-            // Make sure that all nodes's routing tables are up to date with our
-            // local routes
-            node_queue_route_add_local(NULL, oshd.local_routes,
-                oshd.local_routes_count);
             return success;
         }
 

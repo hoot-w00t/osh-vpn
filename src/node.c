@@ -956,7 +956,7 @@ bool node_queue_route_add_local(node_t *exclude, const netaddr_t *addrs,
     uint8_t *curr_buf = (uint8_t *) buf;
     bool success = true;
 
-    // Queue all edges in the buffer
+    // Queue all routes in the buffer
     while (remaining_entries > 0) {
         size_t entries;
         size_t size;
@@ -973,6 +973,71 @@ bool node_queue_route_add_local(node_t *exclude, const netaddr_t *addrs,
         // Broadcast the packet
         if (node_queue_packet_broadcast(exclude, ROUTE_ADD, curr_buf, size)) {
             logger_debug(DBG_ROUTING, "Broadcast ROUTE_ADD with %zu local routes (%zu bytes)",
+                entries, size);
+        } else {
+            success = false;
+        }
+
+        // Iterate to the next entries
+        remaining_entries -= entries;
+        curr_buf += size;
+    }
+
+    // We need to free the memory before returning
+    free(buf);
+    return success;
+}
+
+// Queue ROUTE_ADD request with all our known routes
+bool node_queue_route_exg(node_t *node)
+{
+    size_t count = oshd.local_routes_count + oshd.routes_count;
+
+    if (count == 0)
+        return true;
+
+    size_t buf_size = sizeof(oshpacket_route_t) * count;
+    oshpacket_route_t *buf = xalloc(buf_size);
+
+    // Format the addresses's type and data into buf
+    size_t i = 0;
+
+    // Copy our local routes first
+    for (size_t j = 0; j < oshd.local_routes_count; ++j, ++i) {
+        memcpy(buf[i].node_name, oshd.name, NODE_NAME_SIZE);
+        buf[i].addr_type = oshd.local_routes[j].type;
+        memcpy(buf[i].addr_data, oshd.local_routes[j].data, 16);
+    }
+
+    // Copy all other routes
+    for (size_t j = 0; j < oshd.routes_count; ++j, ++i) {
+        memcpy(buf[i].node_name, oshd.routes[j]->dest_node->name, NODE_NAME_SIZE);
+        buf[i].addr_type = oshd.routes[j]->addr.type;
+        memcpy(buf[i].addr_data, oshd.routes[j]->addr.data, 16);
+    }
+
+    size_t max_entries = OSHPACKET_PAYLOAD_MAXSIZE / sizeof(oshpacket_route_t);
+    size_t remaining_entries = count;
+    uint8_t *curr_buf = (uint8_t *) buf;
+    bool success = true;
+
+    // Queue all routes in the buffer
+    while (remaining_entries > 0) {
+        size_t entries;
+        size_t size;
+
+        // Calculate how many entries to send on the packet
+        if (remaining_entries > max_entries)
+            entries = max_entries;
+        else
+            entries = remaining_entries;
+
+        // Calculate the payload size
+        size = entries * sizeof(oshpacket_route_t);
+
+        // Broadcast the packet
+        if (node_queue_packet(node, node->id->name, ROUTE_ADD, curr_buf, size)) {
+            logger_debug(DBG_ROUTING, "Queued ROUTE_ADD with %zu local routes (%zu bytes) (state exchange)",
                 entries, size);
         } else {
             success = false;
