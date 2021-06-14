@@ -3,19 +3,12 @@
 
 #include "node.h"
 #include "oshd_route.h"
+#include "oshd_device_mode.h"
 #include "crypto/pkey.h"
 #include <stdbool.h>
 #include <stdint.h>
 
 #define OSHD_DEFAULT_PORT (9270)
-
-typedef enum device_mode {
-    MODE_NODEVICE = 0, // No TUN/TAP device will be opened and used
-                       // This daemon will only relay network packets
-
-    MODE_TAP,          // Open the device in TAP mode (Layer 2)
-    MODE_TUN           // Open the device in TUN mode (Layer 3)
-} device_mode_t;
 
 typedef struct oshd {
     // Name of the local node
@@ -76,8 +69,6 @@ typedef struct oshd {
     // When set to false the daemon will stop
     bool run;
 } oshd_t;
-
-const char *device_mode_name(device_mode_t devmode);
 
 EVP_PKEY *oshd_open_key(const char *name, bool private);
 bool oshd_open_keys(const char *dirname);
