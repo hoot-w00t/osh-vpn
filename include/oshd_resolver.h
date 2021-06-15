@@ -4,7 +4,7 @@
 #include <stdbool.h>
 
 typedef enum resolver_type {
-    RESOLVER_NONE,
+    RESOLVER_NONE = 0,
     RESOLVER_HOSTSDUMP
 } resolver_type_t;
 
