@@ -25,9 +25,10 @@ typedef enum debug_what {
     DBG_AUTHENTICATION,
     DBG_ENCRYPTION,
     DBG_HANDSHAKE,
-    DBG_STATEEXG
+    DBG_STATEEXG,
+    DBG_RESOLVER
 } debug_what_t;
-#define debug_what_size (13)
+#define debug_what_size (14)
 
 void logger_toggle_debug(debug_what_t what);
 bool logger_toggle_debug_name(const char *name);

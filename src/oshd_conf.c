@@ -209,6 +209,50 @@ static bool oshd_param_digraphfile(ecp_t *ecp)
     return true;
 }
 
+// Resolver
+static bool oshd_param_resolver(ecp_t *ecp)
+{
+    if (!strcasecmp(ecp_value(ecp), "None")) {
+        oshd.resolver = RESOLVER_NONE;
+    } else if (!strcasecmp(ecp_value(ecp), "HostsDump")) {
+        oshd.resolver = RESOLVER_HOSTSDUMP;
+    } else {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "Invalid resolver: %s", ecp_value(ecp));
+        return false;
+    }
+
+    logger_debug(DBG_CONF, "Set Resolver to %s",
+        oshd_resolver_name(oshd.resolver));
+    return true;
+}
+
+// ResolverTLD
+static bool oshd_param_resolvertld(ecp_t *ecp)
+{
+    free(oshd.resolver_tld);
+    oshd.resolver_tld = xstrdup(ecp_value(ecp));
+    logger_debug(DBG_CONF, "Set ResolverTLD to '%s'", oshd.resolver_tld);
+    return true;
+}
+
+// ResolverFile
+static bool oshd_param_resolverfile(ecp_t *ecp)
+{
+    free(oshd.resolver_file);
+    oshd.resolver_file = xstrdup(ecp_value(ecp));
+    logger_debug(DBG_CONF, "Set ResolverFile to '%s'", oshd.resolver_file);
+    return true;
+}
+
+// OnResolverUpdate
+static bool oshd_param_onresolverupdate(ecp_t *ecp)
+{
+    oshd_cmd_set("OnResolverUpdate", ecp_value(ecp));
+    logger_debug(DBG_CONF, "Set OnResolverUpdate to '%s'", ecp_value(ecp));
+    return true;
+}
+
 // Array of all configuration parameters and their handlers
 static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "NoServer", .type = VALUE_NONE, &oshd_param_noserver },
@@ -224,6 +268,10 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "ReconnectDelayMin", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymin },
     { .name = "ReconnectDelayMax", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymax },
     { .name = "DigraphFile", .type = VALUE_REQUIRED, &oshd_param_digraphfile },
+    { .name = "Resolver", .type = VALUE_REQUIRED, &oshd_param_resolver },
+    { .name = "ResolverTLD", .type = VALUE_REQUIRED, &oshd_param_resolvertld },
+    { .name = "ResolverFile", .type = VALUE_REQUIRED, &oshd_param_resolverfile },
+    { .name = "OnResolverUpdate", .type = VALUE_REQUIRED, &oshd_param_onresolverupdate },
     { NULL, 0, NULL }
 };
 
@@ -306,6 +354,8 @@ bool oshd_load_conf(const char *filename)
             oshd.reconnect_delay_max, oshd.reconnect_delay_min);
         return false;
     }
+    if (!oshd_resolver_check())
+        return false;
 
     return true;
 

@@ -15,6 +15,7 @@ typedef struct command {
 static command_t commands[] = {
     { .name = "DevUp"  , .cmdline = NULL },
     { .name = "DevDown", .cmdline = NULL },
+    { .name = "OnResolverUpdate", .cmdline = NULL },
     { NULL, NULL }
 };
 

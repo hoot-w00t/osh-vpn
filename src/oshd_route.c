@@ -98,8 +98,11 @@ void oshd_route_del_orphan_routes(void)
             ++i;
         }
     }
-    if (changed && logger_is_debugged(DBG_ROUTING))
-        oshd_route_dump();
+    if (changed) {
+        if (logger_is_debugged(DBG_ROUTING))
+            oshd_route_dump();
+        oshd_resolver_update();
+    }
 }
 
 // Add a new local route
@@ -116,6 +119,7 @@ bool oshd_route_add_local(const netaddr_t *addr)
         sizeof(netaddr_t) * (oshd.local_routes_count + 1));
     netaddr_cpy(&oshd.local_routes[oshd.local_routes_count], addr);
     oshd.local_routes_count += 1;
+    oshd_resolver_update();
 
     if (logger_is_debugged(DBG_ROUTING))
         oshd_route_dump_local();

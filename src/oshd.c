@@ -255,6 +255,9 @@ void oshd_free(void)
         oshd_route_free(oshd.routes[i]);
     free(oshd.routes);
 
+    free(oshd.resolver_tld);
+    free(oshd.resolver_file);
+
     event_cancel_queue();
 
     free(oshd.keys_dir);
