@@ -19,6 +19,8 @@
 #include <poll.h>
 #include <signal.h>
 #include <dirent.h>
+#include <ifaddrs.h>
+#include <netdb.h>
 
 // Global variable
 oshd_t oshd;
@@ -26,6 +28,50 @@ oshd_t oshd;
 static struct pollfd *pfd = NULL;
 static size_t pfd_off = 0;
 static size_t pfd_count = 0;
+
+// Get the TUN/TAP device's addresses and add them to the daemon's local routes
+static void oshd_discover_device_routes(void)
+{
+    struct ifaddrs *ifaces;
+    char addrw[INET6_ADDRSTRLEN];
+    netaddr_t addr;
+
+    if (getifaddrs(&ifaces) < 0) {
+        logger(LOG_ERR, "getifaddrs: %s", strerror(errno));
+        return;
+    }
+
+    for (struct ifaddrs *ifa = ifaces; ifa; ifa = ifa->ifa_next) {
+        if (   ifa->ifa_name
+            && !strcmp(ifa->ifa_name, oshd.tuntap_dev)
+            && ifa->ifa_addr
+            && (   ifa->ifa_addr->sa_family == AF_INET
+                || ifa->ifa_addr->sa_family == AF_INET6))
+        {
+            size_t af_size = ifa->ifa_addr->sa_family == AF_INET
+                ? sizeof(struct sockaddr_in)
+                : sizeof(struct sockaddr_in6);
+
+            int err = getnameinfo(ifa->ifa_addr, af_size, addrw, sizeof(addrw),
+                NULL, 0, NI_NUMERICHOST);
+
+            if (err) {
+                logger(LOG_ERR, "getnameinfo: %s", gai_strerror(err));
+                continue;
+            }
+
+            memset(&addr, 0, sizeof(addr));
+            if (!netaddr_pton(&addr, addrw))
+                continue;
+
+            oshd_route_add_local(&addr);
+            logger(LOG_INFO, "Discovered local route %s (%s)", addrw,
+                oshd.tuntap_dev);
+        }
+    }
+
+    freeifaddrs(ifaces);
+}
 
 // Return the name of the device mode
 const char *device_mode_name(device_mode_t devmode)
@@ -176,6 +222,7 @@ bool oshd_init(void)
         setenv("OSHD_DEVICE", oshd.tuntap_dev, 1);
         if (!oshd_cmd_execute("DevUp"))
             return false;
+        oshd_discover_device_routes();
         pfd_off += 1;
     }
 
