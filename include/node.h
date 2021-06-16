@@ -8,6 +8,7 @@
 #include "crypto/pkey.h"
 #include <sys/time.h>
 #include <netinet/in.h>
+#include <poll.h>
 
 #ifndef NODE_SENDQ_MIN_SIZE
 // Allocate 2 MiB of buffer to the send queue at minimum
@@ -81,6 +82,8 @@ struct node {
     int fd;                  // Network socket handle
     struct sockaddr_in6 sin; // Socket data (pointed to by *sin)
     struct node_io io;       // send/recv data buffers
+    struct pollfd *pfd;      // Node's pollfd structure
+                             // Used to update the POLLOUT event
 
     bool remove_queued; // true if the node_remove is queued
     bool initiator;     // true if it is an outgoing connection
@@ -196,5 +199,17 @@ bool node_queue_route_exg(node_t *node);
 // This is the function called to send the initial packet when an initiator
 // established a connection
 #define node_queue_initial_packet(node) node_queue_handshake(node, true)
+
+static inline void node_pollout_set(node_t *node)
+{
+    if (node->pfd)
+        node->pfd->events |= POLLOUT;
+}
+
+static inline void node_pollout_unset(node_t *node)
+{
+    if (node->pfd)
+        node->pfd->events &= ~(POLLOUT);
+}
 
 #endif

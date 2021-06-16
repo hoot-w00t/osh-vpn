@@ -178,6 +178,8 @@ bool node_send_queued(node_t *node)
         logger_debug(DBG_SOCKETS, "%s: Sent %zi bytes", node->addrw, sent_size);
         if (!netbuffer_pop(node->io.sendq, sent_size)) {
             // The send queue is empty
+            node_pollout_unset(node);
+
             // If we should disconnect, do it
             if (node->finish_and_disconnect) {
                 logger(LOG_INFO, "Gracefully disconnecting %s", node->addrw);

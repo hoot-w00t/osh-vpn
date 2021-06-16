@@ -158,14 +158,10 @@ static void pfd_resize(void)
 {
     pfd_count = pfd_off + oshd.nodes_count;
     pfd = xrealloc(pfd, sizeof(struct pollfd) * pfd_count);
-}
-
-// Update TUN/TAP, server and nodes POLLIN/POLLOUT events
-static void pfd_update(void)
-{
     for (size_t i = 0; i < oshd.nodes_count; ++i) {
+        oshd.nodes[i]->pfd = &pfd[i + pfd_off];
         pfd[i + pfd_off].fd = oshd.nodes[i]->fd;
-        if (netbuffer_data_size(oshd.nodes[i]->io.sendq)) {
+        if (netbuffer_data_size(oshd.nodes[i]->io.sendq) || !oshd.nodes[i]->connected) {
             pfd[i + pfd_off].events = POLLIN | POLLOUT;
         } else {
             pfd[i + pfd_off].events = POLLIN;
@@ -345,9 +341,6 @@ void oshd_loop(void)
             pfd_resize();
         }
 
-        // Update our polling structure
-        pfd_update();
-
         // Poll for events on all sockets and the TUN/TAP device
         events = poll(pfd, pfd_count, 500);
         if (events < 0) {
@@ -364,7 +357,12 @@ void oshd_loop(void)
         logger_debug(DBG_OSHD, "Oshd: Polled %i/%zu events", events, pfd_count);
 
         // We then iterate over all our file descriptors to handle the events
-        for (size_t i = 0; i < pfd_count; ++i) {
+        for (size_t i = 0; events > 0 && i < pfd_count; ++i) {
+            if (!pfd[i].revents)
+                continue;
+
+            --events;
+
             if (pfd[i].fd == oshd.tuntap_fd) {
                 if ((pfd[i].revents & POLLIN) && oshd.run) {
                     // Data is available on the TUN/TAP device
@@ -375,10 +373,6 @@ void oshd_loop(void)
                     // The server is ready to accept an incoming connection
                     oshd_accept();
                 }
-            } else if (!oshd.nodes[i - pfd_off]->connected) {
-                // If a node is not connected yet, we check it to see if the
-                // socket has finished connecting
-                oshd_connect_async(oshd.nodes[i - pfd_off]);
             } else {
                 if (pfd[i].revents & (POLLERR | POLLHUP)) {
                     logger(LOG_ERR, "%s: %s", oshd.nodes[i - pfd_off]->addrw,
@@ -392,8 +386,14 @@ void oshd_loop(void)
                         node_recv_queued(oshd.nodes[i - pfd_off]);
                     }
                     if (pfd[i].revents & POLLOUT) {
-                        // A node is ready to send queued data
-                        node_send_queued(oshd.nodes[i - pfd_off]);
+                        if (!oshd.nodes[i - pfd_off]->connected) {
+                            // If a node is not connected yet, we check it to see if the
+                            // socket has finished connecting
+                            oshd_connect_async(oshd.nodes[i - pfd_off]);
+                        } else {
+                            // A node is ready to send queued data
+                            node_send_queued(oshd.nodes[i - pfd_off]);
+                        }
                     }
                 }
             }

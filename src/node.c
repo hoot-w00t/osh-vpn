@@ -632,6 +632,7 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
         }
         return false;
     }
+    node_pollout_set(node);
     return true;
 }
 
@@ -695,6 +696,7 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
         netbuffer_cancel(node->io.sendq, packet_size);
         return false;
     }
+    node_pollout_set(node);
     return true;
 }
 
