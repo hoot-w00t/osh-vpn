@@ -51,6 +51,7 @@ void node_id_free(node_id_t *nid)
 {
     pkey_free(nid->pubkey);
     free(nid->edges);
+    free(nid->resolver_routes);
     free(nid);
 }
 
@@ -117,6 +118,48 @@ bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
     nid->pubkey = pkey_load_ed25519_pubkey(pubkey, pubkey_size);
     nid->pubkey_local = false;
     return nid->pubkey != NULL;
+}
+
+// Append internal IP to a node
+void node_id_add_resolver_route(node_id_t *nid, const netaddr_t *addr)
+{
+    // MAC addresses cannot be resolved
+    if (addr->type == MAC)
+        return;
+
+    // Make sure that the route doesn't exist already
+    for (size_t i = 0; i < nid->resolver_routes_count; ++i) {
+        if (netaddr_eq(&nid->resolver_routes[i], addr))
+            return;
+    }
+
+    if (logger_is_debugged(DBG_RESOLVER)) {
+        char addrp[INET6_ADDRSTRLEN];
+
+        netaddr_ntop(addrp, sizeof(addrp), addr);
+        logger_debug(DBG_RESOLVER, "Resolver: Adding %s to %s",
+            addrp, nid->name);
+    }
+
+    nid->resolver_routes = xrealloc(nid->resolver_routes,
+        sizeof(netaddr_t) * (nid->resolver_routes_count + 1));
+    netaddr_cpy(&nid->resolver_routes[nid->resolver_routes_count], addr);
+    nid->resolver_routes_count += 1;
+    oshd_resolver_append(addr, nid->name);
+}
+
+// Clear all internal IPs from a node
+void node_id_clear_resolver_routes(node_id_t *nid)
+{
+    if (nid->resolver_routes) {
+        logger_debug(DBG_RESOLVER, "Resolver: Clearing routes from %s",
+            nid->name);
+
+        free(nid->resolver_routes);
+        nid->resolver_routes = NULL;
+        nid->resolver_routes_count = 0;
+        oshd_resolver_update();
+    }
 }
 
 // Dynamically resize array and add *n to the end, then increment the count

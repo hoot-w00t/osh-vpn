@@ -29,6 +29,21 @@ void oshd_route_dump_local(void)
     }
 }
 
+// Returns true if the address type is compatible with the device type
+// TAP devices work with MAC addresses only
+// TUN devices work with IPv4/6 addresses only
+// If there is no device all routes are compatible
+static bool oshd_route_compatible(const netaddr_t *addr)
+{
+    if (oshd.device_mode == MODE_NODEVICE) {
+        return true;
+    } else if (oshd.is_tap) {
+        return addr->type == MAC;
+    } else {
+        return addr->type != MAC;
+    }
+}
+
 // Find *addr in the routing table
 // Returns NULL if the route doesn't exist
 oshd_route_t *oshd_route_find(const netaddr_t *addr)
@@ -41,13 +56,16 @@ oshd_route_t *oshd_route_find(const netaddr_t *addr)
 }
 
 // Add a new route to the routing table
-// If it already exists, overwrites the previous destination node with the one
-// given as argument
+// If it already exists nothing is changed
 oshd_route_t *oshd_route_add(const netaddr_t *addr, node_id_t *dest_node)
 {
-    oshd_route_t *route = oshd_route_find(addr);
+    oshd_route_t *route;
 
-    if (!route) {
+    node_id_add_resolver_route(dest_node, addr);
+    if (!oshd_route_compatible(addr))
+        return NULL;
+
+    if (!(route = oshd_route_find(addr))) {
         // Allocate the new route
         route = xalloc(sizeof(oshd_route_t));
         oshd.routes = xrealloc(oshd.routes,
@@ -56,8 +74,15 @@ oshd_route_t *oshd_route_add(const netaddr_t *addr, node_id_t *dest_node)
         oshd.routes_count += 1;
 
         netaddr_cpy(&route->addr, addr);
+        route->dest_node = dest_node;
+
+        if (logger_is_debugged(DBG_ROUTING)) {
+            char addrp[INET6_ADDRSTRLEN];
+
+            netaddr_ntop(addrp, sizeof(addrp), addr);
+            logger_debug(DBG_ROUTING, "Added route %s to %s", addrp, dest_node->name);
+        }
     }
-    route->dest_node = dest_node;
     return route;
 }
 
@@ -80,6 +105,14 @@ void oshd_route_del_orphan_routes(void)
         if (!oshd.routes[i]->dest_node->next_hop) {
             changed = true;
 
+            node_id_clear_resolver_routes(oshd.routes[i]->dest_node);
+            if (logger_is_debugged(DBG_ROUTING)) {
+                char addrp[INET6_ADDRSTRLEN];
+
+                netaddr_ntop(addrp, sizeof(addrp), &oshd.routes[i]->addr);
+                logger_debug(DBG_ROUTING, "Deleting route %s from %s", addrp,
+                    oshd.routes[i]->dest_node->name);
+            }
             oshd_route_free(oshd.routes[i]);
 
             if (i + 1 < oshd.routes_count) {
@@ -101,7 +134,6 @@ void oshd_route_del_orphan_routes(void)
     if (changed) {
         if (logger_is_debugged(DBG_ROUTING))
             oshd_route_dump();
-        oshd_resolver_update();
     }
 }
 
@@ -115,13 +147,21 @@ bool oshd_route_add_local(const netaddr_t *addr)
             return false;
     }
 
+    node_id_add_resolver_route(node_id_find_local(), addr);
+    if (!oshd_route_compatible(addr))
+        return false;
+
     oshd.local_routes = xrealloc(oshd.local_routes,
         sizeof(netaddr_t) * (oshd.local_routes_count + 1));
     netaddr_cpy(&oshd.local_routes[oshd.local_routes_count], addr);
     oshd.local_routes_count += 1;
-    oshd_resolver_update();
 
-    if (logger_is_debugged(DBG_ROUTING))
+    if (logger_is_debugged(DBG_ROUTING)) {
+        char addrp[INET6_ADDRSTRLEN];
+
+        netaddr_ntop(addrp, sizeof(addrp), addr);
+        logger_debug(DBG_ROUTING, "Added local route %s", addrp);
         oshd_route_dump_local();
+    }
     return true;
 }

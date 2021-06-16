@@ -417,7 +417,6 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
 
     if (logger_is_debugged(DBG_ROUTING))
         oshd_route_dump();
-    oshd_resolver_update();
     return true;
 }
 

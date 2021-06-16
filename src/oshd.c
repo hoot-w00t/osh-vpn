@@ -222,7 +222,6 @@ bool oshd_init(void)
         setenv("OSHD_DEVICE", oshd.tuntap_dev, 1);
         if (!oshd_cmd_execute("DevUp"))
             return false;
-        oshd_discover_device_routes();
         pfd_off += 1;
     }
 
@@ -315,6 +314,13 @@ void oshd_free(void)
 void oshd_loop(void)
 {
     int events;
+
+    // Update the resolver with its initial state
+    oshd_resolver_update();
+
+    // Discover the TUN/TAP device's addresses
+    if (oshd.tuntap_used)
+        oshd_discover_device_routes();
 
     // Queue the connections to our remotes
     for (size_t i = 0; i < oshd.remote_count; ++i) {
