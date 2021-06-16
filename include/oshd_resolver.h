@@ -5,7 +5,8 @@
 
 typedef enum resolver_type {
     RESOLVER_NONE = 0,
-    RESOLVER_HOSTSDUMP
+    RESOLVER_HOSTSDUMP,
+    RESOLVER_HOSTSDYNAMIC
 } resolver_type_t;
 
 const char *oshd_resolver_name(resolver_type_t resolver);

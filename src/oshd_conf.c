@@ -216,6 +216,8 @@ static bool oshd_param_resolver(ecp_t *ecp)
         oshd.resolver = RESOLVER_NONE;
     } else if (!strcasecmp(ecp_value(ecp), "HostsDump")) {
         oshd.resolver = RESOLVER_HOSTSDUMP;
+    } else if (!strcasecmp(ecp_value(ecp), "HostsDynamic")) {
+        oshd.resolver = RESOLVER_HOSTSDYNAMIC;
     } else {
         snprintf(oshd_conf_error, sizeof(oshd_conf_error),
             "Invalid resolver: %s", ecp_value(ecp));
