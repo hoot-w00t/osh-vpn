@@ -1046,6 +1046,21 @@ bool node_queue_route_exg(node_t *node)
         memcpy(buf[i].addr_data, oshd.routes[j]->addr.data, 16);
     }
 
+    // If we our device is in TAP mode we should also exchange IPv4/6 routes for
+    // the resolver
+    // This will append all the resolver routes to the packet
+    if (oshd.tuntap_used && oshd.is_tap) {
+        for (size_t j = 0; j < oshd.node_tree_count; ++j) {
+            for (size_t k = 0; k < oshd.node_tree[j]->resolver_routes_count; ++k, ++i) {
+                buf_size += sizeof(oshpacket_route_t);
+                buf = xrealloc(buf, buf_size);
+                memcpy(buf[i].node_name, oshd.node_tree[j]->name, NODE_NAME_SIZE);
+                buf[i].addr_type = oshd.node_tree[j]->resolver_routes[k].type;
+                memcpy(buf[i].addr_data, oshd.node_tree[j]->resolver_routes[k].data, 16);
+            }
+        }
+    }
+
     bool success = node_queue_packet_fragmented(node, ROUTE_ADD, buf, buf_size,
         sizeof(oshpacket_route_t), false);
 
