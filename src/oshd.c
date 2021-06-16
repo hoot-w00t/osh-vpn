@@ -349,7 +349,7 @@ void oshd_loop(void)
         pfd_update();
 
         // Poll for events on all sockets and the TUN/TAP device
-        events = poll(pfd, pfd_count, 100);
+        events = poll(pfd, pfd_count, 500);
         if (events < 0) {
             // Polling errors can occur when receiving signals, in this case the
             // error isn't actually from the polling so we can ignore it
