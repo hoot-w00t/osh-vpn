@@ -5,7 +5,7 @@
 #include <arpa/inet.h>
 
 // Convert netaddr_t data to a text address in *dest
-bool netaddr_ntop(char *dest, uint32_t maxlen, netaddr_t *addr)
+bool netaddr_ntop(char *dest, uint32_t maxlen, const netaddr_t *addr)
 {
     switch (addr->type) {
         case MAC:
