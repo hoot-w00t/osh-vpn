@@ -4,6 +4,10 @@
 #include "node.h"
 #include <sys/time.h>
 
+// Corresponds to the periodic delay of an event, 0 or negative values indicate
+// that an event only triggers once
+#define EVENT_TRIGGER_ONCE ((time_t) 0)
+
 typedef void (*event_handler_t)(void *);
 typedef void (*event_freedata_t)(void *, bool);
 typedef struct event event_t;
@@ -26,6 +30,14 @@ struct event {
     // Timestamp at which the event should trigger
     struct timeval trigger;
     char trigger_fmt[32];
+
+    // If this is higher than zero the event will be queued again using this
+    // delay (in seconds) after it is processed
+    // This is to create periodic events
+    // No data or pointer are changed, it will only change the trigger timestamp
+    // and place the event back in the queue
+    // Periodic events cannot be stopped automatically, they must be canceled
+    time_t periodic_delay;
 
     // Next event in the linked list
     event_t *next;

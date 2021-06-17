@@ -18,7 +18,7 @@ static void tv_delay(struct timeval *tv, time_t delay)
 
 // Return an allocated event_t
 static event_t *event_create(event_handler_t handler, event_freedata_t freedata,
- void *data, const struct timeval *trigger)
+    void *data, const struct timeval *trigger, time_t periodic_delay)
 {
     event_t *event = xzalloc(sizeof(event_t));
 
@@ -28,6 +28,7 @@ static event_t *event_create(event_handler_t handler, event_freedata_t freedata,
     memcpy(&event->trigger, trigger, sizeof(struct timeval));
     strftime(event->trigger_fmt, sizeof(event->trigger_fmt), "%Y-%m-%d %H:%M:%S",
         localtime(&event->trigger.tv_sec));
+    event->periodic_delay = periodic_delay;
     return event;
 }
 
@@ -44,8 +45,13 @@ static void event_queue(event_t *event)
 {
     event_t **i = &event_queue_head;
 
-    logger_debug(DBG_EVENTS, "Queuing event %p at %s", event,
-        event->trigger_fmt);
+    if (event->handled) {
+        logger_debug(DBG_EVENTS, "Re-queuing event %p at %s", event,
+            event->trigger_fmt);
+    } else {
+        logger_debug(DBG_EVENTS, "Queuing event %p at %s", event,
+            event->trigger_fmt);
+    }
 
     // We will keep the event queue sorted by the trigger time of the events
     // The events must be sorted from the fastest to trigger to the longest
@@ -65,6 +71,15 @@ static void event_queue(event_t *event)
     if ((*i))
         event->next = *i;
     *i = event;
+}
+
+// Re-queue a handled event using its periodic delay
+static void event_requeue(event_t *event)
+{
+    tv_delay(&event->trigger, event->periodic_delay);
+    strftime(event->trigger_fmt, sizeof(event->trigger_fmt), "%Y-%m-%d %H:%M:%S",
+        localtime(&event->trigger.tv_sec));
+    event_queue(event);
 }
 
 // Process all events in the event queue that should trigger
@@ -95,7 +110,11 @@ void event_process_queued(void)
         event->handler(event->data);
         event->handled = true;
 
-        event_free(event);
+        if (event->periodic_delay > 0) {
+            event_requeue(event);
+        } else {
+            event_free(event);
+        }
     }
 }
 
@@ -180,28 +199,28 @@ void event_queue_connect(const char *addr, uint16_t port, time_t delay,
     data->port = port;
     data->delay = delay;
     event_queue(event_create(connect_event_handler, connect_event_freedata,
-        data, &trigger));
+        data, &trigger, EVENT_TRIGGER_ONCE));
 }
 
 
-// Periodic ping events
+// Periodically ping direct nodes
 static void periodic_ping_event_handler(__attribute__((unused)) void *data)
 {
     for (size_t i = 0; i < oshd.nodes_count; ++i) {
         if (oshd.nodes[i]->authenticated)
             node_queue_ping(oshd.nodes[i]);
     }
-    event_queue_periodic_ping();
 }
 
 // This function should only be called once outside of the event handler
 void event_queue_periodic_ping(void)
 {
+    const time_t ping_delay = 30;
     struct timeval trigger;
 
-    tv_delay(&trigger, 30);
+    tv_delay(&trigger, ping_delay);
     event_queue(event_create(periodic_ping_event_handler, NULL,
-        NULL, &trigger));
+        NULL, &trigger, ping_delay));
 }
 
 
@@ -232,7 +251,7 @@ void event_queue_node_add(node_t *node)
     // Always trigger when processing the event queue
     memset(&trigger, 0, sizeof(trigger));
     event_queue(event_create(node_add_event_handler, node_add_event_freedata,
-        node, &trigger));
+        node, &trigger, EVENT_TRIGGER_ONCE));
 }
 
 
@@ -280,7 +299,7 @@ void event_queue_node_remove(node_t *node)
     // Always trigger when processing the event queue
     memset(&trigger, 0, sizeof(trigger));
     event_queue(event_create(node_remove_event_handler,
-        node_remove_event_freedata, node, &trigger));
+        node_remove_event_freedata, node, &trigger, EVENT_TRIGGER_ONCE));
 }
 
 
@@ -309,7 +328,7 @@ void event_queue_node_auth_timeout(node_t *node, time_t timeout_delay)
 
     tv_delay(&trigger, timeout_delay);
     event = event_create(node_auth_timeout_event_handler,
-        node_auth_timeout_event_freedata, node, &trigger);
+        node_auth_timeout_event_freedata, node, &trigger, EVENT_TRIGGER_ONCE);
     node->auth_timeout_event = event;
     event_queue(event);
 }
