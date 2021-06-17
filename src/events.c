@@ -293,9 +293,6 @@ void event_queue_node_remove(node_t *node)
     }
     node->remove_queued = true;
 
-    if (node->auth_timeout_event)
-        event_cancel(node->auth_timeout_event);
-
     // Always trigger when processing the event queue
     memset(&trigger, 0, sizeof(trigger));
     event_queue(event_create(node_remove_event_handler,

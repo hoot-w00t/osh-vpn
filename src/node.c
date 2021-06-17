@@ -490,6 +490,9 @@ static void node_reset_ciphers(node_t *node)
 // Free a node and all its resources
 void node_destroy(node_t *node)
 {
+    if (node->auth_timeout_event)
+        event_cancel(node->auth_timeout_event);
+
     node_disconnect(node);
     free(node->hello_chall);
     free(node->io.recvbuf);
