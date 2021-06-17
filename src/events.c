@@ -65,11 +65,11 @@ static void event_queue(event_t *event)
         i = &(*i)->next;
     }
 
-    // If we *i is NULL we are either on the head or the tail of the queue
-    // so we can just add the event
+    // If *i is NULL we are either on the head or the tail of the queue, there
+    // are no other events in the queue
+    // Otherwise the our event's next will point to the next event in the queue
     // Otherwise we also have to set the the next event to the previous one
-    if ((*i))
-        event->next = *i;
+    event->next = *i;
     *i = event;
 }
 
