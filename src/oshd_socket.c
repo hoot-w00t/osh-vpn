@@ -32,7 +32,7 @@ static bool oshd_setsockopts(int s)
     // Set the socket to non-blocking
     if (set_nonblocking(s) < 0) {
         logger(LOG_ERR, "Failed to set socket %i to non-blocking", s);
-        return -1;
+        return false;
     }
     return true;
 }
