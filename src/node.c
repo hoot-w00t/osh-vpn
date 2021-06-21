@@ -50,6 +50,7 @@ node_id_t *node_id_add(const char *name)
 void node_id_free(node_id_t *nid)
 {
     pkey_free(nid->pubkey);
+    free(nid->pubkey_raw);
     free(nid->edges);
     free(nid->resolver_routes);
     free(nid);
@@ -113,11 +114,19 @@ void node_id_del_edge(node_id_t *src, node_id_t *dest)
 bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
     size_t pubkey_size)
 {
-    if (nid->pubkey)
+    if (nid->pubkey) {
+        logger_debug(DBG_AUTHENTICATION, "Ignoring new public key for %s: One is already loaded", nid->name);
         return true;
-    nid->pubkey = pkey_load_ed25519_pubkey(pubkey, pubkey_size);
+    }
+
+    if (!(nid->pubkey = pkey_load_ed25519_pubkey(pubkey, pubkey_size)))
+        return false;
+
+    nid->pubkey_raw = xrealloc(nid->pubkey_raw, pubkey_size);
+    memcpy(nid->pubkey_raw, pubkey, pubkey_size);
+    nid->pubkey_raw_size = pubkey_size;
     nid->pubkey_local = false;
-    return nid->pubkey != NULL;
+    return true;
 }
 
 // Append internal IP to a node
@@ -884,6 +893,58 @@ bool node_queue_pong(node_t *node)
     uint8_t buf = 0;
 
     return node_queue_packet(node, node->id->name, PONG, &buf, 1);
+}
+
+// Broadcast a node's public key
+bool node_queue_pubkey_broadcast(node_t *exclude, node_id_t *id)
+{
+    oshpacket_pubkey_t packet;
+
+    if (   !id->pubkey
+        || !id->pubkey_raw
+        || id->pubkey_raw_size != PUBLIC_KEY_SIZE)
+    {
+        logger(LOG_ERR, "Failed to broadcast public key of %s: No public key",
+            id->name);
+        return false;
+    }
+
+    logger_debug(DBG_AUTHENTICATION, "Public keys exchange: Broadcasting %s", id->name);
+    memcpy(packet.node_name, id->name, NODE_NAME_SIZE);
+    memcpy(packet.node_pubkey, id->pubkey_raw, PUBLIC_KEY_SIZE);
+
+    return node_queue_packet_broadcast(exclude, PUBKEY, (uint8_t *) &packet,
+        sizeof(packet));
+}
+
+// Queue PUBKEY exchange packet
+bool node_queue_pubkey_exg(node_t *node)
+{
+    oshpacket_pubkey_t *pubkeys = NULL;
+    size_t count = 0;
+    bool success;
+
+    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
+        // Only exchange public keys from online nodes
+        if (   !oshd.node_tree[i]->next_hop
+            || !oshd.node_tree[i]->pubkey
+            || !oshd.node_tree[i]->pubkey_raw
+            ||  oshd.node_tree[i]->pubkey_raw_size != PUBLIC_KEY_SIZE)
+        {
+            continue;
+        }
+
+        logger_debug(DBG_AUTHENTICATION, "Public keys exchange: Adding %s", oshd.node_tree[i]->name);
+        pubkeys = xrealloc(pubkeys, sizeof(oshpacket_pubkey_t) * (count + 1));
+        memcpy(pubkeys[count].node_name, oshd.node_tree[i]->name, NODE_NAME_SIZE);
+        memcpy(pubkeys[count].node_pubkey, oshd.node_tree[i]->pubkey_raw, PUBLIC_KEY_SIZE);
+        count += 1;
+    }
+
+    success = node_queue_packet_fragmented(node, PUBKEY, pubkeys,
+        sizeof(oshpacket_pubkey_t) * count, sizeof(oshpacket_pubkey_t), false);
+    free(pubkeys);
+    return success;
 }
 
 // Queue EDGE_ADD or EDGE_DEL request

@@ -27,6 +27,11 @@
 #define HANDSHAKE_KEY_SIZE (32)
 #endif
 
+#ifndef PUBLIC_KEY_SIZE
+// The Ed25519 public keys' length is 32 bytes
+#define PUBLIC_KEY_SIZE (32)
+#endif
+
 #define OSHPACKET_PAYLOAD_MAXSIZE (2048)
 
 typedef enum oshpacket_type {
@@ -39,6 +44,7 @@ typedef enum oshpacket_type {
     PING,
     PONG,
     DATA,
+    PUBKEY,
     EDGE_ADD,
     EDGE_DEL,
     ROUTE_ADD
@@ -79,6 +85,11 @@ typedef struct __attribute__((__packed__)) oshpacket_handshake {
     // Public X25519 key to derive for receiving packets from the other node
     uint8_t recv_pubkey[HANDSHAKE_KEY_SIZE];
 } oshpacket_handshake_t;
+
+typedef struct __attribute__((__packed__)) oshpacket_pubkey {
+    char node_name[NODE_NAME_SIZE];
+    uint8_t node_pubkey[PUBLIC_KEY_SIZE];
+} oshpacket_pubkey_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_edge {
     char src_node[NODE_NAME_SIZE];

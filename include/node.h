@@ -53,6 +53,10 @@ struct node_id {
     // Node's public key for authentication
     EVP_PKEY *pubkey;
 
+    // Public key data for public key exchanges
+    uint8_t *pubkey_raw;
+    size_t pubkey_raw_size;
+
     // true if *pubkey is a local key loaded from the keys directory
     // false otherwise
     bool pubkey_local;
@@ -187,6 +191,8 @@ bool node_queue_stateexg_end(node_t *node);
 bool node_queue_goodbye(node_t *node);
 bool node_queue_ping(node_t *node);
 bool node_queue_pong(node_t *node);
+bool node_queue_pubkey_broadcast(node_t *exclude, node_id_t *id);
+bool node_queue_pubkey_exg(node_t *node);
 bool node_queue_edge(node_t *node, oshpacket_type_t type,
     const char *src, const char *dest);
 bool node_queue_edge_broadcast(node_t *exclude, oshpacket_type_t type,

@@ -131,8 +131,18 @@ bool oshd_open_keys(const char *dirname)
                 logger_debug(DBG_OSHD, "Oshd: Opening public key for %s", filename);
                 id = node_id_add(filename);
                 pkey_free(id->pubkey);
-                if ((id->pubkey = oshd_open_key(filename, false)))
+                free(id->pubkey_raw);
+                id->pubkey_raw = NULL;
+                if ((id->pubkey = oshd_open_key(filename, false))) {
                     id->pubkey_local = true;
+                    if (!pkey_save_ed25519_pubkey(id->pubkey, &id->pubkey_raw,
+                            &id->pubkey_raw_size))
+                    {
+                        pkey_free(id->pubkey);
+                        id->pubkey = NULL;
+                        logger(LOG_ERR, "Failed to export raw public key for %s", id->name);
+                    }
+                }
             } else {
                 logger(LOG_ERR, "Failed to open public key for '%s': Invalid name",
                     filename);
