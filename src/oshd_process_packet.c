@@ -261,6 +261,19 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
     node->id = node->hello_id;
     node->id->node_socket = node;
 
+    // Before updating the route to this node we have to remember whether we had
+    // a route to it prior to our direct connection
+    // If we did have a route it means that both nodes are on the same network
+    // so they don't need to exchange their full states, only their direct
+    // connection should be broadcasted to the rest of the network
+    bool same_network = node->hello_id->next_hop != NULL;
+
+    if (same_network) {
+        logger_debug(DBG_STATEEXG, "%s: %s: Previously accessible through %s (%s)",
+            node->addrw, node->id->name,
+            node->id->next_hop->id->name, node->id->next_hop->addrw);
+    }
+
     // Cleanup the temporary hello variables
     node->hello_id = NULL;
     free(node->hello_chall);
@@ -272,36 +285,41 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
     logger(LOG_INFO, "%s: %s: Authenticated successfully", node->addrw,
         node->id->name);
 
-    logger_debug(DBG_STATEEXG, "%s: %s: Starting state exchange",
-        node->addrw, node->id->name);
+    logger_debug(DBG_STATEEXG, "%s: %s: Starting state exchange (%s)",
+        node->addrw, node->id->name, same_network ? "minimal" : "full");
     node->state_exg = true;
 
     // Make sure that we are our device modes are compatible
     if (!node_queue_devmode(node))
         return false;
 
-    // We start by exchanging our network map
-    if (!node_queue_edge_exg(node))
+    if (!same_network) {
+        logger_debug(DBG_STATEEXG, "%s: %s: Exchanging local state",
+            node->addrw, node->id->name);
+
+        // We exchange our network map
+        if (!node_queue_edge_exg(node))
+            return false;
+
+        // We exchange all known network routes
+        if (!node_queue_route_exg(node))
+            return false;
+
+        // We exchange all known public keys of the nodes that are online
+        if (!node_queue_pubkey_exg(node))
+            return false;
+    }
+
+    // We finished queuing our state exchange packets
+    if (!node_queue_stateexg_end(node))
         return false;
 
     // We broadcast the new connection to our end of the network
     if (!node_queue_edge_broadcast(node, EDGE_ADD, oshd.name, node->id->name))
         return false;
 
-    // We exchange all known network routes
-    if (!node_queue_route_exg(node))
-        return false;
-
-    // We exchange all known public keys of the nodes that are online
-    if (!node_queue_pubkey_exg(node))
-        return false;
-
     // We broadcast the remote node's public key to our end of the network
     if (!node_queue_pubkey_broadcast(node, node->id))
-        return false;
-
-    // We finished queuing our state exchange packets
-    if (!node_queue_stateexg_end(node))
         return false;
 
     // Update the node's latency
@@ -586,8 +604,6 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
 
             if (pkt->type == EDGE_ADD) {
                 if (node->state_exg) {
-                    // TODO: Only do it if our map doesn't share any edge with the
-                    //       remote node's map
                     // Broadcast remote node's edges to our end of the network
                     logger_debug(DBG_STATEEXG,
                         "%s: %s: State exchange: Relaying EDGE_ADD packet",
