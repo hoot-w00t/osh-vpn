@@ -270,7 +270,7 @@ static bool oshd_process_hello_end(node_t *node, oshpacket_hdr_t *pkt,
     if (!node->hello_auth || !payload->hello_success) {
         logger(LOG_ERR, "%s: Authentication did not succeed on both nodes",
             node->addrw);
-        return false;
+        return node->finish_and_disconnect;
     }
 
     node_id_t *me = node_id_find_local();
