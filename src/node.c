@@ -459,8 +459,8 @@ void node_disconnect(node_t *node)
     if (node->fd > 0) {
         logger(LOG_INFO, "Disconnecting %s", node->addrw);
         if (shutdown(node->fd, SHUT_RDWR) < 0) {
-            logger(LOG_ERR, "%s: shutdown(%i): %s", node->addrw, node->fd,
-                strerror(errno));
+            logger_debug(DBG_SOCKETS, "%s: shutdown(%i): %s", node->addrw,
+                node->fd, strerror(errno));
         }
 
         while (close(node->fd) < 0) {
