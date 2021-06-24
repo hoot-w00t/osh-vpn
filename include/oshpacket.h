@@ -38,6 +38,7 @@ typedef enum oshpacket_type {
     HANDSHAKE = 0,
     HELLO_CHALLENGE,
     HELLO_RESPONSE,
+    HELLO_END,
     DEVMODE,
     STATEEXG_END,
     GOODBYE,
@@ -73,6 +74,10 @@ typedef struct __attribute__((__packed__)) oshpacket_hello_challenge {
 typedef struct __attribute__((__packed__)) oshpacket_hello_response {
     uint8_t sig[HELLO_SIG_SIZE];
 } oshpacket_hello_response_t;
+
+typedef struct __attribute__((__packed__)) oshpacket_hello_end {
+    uint8_t hello_success;
+} oshpacket_hello_end_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_devmode {
     device_mode_t devmode : 8;

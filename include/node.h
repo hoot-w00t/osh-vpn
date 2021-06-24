@@ -111,6 +111,11 @@ struct node {
     // by the remote node
     oshpacket_hello_challenge_t *hello_chall;
 
+    // This is the result of the authentication process, if this is true and the
+    // the other node also succeeds we will then finish the authentication and
+    // start the state exchange
+    bool hello_auth;
+
     // X25519 keys, ciphers and counters to encrypt/decrypt traffic
     // The send cipher will be used to encrypt outgoing packets
     // The recv cipher will be used to decrypt incoming packets
@@ -186,6 +191,7 @@ bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
 
 bool node_queue_handshake(node_t *node, bool initiator);
 bool node_queue_hello_challenge(node_t *node);
+bool node_queue_hello_end(node_t *node);
 bool node_queue_devmode(node_t *node);
 bool node_queue_stateexg_end(node_t *node);
 bool node_queue_goodbye(node_t *node);

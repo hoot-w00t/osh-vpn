@@ -124,7 +124,7 @@ static bool oshd_process_hello_challenge(node_t *node, oshpacket_hdr_t *pkt,
 
     if (!node_valid_name(name)) {
         logger(LOG_ERR, "%s: Authentication failed: Invalid name", node->addrw);
-        return false;
+        return node_queue_hello_end(node);
     }
 
     node_id_t *id = node_id_add(name);
@@ -134,7 +134,7 @@ static bool oshd_process_hello_challenge(node_t *node, oshpacket_hdr_t *pkt,
         // as our local node
         logger(LOG_ERR, "%s: Authentication failed: Tried to authenticate as myself",
             node->addrw);
-        return node_queue_goodbye(node);
+        return node_queue_hello_end(node);
     }
 
     node->hello_id = id;
@@ -152,7 +152,7 @@ static bool oshd_process_hello_challenge(node_t *node, oshpacket_hdr_t *pkt,
     {
         logger(LOG_ERR, "%s: %s: Failed to sign the HELLO challenge",
             node->addrw, node->hello_id->name);
-        return false;
+        return node_queue_hello_end(node);
     }
 
     // Make sure that the signature size is the same as the response packet expects
@@ -160,7 +160,7 @@ static bool oshd_process_hello_challenge(node_t *node, oshpacket_hdr_t *pkt,
         free(sig);
         logger(LOG_ERR, "%s: %s: Signature size is invalid (%zu bytes)",
             node->addrw, node->hello_id->name, sig_size);
-        return false;
+        return node_queue_hello_end(node);
     }
 
     // Initialize and queue the response packet
@@ -185,7 +185,7 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
         // If we don't have a hello_chall packet, authentication cannot proceed
         logger(LOG_ERR, "%s: Received HELLO_RESPONSE but no HELLO_CHALLENGE was sent",
             node->addrw);
-        return node_queue_goodbye(node);
+        return node_queue_hello_end(node);
     }
 
     if (!node->hello_id->pubkey) {
@@ -193,7 +193,7 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
         // we can't authenticate the node
         logger(LOG_ERR, "%s: Authentication failed: No public key for %s",
             node->addrw, node->hello_id->name);
-        return node_queue_goodbye(node);
+        return node_queue_hello_end(node);
     }
 
     // If the public key is local we will always use it, but if it is a remote
@@ -202,7 +202,7 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
     if (!node->hello_id->pubkey_local && !oshd.remote_auth) {
         logger(LOG_ERR, "%s: Authentication failed: No local public key for %s",
             node->addrw, node->hello_id->name);
-        return node_queue_goodbye(node);
+        return node_queue_hello_end(node);
     }
 
     logger_debug(DBG_AUTHENTICATION, "%s: Authentication: %s has a %s public key",
@@ -212,18 +212,20 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
     // If the signature verification succeeds then the node is authenticated
     logger_debug(DBG_AUTHENTICATION, "%s: Authentication: Verifying signature from %s",
         node->addrw, node->hello_id->name);
-    node->authenticated = pkey_verify(node->hello_id->pubkey,
+    node->hello_auth = pkey_verify(node->hello_id->pubkey,
         (uint8_t *) node->hello_chall, sizeof(oshpacket_hello_challenge_t),
         payload->sig, sizeof(payload->sig));
 
     // If the node is not authenticated, the signature verification failed
     // The remote node did not sign the data using the private key
     // associated with the public key we have
-    if (!node->authenticated) {
+    if (!node->hello_auth) {
         logger(LOG_ERR, "%s: Authentication failed: Failed to verify signature from %s",
             node->addrw, node->hello_id->name);
-        return node_queue_goodbye(node);
+        return node_queue_hello_end(node);
     }
+    logger_debug(DBG_AUTHENTICATION, "%s: Authentication: Valid signature from %s",
+        node->addrw, node->hello_id->name);
 
     if (node->hello_id->node_socket) {
         // Disconnect the current socket if node is already authenticated
@@ -231,7 +233,7 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
             node->addrw, node->hello_id->name);
 
         // This node should not be used
-        node->authenticated = false;
+        node->hello_auth = false;
 
         // If the node has a reconnection we will disable it to prevent
         // duplicate connections (which will also be refused by the remote node)
@@ -251,24 +253,35 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
             }
             node_reconnect_disable(node);
         }
-        return node_queue_goodbye(node);
+        return node_queue_hello_end(node);
+    }
+    return node_queue_hello_end(node);
+}
+
+// Process HELLO_END packet
+static bool oshd_process_hello_end(node_t *node, oshpacket_hdr_t *pkt,
+    oshpacket_hello_end_t *payload)
+{
+    if (pkt->payload_size != sizeof(oshpacket_hello_end_t)) {
+        logger(LOG_ERR, "%s: Invalid HELLO_END size: %u bytes", node->addrw,
+            pkt->payload_size);
+        return false;
+    }
+    if (!node->hello_auth || !payload->hello_success) {
+        logger(LOG_ERR, "%s: Authentication did not succeed on both nodes",
+            node->addrw);
+        return false;
     }
 
     node_id_t *me = node_id_find_local();
 
     // The remote node is now authenticated
 
+    node->authenticated = node->hello_auth;
     node->id = node->hello_id;
     node->id->node_socket = node;
 
-    // Before updating the route to this node we have to remember whether we had
-    // a route to it prior to our direct connection
-    // If we did have a route it means that both nodes are on the same network
-    // so they don't need to exchange their full states, only their direct
-    // connection should be broadcasted to the rest of the network
-    bool same_network = node->hello_id->next_hop != NULL;
-
-    if (same_network) {
+    if (node->hello_id->next_hop) {
         logger_debug(DBG_STATEEXG, "%s: %s: Previously accessible through %s (%s)",
             node->addrw, node->id->name,
             node->id->next_hop->id->name, node->id->next_hop->addrw);
@@ -285,30 +298,28 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
     logger(LOG_INFO, "%s: %s: Authenticated successfully", node->addrw,
         node->id->name);
 
-    logger_debug(DBG_STATEEXG, "%s: %s: Starting state exchange (%s)",
-        node->addrw, node->id->name, same_network ? "minimal" : "full");
+    logger_debug(DBG_STATEEXG, "%s: %s: Starting state exchange",
+        node->addrw, node->id->name);
     node->state_exg = true;
 
     // Make sure that we are our device modes are compatible
     if (!node_queue_devmode(node))
         return false;
 
-    if (!same_network) {
-        logger_debug(DBG_STATEEXG, "%s: %s: Exchanging local state",
-            node->addrw, node->id->name);
+    logger_debug(DBG_STATEEXG, "%s: %s: Exchanging local state",
+        node->addrw, node->id->name);
 
-        // We exchange our network map
-        if (!node_queue_edge_exg(node))
-            return false;
+    // We exchange our network map
+    if (!node_queue_edge_exg(node))
+        return false;
 
-        // We exchange all known network routes
-        if (!node_queue_route_exg(node))
-            return false;
+    // We exchange all known network routes
+    if (!node_queue_route_exg(node))
+        return false;
 
-        // We exchange all known public keys of the nodes that are online
-        if (!node_queue_pubkey_exg(node))
-            return false;
-    }
+    // We exchange all known public keys of the nodes that are online
+    if (!node_queue_pubkey_exg(node))
+        return false;
 
     // We finished queuing our state exchange packets
     if (!node_queue_stateexg_end(node))
@@ -464,6 +475,10 @@ static bool oshd_process_unauthenticated(node_t *node, oshpacket_hdr_t *pkt,
             return oshd_process_hello_response(node, pkt,
                 (oshpacket_hello_response_t *) payload);
 
+        case HELLO_END:
+            return oshd_process_hello_end(node, pkt,
+                (oshpacket_hello_end_t *) payload);
+
         case GOODBYE:
             logger(LOG_INFO, "%s: Gracefully disconnecting", node->addrw);
             return false;
@@ -488,6 +503,7 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
 
         case HELLO_CHALLENGE:
         case HELLO_RESPONSE:
+        case HELLO_END:
             logger(LOG_ERR, "%s: %s: Already authenticated but received %s",
                 node->addrw, node->id->name, oshpacket_type_name(pkt->type));
             return false;

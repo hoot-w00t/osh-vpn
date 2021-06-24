@@ -851,6 +851,25 @@ bool node_queue_hello_challenge(node_t *node)
         sizeof(oshpacket_hello_challenge_t));
 }
 
+// Queue HELLO_END packet
+bool node_queue_hello_end(node_t *node)
+{
+    oshpacket_hello_end_t packet;
+
+    if (node->hello_auth) {
+        logger_debug(DBG_AUTHENTICATION, "%s: Authentication: Successful HELLO_END",
+            node->addrw);
+        packet.hello_success = 1;
+    } else {
+        logger_debug(DBG_AUTHENTICATION, "%s: Authentication: Failed HELLO_END",
+            node->addrw);
+        packet.hello_success = 0;
+        node->finish_and_disconnect = true;
+    }
+    return node_queue_packet(node, NULL, HELLO_END,
+        (uint8_t *) &packet, sizeof(packet));
+}
+
 // Queue DEVMODE packet
 bool node_queue_devmode(node_t *node)
 {
