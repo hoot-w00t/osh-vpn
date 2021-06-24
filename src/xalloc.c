@@ -59,3 +59,12 @@ char *xstrdup(const char *s)
     }
     return dup;
 }
+
+// Duplicate size bytes starting at s
+void *xmemdup(const void *s, size_t size)
+{
+    void *newptr = xalloc(size);
+
+    memcpy(newptr, s, size);
+    return newptr;
+}

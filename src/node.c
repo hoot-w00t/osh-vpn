@@ -122,8 +122,8 @@ bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
     if (!(nid->pubkey = pkey_load_ed25519_pubkey(pubkey, pubkey_size)))
         return false;
 
-    nid->pubkey_raw = xrealloc(nid->pubkey_raw, pubkey_size);
-    memcpy(nid->pubkey_raw, pubkey, pubkey_size);
+    free(nid->pubkey_raw);
+    nid->pubkey_raw = xmemdup(pubkey, pubkey_size);
     nid->pubkey_raw_size = pubkey_size;
     nid->pubkey_local = false;
     return true;
