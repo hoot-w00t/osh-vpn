@@ -7,12 +7,13 @@
 // Allocate size bytes of memory
 // abort() if allocation fails
 _xalloc_attr
-void *xalloc(size_t size)
+void *_xalloc(_xalloc_args_proto, size_t size)
 {
     void *ptr = malloc(size);
 
     if (!ptr) {
-        fprintf(stderr, "xalloc failed (%zu bytes)\n", size);
+        fprintf(stderr, _xalloc_fmt "xalloc(%zu) failed\n",
+            _xalloc_fmt_args, size);
         abort();
     }
     return ptr;
@@ -21,12 +22,13 @@ void *xalloc(size_t size)
 // Allocate size bytes of memory initialized with value 0
 // abort() if allocation fails
 _xalloc_attr
-void *xzalloc(size_t size)
+void *_xzalloc(_xalloc_args_proto, size_t size)
 {
     void *ptr = calloc(size, 1);
 
     if (!ptr) {
-        fprintf(stderr, "xzalloc failed (%zu bytes)\n", size);
+        fprintf(stderr, _xalloc_fmt "xzalloc(%zu) failed\n",
+            _xalloc_fmt_args, size);
         abort();
     }
     return ptr;
@@ -36,7 +38,7 @@ void *xzalloc(size_t size)
 // If size is 0, frees *ptr and returns NULL
 // abort() if allocation fails
 _xalloc_attr
-void *xrealloc(void *ptr, size_t size)
+void *_xrealloc(_xalloc_args_proto, void *ptr, size_t size)
 {
     void *newptr;
 
@@ -45,7 +47,8 @@ void *xrealloc(void *ptr, size_t size)
         return NULL;
     }
     if (!(newptr = realloc(ptr, size))) {
-        fprintf(stderr, "xrealloc failed (%p, %zu bytes)\n", ptr, size);
+        fprintf(stderr, _xalloc_fmt "xrealloc(%p, %zu) failed\n",
+            _xalloc_fmt_args, ptr, size);
         abort();
     }
     return newptr;
@@ -54,12 +57,13 @@ void *xrealloc(void *ptr, size_t size)
 // Duplicate *s
 // abort() is allocation fails
 _xalloc_attr
-char *xstrdup(const char *s)
+char *_xstrdup(_xalloc_args_proto, const char *s)
 {
     char *dup = strdup(s);
 
     if (!dup) {
-        fprintf(stderr, "xstrdup failed (%p, %zu chars)\n", s, strlen(s));
+        fprintf(stderr, _xalloc_fmt "xstrdup(\"%s\") failed\n",
+            _xalloc_fmt_args, s);
         abort();
     }
     return dup;
@@ -67,12 +71,13 @@ char *xstrdup(const char *s)
 
 // Duplicate size bytes starting at s
 _xalloc_attr
-void *xmemdup(const void *s, size_t size)
+void *_xmemdup(_xalloc_args_proto, const void *s, size_t size)
 {
     void *newptr = malloc(size);
 
     if (!newptr) {
-        fprintf(stderr, "xmemdup failed (%p, %zu bytes)\n", s, size);
+        fprintf(stderr, _xalloc_fmt "xmemdup(%p, %zu) failed\n",
+            _xalloc_fmt_args, s, size);
         abort();
     }
     memcpy(newptr, s, size);
