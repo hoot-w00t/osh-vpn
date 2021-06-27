@@ -5,6 +5,7 @@
 
 // Allocate size bytes of memory
 // abort() if allocation fails
+__attribute__((__malloc__))
 void *xalloc(size_t size)
 {
     void *ptr = malloc(size);
@@ -18,6 +19,7 @@ void *xalloc(size_t size)
 
 // Allocate size bytes of memory initialized with value 0
 // abort() if allocation fails
+__attribute__((__malloc__))
 void *xzalloc(size_t size)
 {
     void *ptr = calloc(size, 1);
@@ -32,6 +34,7 @@ void *xzalloc(size_t size)
 // Re-size *ptr to size bytes
 // If size is 0, frees *ptr and returns NULL
 // abort() if allocation fails
+__attribute__((__malloc__))
 void *xrealloc(void *ptr, size_t size)
 {
     void *newptr;
@@ -49,6 +52,7 @@ void *xrealloc(void *ptr, size_t size)
 
 // Duplicate *s
 // abort() is allocation fails
+__attribute__((__malloc__))
 char *xstrdup(const char *s)
 {
     char *dup = strdup(s);
@@ -61,10 +65,15 @@ char *xstrdup(const char *s)
 }
 
 // Duplicate size bytes starting at s
+__attribute__((__malloc__))
 void *xmemdup(const void *s, size_t size)
 {
-    void *newptr = xalloc(size);
+    void *newptr = malloc(size);
 
+    if (!newptr) {
+        fprintf(stderr, "xmemdup failed (%p, %zu bytes)\n", s, size);
+        abort();
+    }
     memcpy(newptr, s, size);
     return newptr;
 }
