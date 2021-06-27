@@ -1,3 +1,4 @@
+#include "xalloc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -5,7 +6,7 @@
 
 // Allocate size bytes of memory
 // abort() if allocation fails
-__attribute__((__malloc__))
+_xalloc_attr
 void *xalloc(size_t size)
 {
     void *ptr = malloc(size);
@@ -19,7 +20,7 @@ void *xalloc(size_t size)
 
 // Allocate size bytes of memory initialized with value 0
 // abort() if allocation fails
-__attribute__((__malloc__))
+_xalloc_attr
 void *xzalloc(size_t size)
 {
     void *ptr = calloc(size, 1);
@@ -34,7 +35,7 @@ void *xzalloc(size_t size)
 // Re-size *ptr to size bytes
 // If size is 0, frees *ptr and returns NULL
 // abort() if allocation fails
-__attribute__((__malloc__))
+_xalloc_attr
 void *xrealloc(void *ptr, size_t size)
 {
     void *newptr;
@@ -52,7 +53,7 @@ void *xrealloc(void *ptr, size_t size)
 
 // Duplicate *s
 // abort() is allocation fails
-__attribute__((__malloc__))
+_xalloc_attr
 char *xstrdup(const char *s)
 {
     char *dup = strdup(s);
@@ -65,7 +66,7 @@ char *xstrdup(const char *s)
 }
 
 // Duplicate size bytes starting at s
-__attribute__((__malloc__))
+_xalloc_attr
 void *xmemdup(const void *s, size_t size)
 {
     void *newptr = malloc(size);
