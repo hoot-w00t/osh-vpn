@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-#define _xalloc_attr __attribute__((__malloc__))
+#define _xalloc_attr __attribute__((__malloc__, returns_nonnull, warn_unused_result))
 
 // These are common definitions used in each xalloc function
 // This is to help identify which allocation fails if it does, currently it
