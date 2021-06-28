@@ -434,6 +434,15 @@ void node_tree_update(void)
         node_tree_dump();
 }
 
+// Gracefully disconnect a node, sets the finish_and_disconnect flag to
+// disconnect the node automatically after the send queue is emptied
+// Unsets the POLLIN from the node's pfd events to drop all incoming packets
+void node_graceful_disconnect(node_t *node)
+{
+    node->finish_and_disconnect = true;
+    node_pollin_unset(node);
+}
+
 // Disconnect node
 void node_disconnect(node_t *node)
 {
@@ -861,7 +870,7 @@ bool node_queue_hello_end(node_t *node)
         logger_debug(DBG_AUTHENTICATION, "%s: Failed HELLO_END",
             node->addrw);
         packet.hello_success = 0;
-        node->finish_and_disconnect = true;
+        node_graceful_disconnect(node);
     }
     return node_queue_packet(node, NULL, HELLO_END,
         (uint8_t *) &packet, sizeof(packet));
@@ -890,7 +899,7 @@ bool node_queue_goodbye(node_t *node)
 {
     uint8_t buf = 0;
 
-    node->finish_and_disconnect = true;
+    node_graceful_disconnect(node);
     return node_queue_packet(node, node->id->name, GOODBYE, &buf, sizeof(buf));
 }
 

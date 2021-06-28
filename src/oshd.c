@@ -171,10 +171,15 @@ static void pfd_resize(void)
     for (size_t i = 0; i < oshd.nodes_count; ++i) {
         oshd.nodes[i]->pfd = &pfd[i + pfd_off];
         pfd[i + pfd_off].fd = oshd.nodes[i]->fd;
-        if (netbuffer_data_size(oshd.nodes[i]->io.sendq) || !oshd.nodes[i]->connected) {
-            pfd[i + pfd_off].events = POLLIN | POLLOUT;
-        } else {
-            pfd[i + pfd_off].events = POLLIN;
+        pfd[i + pfd_off].events = 0;
+
+        if (!oshd.nodes[i]->finish_and_disconnect)
+            pfd[i + pfd_off].events |= POLLIN;
+
+        if (   netbuffer_data_size(oshd.nodes[i]->io.sendq)
+            || !oshd.nodes[i]->connected)
+        {
+            pfd[i + pfd_off].events |= POLLOUT;
         }
     }
 }

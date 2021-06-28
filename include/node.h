@@ -174,6 +174,7 @@ void node_tree_dump_digraph(void);
 void node_tree_dump(void);
 void node_tree_update(void);
 
+void node_graceful_disconnect(node_t *node);
 void node_disconnect(node_t *node);
 void node_destroy(node_t *node);
 node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port);
@@ -211,6 +212,18 @@ bool node_queue_route_exg(node_t *node);
 // This is the function called to send the initial packet when an initiator
 // established a connection
 #define node_queue_initial_packet(node) node_queue_handshake(node, true)
+
+static inline void node_pollin_set(node_t *node)
+{
+    if (node->pfd)
+        node->pfd->events |= POLLIN;
+}
+
+static inline void node_pollin_unset(node_t *node)
+{
+    if (node->pfd)
+        node->pfd->events &= ~(POLLIN);
+}
 
 static inline void node_pollout_set(node_t *node)
 {
