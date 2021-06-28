@@ -31,4 +31,4 @@ jobs:
         with:
           submodules: true
       - name: Build and run unit tests
-        run: make test
+        run: make test OTHER_CFLAGS="-Werror"

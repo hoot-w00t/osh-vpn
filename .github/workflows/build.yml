@@ -18,4 +18,4 @@ jobs:
         with:
           submodules: true
       - name: Build project
-        run: make
+        run: make OTHER_CFLAGS="-Werror"

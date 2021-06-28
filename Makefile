@@ -5,7 +5,11 @@ EASYCONF_ROOT	=	./easyconf
 EASYCONF_INC	=	$(EASYCONF_ROOT)/include
 EASYCONF_STATIC	=	$(EASYCONF_ROOT)/libeasyconf.a
 
-CFLAGS		=	-Wall -Wextra -Wshadow -O2 -g -pipe
+ifndef OTHER_CFLAGS
+	OTHER_CFLAGS	=
+endif
+
+CFLAGS		=	-Wall -Wextra -Wshadow $(OTHER_CFLAGS) -O2 -g -pipe
 CFLAGS		+=	-Iinclude -I$(EASYCONF_INC)
 CFLAGS		+=	$(strip $(shell $(PKG_CONFIG) --cflags openssl))
 LDFLAGS		=	$(EASYCONF_STATIC)
