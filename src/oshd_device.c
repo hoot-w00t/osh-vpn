@@ -52,11 +52,11 @@ read_again:
         netaddr_ntop(pkt_dest, sizeof(pkt_dest), &pkt_hdr.dest);
 
         if (route) {
-            logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%i bytes, to %s)",
+            logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zi bytes, to %s)",
                 oshd.tuntap_dev, oshd.name, pkt_src, pkt_dest, pkt_size,
                 route->dest_node->name);
         } else {
-            logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%i bytes, broadcast)",
+            logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zi bytes, broadcast)",
                 oshd.tuntap_dev, oshd.name, pkt_src, pkt_dest, pkt_size);
         }
     }
@@ -77,7 +77,7 @@ bool oshd_write_tuntap_pkt(uint8_t *data, uint16_t data_len)
             // TODO: Only notify the user of the error if it is a non-fatal error
             logger(LOG_ERR, "%s: write(): %s", oshd.tuntap_dev, strerror(errno));
         } else {
-            logger(LOG_ERR, "%s: write(): %i/%u bytes written", oshd.tuntap_dev, written, data_len);
+            logger(LOG_ERR, "%s: write(): %zi/%u bytes written", oshd.tuntap_dev, written, data_len);
         }
 
         // TODO: Only exit the program if we can no longer read/write to the TUN/TAP device

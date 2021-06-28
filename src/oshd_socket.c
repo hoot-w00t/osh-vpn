@@ -244,7 +244,7 @@ bool node_recv_queued(node_t *node)
 
                 node->io.recv_pkt_size = OSHPACKET_HDR_SIZE + curr_hdr->payload_size;
                 if (node->io.recv_pkt_size > OSHPACKET_MAXSIZE) {
-                    logger(LOG_ERR, "%s: Invalid packet size (recv, %u bytes)",
+                    logger(LOG_ERR, "%s: Invalid packet size (recv, %zu bytes)",
                         node->addrw, node->io.recv_pkt_size);
                     event_queue_node_remove(node);
                     return false;

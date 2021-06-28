@@ -74,6 +74,7 @@ static void logger_print(const char *level, const char *format, va_list ap)
 }
 
 // Log a message of level
+_logger_attr
 void logger(loglevel_t level, const char *format, ...)
 {
     va_list ap;
@@ -84,6 +85,7 @@ void logger(loglevel_t level, const char *format, ...)
 }
 
 // Log a message if what is being debugged
+_logger_debug_attr
 void logger_debug(debug_what_t what, const char *format, ...)
 {
     va_list ap;

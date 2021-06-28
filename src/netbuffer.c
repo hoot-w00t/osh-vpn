@@ -84,7 +84,7 @@ void netbuffer_cancel(netbuffer_t *nbuf, size_t data_size)
 {
     if (data_size >= nbuf->data_size) {
         logger_debug(DBG_NETBUFFER, "Netbuffer %p: Cancelled the last %zu bytes",
-            nbuf->data_size);
+            nbuf, nbuf->data_size);
 
         nbuf->data_size = 0;
 
@@ -93,7 +93,7 @@ void netbuffer_cancel(netbuffer_t *nbuf, size_t data_size)
             netbuffer_shrink(nbuf);
     } else {
         logger_debug(DBG_NETBUFFER, "Netbuffer %p: Cancelled %zu bytes",
-            data_size);
+            nbuf, data_size);
         nbuf->data_size -= data_size;
     }
 }

@@ -92,8 +92,7 @@ bool oshd_cmd_execute(const char *name)
             return true;
         logger(LOG_ERR, "%s command exited with code %i", cmd->name, exit_status);
     } else {
-        logger(LOG_ERR, "%s command terminated abnormally", cmd->name,
-            strerror(errno));
+        logger(LOG_ERR, "%s command terminated abnormally", cmd->name);
     }
     return false;
 }

@@ -812,8 +812,8 @@ bool node_queue_handshake(node_t *node, bool initiator)
         return false;
     if (pubkey_size != sizeof(packet.send_pubkey)) {
         free(pubkey);
-        logger(LOG_ERR, "%s: send_key size is invalid (%zu, but expected %u)",
-            pubkey_size, sizeof(packet.send_pubkey));
+        logger(LOG_ERR, "%s: send_key size is invalid (%zu, but expected %zu)",
+            node->addrw, pubkey_size, sizeof(packet.send_pubkey));
         return false;
     }
     memcpy(packet.send_pubkey, pubkey, pubkey_size);
@@ -824,8 +824,8 @@ bool node_queue_handshake(node_t *node, bool initiator)
         return false;
     if (pubkey_size != sizeof(packet.recv_pubkey)) {
         free(pubkey);
-        logger(LOG_ERR, "%s: recv_key size is invalid (%zu, but expected %u)",
-            pubkey_size, sizeof(packet.recv_pubkey));
+        logger(LOG_ERR, "%s: recv_key size is invalid (%zu, but expected %zu)",
+            node->addrw, pubkey_size, sizeof(packet.recv_pubkey));
         return false;
     }
     memcpy(packet.recv_pubkey, pubkey, pubkey_size);
