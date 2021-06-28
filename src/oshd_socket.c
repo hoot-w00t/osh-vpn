@@ -120,7 +120,7 @@ bool oshd_connect_queue(const char *address, const uint16_t port, time_t delay)
         (struct sockaddr *) &d_sin, d_sin_len);
 
     if (client_fd < 0) {
-        event_queue_connect(address, port, delay * 2, delay);
+        node_reconnect_exp(address, port, delay);
         return false;
     }
 
@@ -152,7 +152,7 @@ bool oshd_connect(const char *address, const uint16_t port, time_t delay)
     // but here we will have a connected socket when returning
     memset(d_addr, 0, sizeof(d_addr));
     if ((client_fd = tcp_connect(address, port, d_addr, sizeof(d_addr))) < 0) {
-        event_queue_connect(address, port, delay * 2, delay);
+        node_reconnect_exp(address, port, delay);
         return false;
     }
     netaddr_pton(&naddr, d_addr);

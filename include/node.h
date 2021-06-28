@@ -178,10 +178,15 @@ void node_graceful_disconnect(node_t *node);
 void node_disconnect(node_t *node);
 void node_destroy(node_t *node);
 node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port);
+
+time_t node_reconnect_delay_limit(time_t delay);
 void node_reconnect_delay(node_t *node, time_t delay);
 void node_reconnect_to(node_t *node, const char *addr, uint16_t port,
     time_t delay);
 #define node_reconnect_disable(node) node_reconnect_to((node), NULL, 0, 0)
+void node_reconnect_exp(const char *addr, uint16_t port, time_t delay);
+void node_reconnect(node_t *node);
+
 bool node_valid_name(const char *name);
 
 bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,

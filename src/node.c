@@ -480,13 +480,7 @@ void node_disconnect(node_t *node)
         logger(LOG_WARN, "%s: Already disconnected", node->addrw);
     }
 
-    if (node->reconnect_addr) {
-        logger(LOG_INFO, "Retrying to connect to %s:%u in %li seconds",
-            node->reconnect_addr, node->reconnect_port,
-            node->reconnect_delay);
-        event_queue_connect(node->reconnect_addr, node->reconnect_port,
-            node->reconnect_delay * 2, node->reconnect_delay);
-    }
+    node_reconnect(node);
 }
 
 // Free the send/recv keys and ciphers and reset their values to NULL
@@ -543,16 +537,25 @@ node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port)
     return node;
 }
 
+// Returns a valid delay within the minimum and maximum reconnection delays
+time_t node_reconnect_delay_limit(time_t delay)
+{
+    // If delay is too small, return the minimum delay
+    if (delay < oshd.reconnect_delay_min)
+        return oshd.reconnect_delay_min;
+
+    // If it is too big, return the maximum
+    if (delay > oshd.reconnect_delay_max)
+        return oshd.reconnect_delay_max;
+
+    // Otherwise the delay is already within the limits, return it
+    return delay;
+}
+
 // Set the node socket's reconnection delay
 void node_reconnect_delay(node_t *node, time_t delay)
 {
-    if (delay < oshd.reconnect_delay_min) {
-        node->reconnect_delay = oshd.reconnect_delay_min;
-    } else if (delay > oshd.reconnect_delay_max) {
-        node->reconnect_delay = oshd.reconnect_delay_max;
-    } else {
-        node->reconnect_delay = delay;
-    }
+    node->reconnect_delay = node_reconnect_delay_limit(delay);
 }
 
 // Set the node's socket reconnection information
@@ -563,6 +566,27 @@ void node_reconnect_to(node_t *node, const char *addr, uint16_t port,
     node->reconnect_addr = addr ? xstrdup(addr) : NULL;
     node->reconnect_port = port;
     node_reconnect_delay(node, delay);
+}
+
+// Queue a reconnection to addr:port in delay seconds
+// Doubles the delay for future reconnections
+void node_reconnect_exp(const char *addr, uint16_t port, time_t delay)
+{
+    const time_t l_event_delay = node_reconnect_delay_limit(delay);
+    const time_t l_delay = node_reconnect_delay_limit(delay * 2);
+
+    logger(LOG_INFO, "Retrying to connect to %s:%u in %li seconds",
+        addr, port, l_event_delay);
+    event_queue_connect(addr, port, l_delay, l_event_delay);
+}
+
+// If node has a reconnect_addr, queue a reconnection
+void node_reconnect(node_t *node)
+{
+    if (node->reconnect_addr) {
+        node_reconnect_exp(node->reconnect_addr, node->reconnect_port,
+            node->reconnect_delay);
+    }
 }
 
 // Returns true if the node name is valid
