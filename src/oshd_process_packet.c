@@ -24,7 +24,7 @@ static bool oshd_process_handshake(node_t *node, oshpacket_hdr_t *pkt,
     }
 
     // Load the remote node's public keys
-    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Loading the remote node's public keys", node->addrw);
+    logger_debug(DBG_HANDSHAKE, "%s: Loading the remote node's public keys", node->addrw);
     EVP_PKEY *r_send_pubkey = pkey_load_x25519_pubkey(payload->send_pubkey,
         sizeof(payload->send_pubkey));
     EVP_PKEY *r_recv_pubkey = pkey_load_x25519_pubkey(payload->recv_pubkey,
@@ -47,9 +47,9 @@ static bool oshd_process_handshake(node_t *node, oshpacket_hdr_t *pkt,
     size_t recv_secret_size;
     bool secret_success = true;
 
-    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Computing send_secret", node->addrw);
+    logger_debug(DBG_HANDSHAKE, "%s: Computing send_secret", node->addrw);
     if (pkey_derive(node->send_key, r_recv_pubkey, &send_secret, &send_secret_size)) {
-        logger_debug(DBG_HANDSHAKE, "%s: Handshake: Computing recv_secret", node->addrw);
+        logger_debug(DBG_HANDSHAKE, "%s: Computing recv_secret", node->addrw);
         if (!pkey_derive(node->recv_key, r_send_pubkey, &recv_secret, &recv_secret_size)) {
             secret_success = false;
             free(send_secret);
@@ -75,7 +75,7 @@ static bool oshd_process_handshake(node_t *node, oshpacket_hdr_t *pkt,
     unsigned int send_hash_size;
     unsigned int recv_hash_size;
 
-    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Hashing shared secrets", node->addrw);
+    logger_debug(DBG_HANDSHAKE, "%s: Hashing shared secrets", node->addrw);
     if (   !sha3_512_hash(send_secret, send_secret_size, send_hash, &send_hash_size)
         || !sha3_512_hash(recv_secret, recv_secret_size, recv_hash, &recv_hash_size))
     {
@@ -88,9 +88,9 @@ static bool oshd_process_handshake(node_t *node, oshpacket_hdr_t *pkt,
     free(recv_secret);
 
     // We can now create our send/recv ciphers using the two hashes
-    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Creating send_cipher", node->addrw);
+    logger_debug(DBG_HANDSHAKE, "%s: Creating send_cipher", node->addrw);
     node->send_cipher = cipher_create_aes_256_ctr(true, send_hash, 32, send_hash + 32, 16);
-    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Creating recv_cipher", node->addrw);
+    logger_debug(DBG_HANDSHAKE, "%s: Creating recv_cipher", node->addrw);
     node->recv_cipher = cipher_create_aes_256_ctr(false, recv_hash, 32, recv_hash + 32, 16);
 
     if (!node->send_cipher || !node->recv_cipher) {
@@ -144,7 +144,7 @@ static bool oshd_process_hello_challenge(node_t *node, oshpacket_hdr_t *pkt,
     oshpacket_hello_response_t response;
 
     // Sign the challenge using our private key
-    logger_debug(DBG_AUTHENTICATION, "%s: %s: Authentication: Signing challenge",
+    logger_debug(DBG_AUTHENTICATION, "%s: %s: Signing challenge",
         node->addrw, node->hello_id->name);
     if (!pkey_sign(oshd.privkey,
                    (uint8_t *) payload, sizeof(oshpacket_hello_challenge_t),
@@ -205,12 +205,12 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
         return node_queue_hello_end(node);
     }
 
-    logger_debug(DBG_AUTHENTICATION, "%s: Authentication: %s has a %s public key",
+    logger_debug(DBG_AUTHENTICATION, "%s: %s has a %s public key",
         node->addrw, node->hello_id->name,
         node->hello_id->pubkey_local ? "local" : "remote");
 
     // If the signature verification succeeds then the node is authenticated
-    logger_debug(DBG_AUTHENTICATION, "%s: Authentication: Verifying signature from %s",
+    logger_debug(DBG_AUTHENTICATION, "%s: Verifying signature from %s",
         node->addrw, node->hello_id->name);
     node->hello_auth = pkey_verify(node->hello_id->pubkey,
         (uint8_t *) node->hello_chall, sizeof(oshpacket_hello_challenge_t),
@@ -224,7 +224,7 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
             node->addrw, node->hello_id->name);
         return node_queue_hello_end(node);
     }
-    logger_debug(DBG_AUTHENTICATION, "%s: Authentication: Valid signature from %s",
+    logger_debug(DBG_AUTHENTICATION, "%s: Valid signature from %s",
         node->addrw, node->hello_id->name);
 
     if (node->hello_id->node_socket) {

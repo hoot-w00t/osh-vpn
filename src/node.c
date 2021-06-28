@@ -146,8 +146,7 @@ void node_id_add_resolver_route(node_id_t *nid, const netaddr_t *addr)
         char addrp[INET6_ADDRSTRLEN];
 
         netaddr_ntop(addrp, sizeof(addrp), addr);
-        logger_debug(DBG_RESOLVER, "Resolver: Adding %s to %s",
-            addrp, nid->name);
+        logger_debug(DBG_RESOLVER, "Adding %s to %s", addrp, nid->name);
     }
 
     nid->resolver_routes = xrealloc(nid->resolver_routes,
@@ -161,9 +160,7 @@ void node_id_add_resolver_route(node_id_t *nid, const netaddr_t *addr)
 void node_id_clear_resolver_routes(node_id_t *nid)
 {
     if (nid->resolver_routes) {
-        logger_debug(DBG_RESOLVER, "Resolver: Clearing routes from %s",
-            nid->name);
-
+        logger_debug(DBG_RESOLVER, "Clearing routes from %s", nid->name);
         free(nid->resolver_routes);
         nid->resolver_routes = NULL;
         nid->resolver_routes_count = 0;
@@ -799,10 +796,10 @@ bool node_queue_handshake(node_t *node, bool initiator)
     node_reset_ciphers(node);
 
     // Generate random keys
-    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Generating send_key", node->addrw);
+    logger_debug(DBG_HANDSHAKE, "%s: Generating send_key", node->addrw);
     if (!(node->send_key = pkey_generate_x25519()))
         return false;
-    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Generating recv_key", node->addrw);
+    logger_debug(DBG_HANDSHAKE, "%s: Generating recv_key", node->addrw);
     if (!(node->recv_key = pkey_generate_x25519()))
         return false;
 
@@ -810,7 +807,7 @@ bool node_queue_handshake(node_t *node, bool initiator)
     size_t pubkey_size;
 
     // Export the keys to the packet
-    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Exporting send_key", node->addrw);
+    logger_debug(DBG_HANDSHAKE, "%s: Exporting send_key", node->addrw);
     if (!pkey_save_x25519_pubkey(node->send_key, &pubkey, &pubkey_size))
         return false;
     if (pubkey_size != sizeof(packet.send_pubkey)) {
@@ -822,7 +819,7 @@ bool node_queue_handshake(node_t *node, bool initiator)
     memcpy(packet.send_pubkey, pubkey, pubkey_size);
     free(pubkey);
 
-    logger_debug(DBG_HANDSHAKE, "%s: Handshake: Exporting recv_key", node->addrw);
+    logger_debug(DBG_HANDSHAKE, "%s: Exporting recv_key", node->addrw);
     if (!pkey_save_x25519_pubkey(node->recv_key, &pubkey, &pubkey_size))
         return false;
     if (pubkey_size != sizeof(packet.recv_pubkey)) {
@@ -857,11 +854,11 @@ bool node_queue_hello_end(node_t *node)
     oshpacket_hello_end_t packet;
 
     if (node->hello_auth) {
-        logger_debug(DBG_AUTHENTICATION, "%s: Authentication: Successful HELLO_END",
+        logger_debug(DBG_AUTHENTICATION, "%s: Successful HELLO_END",
             node->addrw);
         packet.hello_success = 1;
     } else {
-        logger_debug(DBG_AUTHENTICATION, "%s: Authentication: Failed HELLO_END",
+        logger_debug(DBG_AUTHENTICATION, "%s: Failed HELLO_END",
             node->addrw);
         packet.hello_success = 0;
         node->finish_and_disconnect = true;
