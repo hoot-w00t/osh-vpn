@@ -87,10 +87,12 @@ void logger(loglevel_t level, const char *format, ...)
 void logger_debug(debug_what_t what, const char *format, ...)
 {
     va_list ap;
+    char level[48];
 
     if (enabled_debug[what]) {
         va_start(ap, format);
-        logger_print("Debug", format, ap);
+        snprintf(level, sizeof(level), "Debug: %s", logger_get_debug_name(what));
+        logger_print(level, format, ap);
         va_end(ap);
     }
 }
