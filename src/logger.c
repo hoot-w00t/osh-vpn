@@ -21,12 +21,43 @@ static const char *debug_names[debug_what_size] = {
     "resolver"
 };
 
+static loglevel_t logger_level = LOG_INFO;
 static const char *level_names[loglevel_size] = {
     "Critical",
     "Error",
     "Warning",
     "Info"
 };
+
+// Set logging level
+void logger_set_level(loglevel_t level)
+{
+    logger_level = level;
+}
+
+// Set logging level by name
+bool logger_set_level_name(const char *name)
+{
+    for (loglevel_t i = 0; i < loglevel_size; ++i) {
+        if (!strcasecmp(name, level_names[i])) {
+            logger_set_level(i);
+            return true;
+        }
+    }
+    return false;
+}
+
+// Returns the current logging level
+loglevel_t logger_get_level(void)
+{
+    return logger_level;
+}
+
+// Returns the logging level name
+const char *logger_get_level_name(loglevel_t level)
+{
+    return level_names[level];
+}
 
 // Toggle debugging for what
 void logger_toggle_debug(debug_what_t what)
@@ -79,9 +110,11 @@ void logger(loglevel_t level, const char *format, ...)
 {
     va_list ap;
 
-    va_start(ap, format);
-    logger_print(level_names[level], format, ap);
-    va_end(ap);
+    if (level <= logger_level) {
+        va_start(ap, format);
+        logger_print(level_names[level], format, ap);
+        va_end(ap);
+    }
 }
 
 // Log a message if what is being debugged

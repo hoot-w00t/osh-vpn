@@ -255,6 +255,19 @@ static bool oshd_param_onresolverupdate(ecp_t *ecp)
     return true;
 }
 
+// LogLevel
+static bool oshd_param_loglevel(ecp_t *ecp)
+{
+    if (!logger_set_level_name(ecp_value(ecp))) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "Invalid LogLevel: %s", ecp_value(ecp));
+        return false;
+    }
+    logger_debug(DBG_CONF, "Set LogLevel to %s",
+        logger_get_level_name(logger_get_level()));
+    return true;
+}
+
 // Array of all configuration parameters and their handlers
 static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "NoServer", .type = VALUE_NONE, &oshd_param_noserver },
@@ -274,6 +287,7 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "ResolverTLD", .type = VALUE_REQUIRED, &oshd_param_resolvertld },
     { .name = "ResolverFile", .type = VALUE_REQUIRED, &oshd_param_resolverfile },
     { .name = "OnResolverUpdate", .type = VALUE_REQUIRED, &oshd_param_onresolverupdate },
+    { .name = "LogLevel", .type = VALUE_REQUIRED, &oshd_param_loglevel },
     { NULL, 0, NULL }
 };
 

@@ -30,6 +30,11 @@ typedef enum debug_what {
 } debug_what_t;
 #define debug_what_size (14)
 
+void logger_set_level(loglevel_t level);
+bool logger_set_level_name(const char *name);
+loglevel_t logger_get_level(void);
+const char *logger_get_level_name(loglevel_t level);
+
 void logger_toggle_debug(debug_what_t what);
 bool logger_toggle_debug_name(const char *name);
 const char *logger_get_debug_name(debug_what_t what);
