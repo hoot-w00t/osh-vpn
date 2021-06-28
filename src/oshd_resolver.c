@@ -168,7 +168,7 @@ static bool oshd_resolver_hostsdynamic_update(const char *tld)
 
     // Read the whole file line by line into a buffer
     while ((line = resolver_getline(file))) {
-        hosts = xrealloc(hosts, sizeof(char *) * (hosts_size + 1));
+        hosts = xreallocarray(hosts, hosts_size + 1, sizeof(char *));
         hosts[hosts_size] = line;
         hosts_size += 1;
 

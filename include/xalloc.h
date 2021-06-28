@@ -26,6 +26,10 @@ void *_xrealloc(_xalloc_args_proto, void *ptr, size_t size);
 #define xrealloc(ptr, size) _xrealloc(_xalloc_args, ptr, size)
 
 _xalloc_attr
+void *_xreallocarray(_xalloc_args_proto, void *ptr, size_t nmemb, size_t size);
+#define xreallocarray(ptr, nmemb, size) _xreallocarray(_xalloc_args, ptr, nmemb, size)
+
+_xalloc_attr
 char *_xstrdup(_xalloc_args_proto, const char *s);
 #define xstrdup(s) _xstrdup(_xalloc_args, s)
 

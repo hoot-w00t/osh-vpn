@@ -238,7 +238,7 @@ static void node_add_event_handler(void *data)
 {
     node_t *node = (node_t *) data;
 
-    oshd.nodes = xrealloc(oshd.nodes, sizeof(node_t *) * (oshd.nodes_count + 1));
+    oshd.nodes = xreallocarray(oshd.nodes, oshd.nodes_count + 1, sizeof(node_t *));
     oshd.nodes[oshd.nodes_count] = node;
     oshd.nodes_count += 1;
     oshd.nodes_updated = true;
@@ -272,7 +272,7 @@ static void node_remove_event_handler(void *data)
     for (; i + 1 < oshd.nodes_count; ++i)
         oshd.nodes[i] = oshd.nodes[i + 1];
     oshd.nodes_count -= 1;
-    oshd.nodes = xrealloc(oshd.nodes, sizeof(node_t *) * (oshd.nodes_count));
+    oshd.nodes = xreallocarray(oshd.nodes, oshd.nodes_count, sizeof(node_t *));
     oshd.nodes_updated = true;
 }
 

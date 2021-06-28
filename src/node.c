@@ -35,8 +35,8 @@ node_id_t *node_id_add(const char *name)
 
     if (!(id = node_id_find(name))) {
         id = xzalloc(sizeof(node_id_t));
-        oshd.node_tree = xrealloc(oshd.node_tree,
-            sizeof(node_id_t *) * (oshd.node_tree_count + 1));
+        oshd.node_tree = xreallocarray(oshd.node_tree, oshd.node_tree_count + 1,
+            sizeof(node_id_t *));
 
         oshd.node_tree[oshd.node_tree_count] = id;
         oshd.node_tree_count += 1;
@@ -72,8 +72,8 @@ static void node_id_add_edge_internal(node_id_t *nid, node_id_t *edge)
     ssize_t i = node_id_find_edge(nid, edge);
 
     if (i < 0) {
-        nid->edges = xrealloc(nid->edges,
-            sizeof(node_id_t *) * (nid->edges_count + 1));
+        nid->edges = xreallocarray(nid->edges, nid->edges_count + 1,
+            sizeof(node_id_t *));
         i = nid->edges_count;
         nid->edges_count += 1;
     }
@@ -91,7 +91,7 @@ static void node_id_del_edge_internal(node_id_t *nid, node_id_t *edge)
                 sizeof(node_id_t *) * (nid->edges_count - i - 1));
         }
         nid->edges_count -= 1;
-        nid->edges = xrealloc(nid->edges, sizeof(node_id_t *) * nid->edges_count);
+        nid->edges = xreallocarray(nid->edges, nid->edges_count, sizeof(node_id_t *));
     }
 }
 
@@ -149,8 +149,8 @@ void node_id_add_resolver_route(node_id_t *nid, const netaddr_t *addr)
         logger_debug(DBG_RESOLVER, "Adding %s to %s", addrp, nid->name);
     }
 
-    nid->resolver_routes = xrealloc(nid->resolver_routes,
-        sizeof(netaddr_t) * (nid->resolver_routes_count + 1));
+    nid->resolver_routes = xreallocarray(nid->resolver_routes,
+        nid->resolver_routes_count + 1, sizeof(netaddr_t));
     netaddr_cpy(&nid->resolver_routes[nid->resolver_routes_count], addr);
     nid->resolver_routes_count += 1;
     oshd_resolver_append(addr, nid->name);
@@ -174,7 +174,7 @@ static void node_id_array_append(node_id_t ***arr, size_t *count, node_id_t *n)
     const size_t alloc_count = 16;
 
     if ((*count) % alloc_count == 0)
-        *arr = xrealloc(*arr, sizeof(node_id_t *) * ((*count) + alloc_count));
+        *arr = xreallocarray(*arr, (*count) + alloc_count, sizeof(node_id_t *));
     (*arr)[(*count)] = n;
     *count += 1;
 }
@@ -951,7 +951,7 @@ bool node_queue_pubkey_exg(node_t *node)
         }
 
         logger_debug(DBG_AUTHENTICATION, "Public keys exchange: Adding %s", oshd.node_tree[i]->name);
-        pubkeys = xrealloc(pubkeys, sizeof(oshpacket_pubkey_t) * (count + 1));
+        pubkeys = xreallocarray(pubkeys, count + 1, sizeof(oshpacket_pubkey_t));
         memcpy(pubkeys[count].node_name, oshd.node_tree[i]->name, NODE_NAME_SIZE);
         memcpy(pubkeys[count].node_pubkey, oshd.node_tree[i]->pubkey_raw, PUBLIC_KEY_SIZE);
         count += 1;
@@ -1031,7 +1031,7 @@ static void edge_exg_append(oshpacket_edge_t **buf, size_t *buf_count,
 
     // Reallocate more alloc_count items in the buffer when we need more memory
     if ((*buf_count) % alloc_count == 0)
-        *buf = xrealloc(*buf, sizeof(oshpacket_edge_t) * ((*buf_count) + alloc_count));
+        *buf = xreallocarray(*buf, (*buf_count) + alloc_count, sizeof(oshpacket_edge_t));
 
     memcpy((*buf)[(*buf_count)].src_node, src_node, NODE_NAME_SIZE);
     memcpy((*buf)[(*buf_count)].dest_node, dest_node, NODE_NAME_SIZE);

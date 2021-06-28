@@ -68,8 +68,8 @@ oshd_route_t *oshd_route_add(const netaddr_t *addr, node_id_t *dest_node)
     if (!(route = oshd_route_find(addr))) {
         // Allocate the new route
         route = xalloc(sizeof(oshd_route_t));
-        oshd.routes = xrealloc(oshd.routes,
-            sizeof(oshd_route_t *) * (oshd.routes_count + 1));
+        oshd.routes = xreallocarray(oshd.routes, oshd.routes_count + 1,
+            sizeof(oshd_route_t *));
         oshd.routes[oshd.routes_count] = route;
         oshd.routes_count += 1;
 
@@ -122,8 +122,8 @@ void oshd_route_del_orphan_routes(void)
                     sizeof(oshd_route_t *) * (oshd.routes_count - i - 1));
             }
             oshd.routes_count -= 1;
-            oshd.routes = xrealloc(oshd.routes,
-                sizeof(oshd_route_t *) * oshd.routes_count);
+            oshd.routes = xreallocarray(oshd.routes, oshd.routes_count,
+                sizeof(oshd_route_t *));
         } else {
             // We only increment our iterator if the route wasn't removed,
             // because if we removed one the next will be shifted at the same
@@ -151,8 +151,8 @@ bool oshd_route_add_local(const netaddr_t *addr)
     if (!oshd_route_compatible(addr))
         return false;
 
-    oshd.local_routes = xrealloc(oshd.local_routes,
-        sizeof(netaddr_t) * (oshd.local_routes_count + 1));
+    oshd.local_routes = xreallocarray(oshd.local_routes,
+        oshd.local_routes_count + 1, sizeof(netaddr_t));
     netaddr_cpy(&oshd.local_routes[oshd.local_routes_count], addr);
     oshd.local_routes_count += 1;
 

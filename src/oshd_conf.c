@@ -151,10 +151,10 @@ static bool oshd_param_remote(ecp_t *ecp)
     for (; *port == ' ' || *port == '\t'; ++port);
 
     // Append a new address and port to the remote lists
-    oshd.remote_addrs = xrealloc(oshd.remote_addrs,
-        sizeof(char *) * (oshd.remote_count + 1));
-    oshd.remote_ports = xrealloc(oshd.remote_ports,
-        sizeof(uint16_t) * (oshd.remote_count + 1));
+    oshd.remote_addrs = xreallocarray(oshd.remote_addrs, oshd.remote_count + 1,
+        sizeof(char *));
+    oshd.remote_ports = xreallocarray(oshd.remote_ports, oshd.remote_count + 1,
+        sizeof(uint16_t));
 
     // Set the address
     oshd.remote_addrs[oshd.remote_count] = addr;

@@ -54,6 +54,32 @@ void *_xrealloc(_xalloc_args_proto, void *ptr, size_t size)
     return newptr;
 }
 
+// Re-size ptr to (nmemb * size) bytes
+// If size is 0, frees ptr and returns NULL
+// abort() if the allocation fails or if the multiplication overflows
+_xalloc_attr
+void *_xreallocarray(_xalloc_args_proto, void *ptr, size_t nmemb, size_t size)
+{
+    const size_t newsize = nmemb * size;
+    void *newptr;
+
+    if (nmemb && (newsize / nmemb) != size) {
+        fprintf(stderr, _xalloc_fmt "xreallocarray(%p, %zu, %zu) overflow\n",
+            _xalloc_fmt_args, ptr, nmemb, size);
+        abort();
+    }
+    if (newsize == 0) {
+        free(ptr);
+        return NULL;
+    }
+    if (!(newptr = realloc(ptr, newsize))) {
+        fprintf(stderr, _xalloc_fmt "xreallocarray(%p, %zu, %zu) failed\n",
+            _xalloc_fmt_args, ptr, nmemb, size);
+        abort();
+    }
+    return newptr;
+}
+
 // Duplicate *s
 // abort() is allocation fails
 _xalloc_attr

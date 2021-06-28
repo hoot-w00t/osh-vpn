@@ -167,7 +167,7 @@ int set_nonblocking(int fd)
 static void pfd_resize(void)
 {
     pfd_count = pfd_off + oshd.nodes_count;
-    pfd = xrealloc(pfd, sizeof(struct pollfd) * pfd_count);
+    pfd = xreallocarray(pfd, pfd_count, sizeof(struct pollfd));
     for (size_t i = 0; i < oshd.nodes_count; ++i) {
         oshd.nodes[i]->pfd = &pfd[i + pfd_off];
         pfd[i + pfd_off].fd = oshd.nodes[i]->fd;
