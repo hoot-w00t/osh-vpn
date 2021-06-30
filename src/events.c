@@ -245,10 +245,16 @@ static void node_add_event_handler(void *data)
 {
     node_t *node = (node_t *) data;
 
-    oshd.nodes = xreallocarray(oshd.nodes, oshd.nodes_count + 1, sizeof(node_t *));
-    oshd.nodes[oshd.nodes_count] = node;
-    oshd.nodes_count += 1;
-    oshd.nodes_updated = true;
+    if (oshd_nodes_limited()) {
+        logger(LOG_WARN, "Simultaneous connections limited to %zu, disconnecting %s",
+            oshd.nodes_count_max, node->addrw);
+        node_destroy(node);
+    } else {
+        oshd.nodes = xreallocarray(oshd.nodes, oshd.nodes_count + 1, sizeof(node_t *));
+        oshd.nodes[oshd.nodes_count] = node;
+        oshd.nodes_count += 1;
+        oshd.nodes_updated = true;
+    }
 }
 
 void event_queue_node_add(node_t *node)

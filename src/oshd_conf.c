@@ -242,6 +242,15 @@ static bool oshd_param_reconnectdelaymax(ecp_t *ecp)
     return true;
 }
 
+// ConnectionsLimit
+static bool oshd_param_connectionslimit(ecp_t *ecp)
+{
+    oshd.nodes_count_max = (size_t) atoi(ecp_value(ecp));
+    logger_debug(DBG_CONF, "Set ConnectionsLimit to %zu%s", oshd.nodes_count_max,
+        (oshd.nodes_count_max == 0) ? " (unlimited)" : "");
+    return true;
+}
+
 // DigraphFile
 static bool oshd_param_digraphfile(ecp_t *ecp)
 {
@@ -325,6 +334,7 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "Remote", .type = VALUE_REQUIRED, &oshd_param_remote },
     { .name = "ReconnectDelayMin", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymin },
     { .name = "ReconnectDelayMax", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymax },
+    { .name = "ConnectionsLimit", .type = VALUE_REQUIRED, &oshd_param_connectionslimit },
     { .name = "DigraphFile", .type = VALUE_REQUIRED, &oshd_param_digraphfile },
     { .name = "Resolver", .type = VALUE_REQUIRED, &oshd_param_resolver },
     { .name = "ResolverTLD", .type = VALUE_REQUIRED, &oshd_param_resolvertld },

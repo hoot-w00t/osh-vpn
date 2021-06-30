@@ -41,6 +41,7 @@ typedef struct oshd {
     // Array of the node's sockets, all direct connections
     node_t **nodes;
     size_t nodes_count;
+    size_t nodes_count_max;
     bool nodes_updated;
 
     // Array of all nodes on the network (ID)
@@ -76,6 +77,9 @@ typedef struct oshd {
     // When set to false the daemon will stop
     bool run;
 } oshd_t;
+
+// true if the maximum number of nodes is reached
+#define oshd_nodes_limited() (oshd.nodes_count_max != 0 && oshd.nodes_count >= oshd.nodes_count_max)
 
 EVP_PKEY *oshd_open_key(const char *name, bool private);
 bool oshd_open_keys(const char *dirname);
