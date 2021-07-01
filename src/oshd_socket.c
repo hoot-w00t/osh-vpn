@@ -81,26 +81,30 @@ bool oshd_connect_async(node_t *node)
 {
     // We try to connect the socket
     if (connect(node->fd, (struct sockaddr *) &node->sin, sizeof(node->sin)) < 0) {
-        // If the error is EINPROGRESS or EALREADY we just need to wait longer
-        // for the socket to finish connecting
-        if (errno != EINPROGRESS && errno != EALREADY) {
+        // If error is EISCONN the connection is already established, so we can
+        // proceed without processing any error
+        if (errno != EISCONN) {
+            // If the error is EINPROGRESS or EALREADY we just need to wait longer
+            // for the socket to finish connecting
+            if (errno == EINPROGRESS || errno == EALREADY)
+                return true;
+
             // Otherwise something is wrong with the socket
             logger(LOG_ERR, "connect: %s: %s", node->addrw, strerror(errno));
             event_queue_node_remove(node);
             return false;
         }
-    } else {
-        // We did not have an error, so the socket has finished connecting
-        logger(LOG_INFO, "Established connection with %s", node->addrw);
-        node->connected = true;
-
-        // We can reset the reconnection delay to the minimum
-        node_reconnect_delay(node, oshd.reconnect_delay_min);
-
-        // We are the initiator, so we initiate the authentication
-        return node_queue_initial_packet(node);
     }
-    return true;
+
+    // We did not have an error, so the socket has finished connecting
+    logger(LOG_INFO, "Established connection with %s", node->addrw);
+    node->connected = true;
+
+    // We can reset the reconnection delay to the minimum
+    node_reconnect_delay(node, oshd.reconnect_delay_min);
+
+    // We are the initiator, so we initiate the authentication
+    return node_queue_initial_packet(node);
 }
 
 // Queue node connection (non-blocking connect)
