@@ -127,7 +127,7 @@ int tcp_outgoing_socket(const char *hostname, const uint16_t port,
     if (addrinfo->ai_family == AF_INET6) {
         struct sockaddr_in6 *conn = (struct sockaddr_in6 *) sin;
 
-        inet_ntop(AF_INET6, &conn->sin6_addr.__in6_u, address, sizeof(address));
+        inet_ntop(AF_INET6, &conn->sin6_addr, address, sizeof(address));
         conn->sin6_port = htons(port);
         sin_len = sizeof(struct sockaddr_in6);
     } else {
@@ -170,7 +170,7 @@ int tcp_connect(const char *hostname, const uint16_t port,
     if (addrinfo->ai_family == AF_INET6) {
         struct sockaddr_in6 *conn = (struct sockaddr_in6 *) sin;
 
-        inet_ntop(AF_INET6, &conn->sin6_addr.__in6_u, address, sizeof(address));
+        inet_ntop(AF_INET6, &conn->sin6_addr, address, sizeof(address));
         conn->sin6_port = htons(port);
     } else {
         struct sockaddr_in *conn = (struct sockaddr_in *) sin;
