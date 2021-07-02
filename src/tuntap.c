@@ -2,6 +2,15 @@
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
+
+#if defined(_WIN32) || defined(__CYGWIN__)
+int tuntap_open(__attribute__((unused)) char *dev,
+    __attribute__((unused)) const bool tap)
+{
+    logger(LOG_CRIT, "TUN/TAP device is not yet supported on Windows");
+    return false;
+}
+#else
 #include <linux/if.h>
 #include <linux/if_tun.h>
 #include <sys/ioctl.h>
@@ -10,9 +19,6 @@
 
 // https://github.com/torvalds/linux/blob/master/Documentation/networking/tuntap.rst
 
-// Open TUN/TAP device with name *dev
-// If tap is true the device will use layer 2 instead of layer 3 (TUN)
-// Returns true on success, false on error
 int tuntap_open(char *dev, const bool tap)
 {
     struct ifreq ifr;
@@ -37,3 +43,4 @@ int tuntap_open(char *dev, const bool tap)
     logger(LOG_INFO, "Opened %s device: %s (fd: %i)", tap ? "TAP" : "TUN", dev, fd);
     return fd;
 }
+#endif
