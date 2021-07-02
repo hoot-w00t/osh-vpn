@@ -642,12 +642,12 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
             return oshd_process_route(node, pkt, (oshpacket_route_t *) payload);
 
         case DATA: {
-            if (!oshd.tuntap_used)
+            if (!oshd.tuntap)
                 return true;
 
             netpacket_t netpkt;
 
-            if (!netpacket_from_data(&netpkt, payload, oshd.is_tap)) {
+            if (!netpacket_from_data(&netpkt, payload, oshd.tuntap->is_tap)) {
                 logger(LOG_ERR, "%s: %s: Failed to decode received tunnel packet",
                     node->addrw, node->id->name);
                 return false;
@@ -664,9 +664,7 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                     pkt->payload_size, src_node->name);
             }
 
-            if (!oshd_write_tuntap_pkt(payload, pkt->payload_size))
-                return false;
-            return true;
+            return tuntap_write(oshd.tuntap, payload, pkt->payload_size);
         }
 
         default:

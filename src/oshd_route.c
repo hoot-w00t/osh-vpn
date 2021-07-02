@@ -35,9 +35,9 @@ void oshd_route_dump_local(void)
 // If there is no device all routes are compatible
 static bool oshd_route_compatible(const netaddr_t *addr)
 {
-    if (oshd.device_mode == MODE_NODEVICE) {
+    if (!oshd.tuntap) {
         return true;
-    } else if (oshd.is_tap) {
+    } else if (oshd.tuntap->is_tap) {
         return addr->type == MAC;
     } else {
         return addr->type != MAC;

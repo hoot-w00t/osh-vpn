@@ -2,6 +2,7 @@
 #define _OSH_OSHD_H
 
 #include "node.h"
+#include "tuntap.h"
 #include "oshd_route.h"
 #include "oshd_resolver.h"
 #include "oshd_device_mode.h"
@@ -26,11 +27,8 @@ typedef struct oshd {
 
     // TUN/TAP device information
     device_mode_t device_mode; // The mode of the TUN/TAP device
-    bool tuntap_used;          // true if the TUN/TAP device will be used
-    int tuntap_fd;             // File descriptor of the device
-    char tuntap_dev[17];       // Name of the device interface
-    bool is_tap;               // true if the device is running in Layer 2 (TAP)
-                               // Otherwise the device is in Layer 3 (TUN)
+    tuntap_t *tuntap;          // The TUN/TAP device
+    char *tuntap_devname;       // The requested TUN/TAP device name
 
     int server_fd;        // TCP server socket
     uint16_t server_port; // TCP server port

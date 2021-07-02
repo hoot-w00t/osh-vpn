@@ -99,22 +99,20 @@ static bool oshd_param_mode(ecp_t *ecp)
         snprintf(oshd_conf_error, sizeof(oshd_conf_error), "Unknown mode");
         return false;
     }
-    oshd.tuntap_used = oshd.device_mode != MODE_NODEVICE;
-    oshd.is_tap = oshd.device_mode == MODE_TAP;
 
     logger_debug(DBG_CONF, "Set device mode to %s (%s, %s)",
         device_mode_name(oshd.device_mode),
-        oshd.tuntap_used ? "used" : "unused",
-        oshd.is_tap ? "TAP" : "TUN");
+        (oshd.device_mode != MODE_NODEVICE)  ? "used" : "unused",
+        device_mode_is_tap(oshd.device_mode) ? "TAP"  : "TUN");
     return true;
 }
 
 // Device
 static bool oshd_param_device(ecp_t *ecp)
 {
-    memset(oshd.tuntap_dev, 0, sizeof(oshd.tuntap_dev));
-    strncpy(oshd.tuntap_dev, ecp_value(ecp), sizeof(oshd.tuntap_dev) - 1);
-    logger_debug(DBG_CONF, "Set device name to %s", ecp_value(ecp));
+    free(oshd.tuntap_devname);
+    oshd.tuntap_devname = xstrdup(ecp_value(ecp));
+    logger_debug(DBG_CONF, "Set device name to %s", oshd.tuntap_devname);
     return true;
 }
 
@@ -299,9 +297,6 @@ void oshd_init_conf(void)
 
     // Everything that should not be zero by default is set
     oshd.keys_dir = xstrdup("./");
-
-    oshd.tuntap_used = true;
-    oshd.tuntap_fd = -1;
 
     oshd.server_fd = -1;
     oshd.server_port = OSHD_DEFAULT_PORT;

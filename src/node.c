@@ -1164,7 +1164,7 @@ bool node_queue_route_exg(node_t *node)
     // If we our device is in TAP mode we should also exchange IPv4/6 routes for
     // the resolver
     // This will append all the resolver routes to the packet
-    if (oshd.tuntap_used && oshd.is_tap) {
+    if (oshd.tuntap && oshd.tuntap->is_tap) {
         for (size_t j = 0; j < oshd.node_tree_count; ++j) {
             for (size_t k = 0; k < oshd.node_tree[j]->resolver_routes_count; ++k, ++i) {
                 buf_size += sizeof(oshpacket_route_t);
