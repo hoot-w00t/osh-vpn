@@ -475,7 +475,15 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
 
     memset(&ifr, 0, sizeof(ifr));
     ifr.ifr_flags = tap ? IFF_TAP : IFF_TUN;
-    if (devname) strncpy(ifr.ifr_name, devname, IFNAMSIZ);
+    if (devname) {
+        size_t devname_len = strlen(devname);
+
+        if (devname_len < IFNAMSIZ) {
+            memcpy(ifr.ifr_name, devname, devname_len);
+        } else {
+            memcpy(ifr.ifr_name, devname, IFNAMSIZ);
+        }
+    }
 
     if (ioctl(fd, TUNSETIFF, (void *) &ifr) < 0) {
         logger(LOG_CRIT, "ioctl(%i, TUNSETIFF): %s: %s", fd, devname, strerror(errno));
