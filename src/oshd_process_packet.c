@@ -365,6 +365,12 @@ static bool oshd_process_edge(node_t *node, oshpacket_hdr_t *pkt,
         src = node_id_add(src_name);
         dest = node_id_add(dest_name);
 
+        if (src->local_node || dest->local_node) {
+            logger_debug(DBG_NODETREE, "%s: %s: %s edge: %s <=> %s (skipped, local)",
+                node->addrw, node->id->name, action_name, src_name, dest_name);
+            continue;
+        }
+
         logger_debug(DBG_NODETREE, "%s: %s: %s edge: %s <=> %s", node->addrw,
             node->id->name, action_name, src_name, dest_name);
         action(src, dest);

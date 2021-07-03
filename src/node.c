@@ -1040,9 +1040,21 @@ bool node_queue_edge_broadcast(node_t *exclude, oshpacket_type_t type,
 
 // Dynamically append edges to *buf
 static void edge_exg_append(oshpacket_edge_t **buf, size_t *buf_count,
-    const char *src_node, const char *dest_node, const char *edge_type)
+    const char *src_node, const char *dest_node, const char *edge_type,
+    node_id_t *remote_node)
 {
     const size_t alloc_count = 16;
+
+    // Trim edges of the remote node with which we are exchanging states, it
+    // will already know its edges
+    if (   !strcmp(src_node, remote_node->name)
+        || !strcmp(dest_node, remote_node->name))
+    {
+        // This edge is owned by the remote node, it already knows about it
+        logger_debug(DBG_NODETREE, "    %s: %s <=> %s (skipped, remote)",
+            edge_type, src_node, dest_node, remote_node->name);
+        return;
+    }
 
     // Trim repeating edges
     // Including src -> dest and dest -> src
@@ -1090,12 +1102,13 @@ bool node_queue_edge_exg(node_t *node)
     for (size_t i = 1; i < oshd.node_tree_count; ++i) {
         // Direct edge
         if (oshd.node_tree[i]->node_socket)
-            edge_exg_append(&buf, &buf_count, oshd.name, oshd.node_tree[i]->name, "Direct");
+            edge_exg_append(&buf, &buf_count, oshd.name, oshd.node_tree[i]->name,
+                "Direct", node->id);
 
         // Indirect edges
         for (ssize_t j = 0; j < oshd.node_tree[i]->edges_count; ++j) {
             edge_exg_append(&buf, &buf_count, oshd.node_tree[i]->name,
-                oshd.node_tree[i]->edges[j]->name, "Indirect");
+                oshd.node_tree[i]->edges[j]->name, "Indirect", node->id);
         }
     }
 
