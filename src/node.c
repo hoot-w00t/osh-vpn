@@ -1051,8 +1051,8 @@ static void edge_exg_append(oshpacket_edge_t **buf, size_t *buf_count,
         || !strcmp(dest_node, remote_node->name))
     {
         // This edge is owned by the remote node, it already knows about it
-        logger_debug(DBG_NODETREE, "    %s: %s <=> %s (skipped, remote)",
-            edge_type, src_node, dest_node, remote_node->name);
+        logger_debug(DBG_NODETREE, "    Skipped: %s: %s <=> %s (remote)",
+            edge_type, src_node, dest_node);
         return;
     }
 
@@ -1065,14 +1065,15 @@ static void edge_exg_append(oshpacket_edge_t **buf, size_t *buf_count,
             && !strcmp((*buf)[i].dest_node, src_node))
         {
             // This edge is already in the list in the other direction
-            logger_debug(DBG_NODETREE, "    %s: %s <=> %s (skipped, repeating)",
+            logger_debug(DBG_NODETREE, "    Skipped: %s: %s <=> %s (repeating)",
                 edge_type, src_node, dest_node);
             return;
         }
     }
 
     // Add this edge to the buffer
-    logger_debug(DBG_NODETREE, "    %s: %s <=> %s", edge_type, src_node, dest_node);
+    logger_debug(DBG_NODETREE, "    Adding : %s: %s <=> %s",
+        edge_type, src_node, dest_node);
 
     // Reallocate more alloc_count items in the buffer when we need more memory
     if ((*buf_count) % alloc_count == 0)
