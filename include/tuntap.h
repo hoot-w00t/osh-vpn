@@ -3,6 +3,10 @@
 
 #include <stdbool.h>
 
+#if defined(_WIN32) || defined(__CYGWIN__)
+#include <pthread.h>
+#endif
+
 struct tuntap {
     // true if the device is running in layer 2
     bool is_tap;
@@ -15,8 +19,17 @@ struct tuntap {
     char *dev_id;
     size_t dev_id_size;
 
+#if defined(_WIN32) || defined(__CYGWIN__)
+    void *device_handle;     // Windows file handle for the TUN/TAP device
+    int pollfd_read;         // File descriptor of a pipe for reading from the device
+    int pollfd_write;        // File descriptor of the same pipe for writing on it
+    pthread_t pollfd_thread; // Thread to pipe the adapter's data to pollfd_read
+    void *read_ol;           // TUN/TAP overlapped structure for reading
+    void *write_ol;          // TUN/TAP overlapped structure for writing
+#else
     // Device's file descriptor
     int fd;
+#endif
 };
 
 typedef struct tuntap tuntap_t;
