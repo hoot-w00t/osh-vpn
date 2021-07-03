@@ -4,6 +4,7 @@
 #include "logger.h"
 #include "xalloc.h"
 #include "random.h"
+#include "crypto/sha3.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,6 +28,54 @@ node_id_t *node_id_find_local(void)
     return oshd.node_tree[0];
 }
 
+// Update the node_id's edges_hash
+static void node_id_update_edges_hash(node_id_t *nid)
+{
+    // Format: node_id_name edge_name edge2_name edge3_name
+    const char separator[] = " ";
+    const size_t buf_size = ((nid->edges_count + 1) * (NODE_NAME_SIZE + 1)) + 1;
+    char *buf = xzalloc(buf_size);
+    node_id_t **ordered_edges = xmemdup(nid->edges, nid->edges_count * sizeof(node_id_t *));
+
+    // Order the edges by name using the bubble-sort
+    bool sorted = false;
+    while (!sorted) {
+        sorted = true;
+        for (ssize_t i = 1; i < nid->edges_count; ++i) {
+            if (strcmp(ordered_edges[i - 1]->name, ordered_edges[i]->name) > 0) {
+                node_id_t *tmp = ordered_edges[i - 1];
+
+                ordered_edges[i - 1] = ordered_edges[i];
+                ordered_edges[i] = tmp;
+                sorted = false;
+            }
+        }
+    }
+
+    // Create a checksum of the ordered edges
+    strcat(buf, nid->name);
+    strcat(buf, separator);
+    for (ssize_t i = 0; i < nid->edges_count; ++i) {
+        strcat(buf, ordered_edges[i]->name);
+        if ((i + 1) < nid->edges_count)
+            strcat(buf, separator);
+    }
+    free(ordered_edges);
+
+    // Compute the SHA3-512 hash of this checksum
+    if (!sha3_512_hash((uint8_t *) buf, strlen(buf),
+            nid->edges_hash, &nid->edges_hash_size))
+    {
+        logger(LOG_CRIT, "Edges hash could not be computed for %s", nid->name);
+        memset(nid->edges_hash, 0, sizeof(nid->edges_hash));
+        nid->edges_hash_size = 0;
+    }
+    free(buf);
+
+    hash_hexdump(nid->edges_hash, nid->edges_hash_size, nid->edges_hash_hex, false);
+    logger_debug(DBG_NODETREE, "Edges hash of %s is %s", nid->name, nid->edges_hash_hex);
+}
+
 // Add node_id_t with *name to the node tree (doesn't do anything if it already
 // exists)
 node_id_t *node_id_add(const char *name)
@@ -42,6 +91,8 @@ node_id_t *node_id_add(const char *name)
         oshd.node_tree_count += 1;
 
         strncpy(id->name, name, NODE_NAME_SIZE);
+
+        node_id_update_edges_hash(id);
     }
     return id;
 }
@@ -422,6 +473,10 @@ static void node_tree_update_next_hops(void)
 void node_tree_update(void)
 {
     logger_debug(DBG_NODETREE, "Node tree updated");
+
+    // Re-compute the edges hash of every node (including our local node)
+    for (size_t i = 0; i < oshd.node_tree_count; ++i)
+        node_id_update_edges_hash(oshd.node_tree[i]);
 
     // After the node tree gets updated we need to re-calculate the next hops
     // of all nodes

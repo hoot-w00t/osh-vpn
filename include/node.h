@@ -71,6 +71,15 @@ struct node_id {
     node_id_t **edges;
     ssize_t edges_count;
 
+    // A hash of the node's edges, ordered the same as on other nodes
+    // If the local node's edges_hash differs with another node's edges_hash of
+    // the local node, it means that the remote node went out of sync
+    // The remote node must then clear thoses edges and the local node will send
+    // its valid edges to re-sync
+    uint8_t edges_hash[EVP_MAX_MD_SIZE];
+    char edges_hash_hex[(EVP_MAX_MD_SIZE * 2) + 1];
+    unsigned int edges_hash_size;
+
     // The node's routes, these are the VPN addresses
     netaddr_t *resolver_routes;
     size_t resolver_routes_count;
