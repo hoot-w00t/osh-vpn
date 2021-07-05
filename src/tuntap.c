@@ -347,12 +347,13 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
         return NULL;
     }
 
-    logger(LOG_INFO, "Opened %s device: %s (%s) (handle: %p, pollfd: %i)",
+    logger(LOG_INFO, "Opened %s device: %s (%s) (handle: %p, pollfd: %i <- %i)",
         tuntap->is_tap ? "TAP" : "TUN",
         tuntap->dev_name,
         tuntap->dev_id,
         tuntap->device_handle,
-        tuntap->pollfd_read);
+        tuntap->pollfd_read,
+        tuntap->pollfd_write);
     return tuntap;
 
 err:
