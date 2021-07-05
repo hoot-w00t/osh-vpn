@@ -101,15 +101,15 @@ static bool tuntap_device_enable(tuntap_t *tuntap)
 }
 
 // Read from the device handle and write the data to the pollfd pipe
-#define pollfd_buf_offset (sizeof(DWORD))
+#define pollfd_hdr_size (sizeof(DWORD))
 static void *tuntap_pollfd_thread(void *data)
 {
     tuntap_t *tuntap = (tuntap_t *) data;
     OVERLAPPED *ol = (OVERLAPPED *) tuntap->read_ol;
 
-    uint8_t _buf[2048 + pollfd_buf_offset];
-    uint8_t *buf = _buf + pollfd_buf_offset;
-    DWORD buf_size = sizeof(_buf) - pollfd_buf_offset;
+    uint8_t _buf[pollfd_hdr_size + 2048];
+    uint8_t *buf = _buf + pollfd_hdr_size;
+    DWORD buf_size = sizeof(_buf) - pollfd_hdr_size;
     DWORD read_bytes;
     DWORD err;
 
@@ -141,7 +141,7 @@ static void *tuntap_pollfd_thread(void *data)
         *((DWORD *) _buf) = read_bytes;
 
         // Write the packet size followed by the packet data to the pollfd pipe
-        size_t total_size = read_bytes + sizeof(DWORD);
+        size_t total_size = read_bytes + pollfd_hdr_size;
         ssize_t wb = write(tuntap->pollfd_write, _buf, total_size);
 
         if (wb < 0 || (size_t) wb != total_size) {
@@ -396,7 +396,7 @@ bool tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
     ssize_t n;
 
     // Read the size of the next packet on the pipe
-    n = read(tuntap->pollfd_read, &size, sizeof(DWORD));
+    n = read(tuntap->pollfd_read, &size, pollfd_hdr_size);
     if (n < 0) {
         // If the read would block, no more data is ready to be read on the pipe
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -409,9 +409,9 @@ bool tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
     }
 
     // The packet size must be fully read
-    if (n != sizeof(DWORD)) {
-        logger(LOG_CRIT, "tuntap_read: Incomplete packet size (%zi/%zu bytes)",
-            n, sizeof(DWORD));
+    if (n != pollfd_hdr_size) {
+        logger(LOG_CRIT, "tuntap_read: Incomplete packet header (%zi/%zu bytes)",
+            n, pollfd_hdr_size);
         errno = EIO;
         return false;
     }
