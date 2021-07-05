@@ -52,7 +52,36 @@ static void tuntap_free_common(tuntap_t *tuntap)
 #include <winerror.h>
 #include <stdio.h>
 
-// TODO: Log the error messages along with the error codes
+static const char *win_strerror(DWORD errcode)
+{
+    static char errstr[256];
+
+    if (!FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, errcode, 0,
+        errstr, sizeof(errstr), NULL))
+    {
+        snprintf(errstr, sizeof(errstr), "Error code %u (FormatMessage failed with %u)",
+            errcode, GetLastError());
+    } else {
+        // Remove the newline at the end of the error string
+        // TODO: There could be a better way of doing this, this is very ugly
+        size_t errstr_len = strlen(errstr);
+
+        if (   errstr_len > 0
+            && (errstr[errstr_len - 1] == '\n' || errstr[errstr_len - 1] == '\r'))
+        {
+            errstr[errstr_len - 1] = '\0';
+            errstr_len -= 1;
+            if (   errstr_len > 0
+                && (errstr[errstr_len - 1] == '\n' || errstr[errstr_len - 1] == '\r'))
+            {
+                errstr[errstr_len - 1] = '\0';
+                errstr_len -= 1;
+            }
+        }
+    }
+    return errstr;
+}
+#define win_strerror_last() win_strerror(GetLastError())
 
 // Enable the TUN/TAP device
 // The adapter is not enabled by default and cannot be used before enabling it
@@ -64,8 +93,8 @@ static bool tuntap_device_enable(tuntap_t *tuntap)
     if (!DeviceIoControl(tuntap->device_handle, TAP_WIN_IOCTL_SET_MEDIA_STATUS,
             &status, sizeof(status), &status, sizeof(status), &len, NULL))
     {
-        logger(LOG_CRIT, "Failed to enable TUN/TAP device %s: %u", tuntap->dev_name,
-            GetLastError());
+        logger(LOG_CRIT, "Failed to enable TUN/TAP device %s: %s", tuntap->dev_name,
+            win_strerror_last());
         return false;
     }
     return true;
@@ -105,8 +134,8 @@ static void *tuntap_pollfd_thread(void *data)
                 logger_debug(DBG_TUNTAP, "Async read of %u bytes", read_bytes);
             } else {
                 // There was an error
-                logger(LOG_CRIT, "%s: Failed to read from device handle: %u",
-                    tuntap->dev_name, err);
+                logger(LOG_CRIT, "%s: Failed to read from device handle: %s",
+                    tuntap->dev_name, win_strerror(err));
                 break;
             }
         }
@@ -170,8 +199,8 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
     hkey_status = RegOpenKeyExA(HKEY_LOCAL_MACHINE, NETWORK_CONNECTIONS_KEY, 0,
         KEY_READ, &netconn_key);
     if (hkey_status != ERROR_SUCCESS) {
-        logger(LOG_CRIT, "Failed to open %s: %zi", NETWORK_CONNECTIONS_KEY,
-            hkey_status);
+        logger(LOG_CRIT, "Failed to open %s: %s", NETWORK_CONNECTIONS_KEY,
+            win_strerror(hkey_status));
         goto err;
     }
 
@@ -189,8 +218,8 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
             if (hkey_status == ERROR_NO_MORE_ITEMS)
                 break;
 
-            logger(LOG_CRIT, "Failed to enumerate %s: index %u: %zi",
-                NETWORK_CONNECTIONS_KEY, i, hkey_status);
+            logger(LOG_CRIT, "Failed to enumerate %s: index %u: %s",
+                NETWORK_CONNECTIONS_KEY, i, win_strerror(hkey_status));
             goto err;
         }
 
@@ -204,8 +233,8 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
         hkey_status = RegOpenKeyExA(HKEY_LOCAL_MACHINE, adapter_path, 0,
             KEY_READ, &adapter_subkey);
         if (hkey_status != ERROR_SUCCESS) {
-            logger(LOG_WARN, "Failed to open %s: index %u: %zi", adapter_path,
-                i, hkey_status);
+            logger(LOG_WARN, "Failed to open %s: index %u: %s", adapter_path,
+                i, win_strerror(hkey_status));
             continue;
         }
 
@@ -215,8 +244,8 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
             (BYTE *) adapter_name, &adapter_name_len);
         RegCloseKey(adapter_subkey);
         if (hkey_status != ERROR_SUCCESS) {
-            logger(LOG_CRIT, "Failed to query %s: index %u: %zi", adapter_path,
-                i, hkey_status);
+            logger(LOG_CRIT, "Failed to query %s: index %u: %s", adapter_path,
+                i, win_strerror(hkey_status));
             goto err;
         }
 
@@ -235,8 +264,8 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
                 OPEN_EXISTING, FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED, 0);
 
             if (adapter_handle == INVALID_HANDLE_VALUE) {
-                logger(LOG_CRIT, "Failed to open %s: %u", adapter_subpath,
-                    GetLastError());
+                logger(LOG_CRIT, "Failed to open %s: %s", adapter_subpath,
+                    win_strerror_last());
             }
             break;
         }
@@ -270,7 +299,7 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
     tuntap->read_ol = xzalloc(sizeof(OVERLAPPED));
     ((OVERLAPPED *) tuntap->read_ol)->hEvent = CreateEventA(NULL, TRUE, FALSE, NULL);
     if (((OVERLAPPED *) tuntap->read_ol)->hEvent == NULL) {
-        logger(LOG_CRIT, "Failed to create read event handle: %u", GetLastError());
+        logger(LOG_CRIT, "Failed to create read event handle: %s", win_strerror_last());
         tuntap_close(tuntap);
         return NULL;
     }
@@ -278,7 +307,7 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
     tuntap->write_ol = xzalloc(sizeof(OVERLAPPED));
     ((OVERLAPPED *) tuntap->write_ol)->hEvent = CreateEventA(NULL, TRUE, FALSE, NULL);
     if (((OVERLAPPED *) tuntap->write_ol)->hEvent == NULL) {
-        logger(LOG_CRIT, "Failed to create write event handle: %u", GetLastError());
+        logger(LOG_CRIT, "Failed to create write event handle: %s", win_strerror_last());
         tuntap_close(tuntap);
         return NULL;
     }
@@ -442,8 +471,8 @@ bool tuntap_write(tuntap_t *tuntap, void *packet, size_t packet_size)
             return true;
         } else {
             // The packet could not be written
-            logger(LOG_CRIT, "%s: Failed to write %u bytes to device handle: %u",
-                tuntap->dev_name, (DWORD) packet_size, err);
+            logger(LOG_CRIT, "%s: Failed to write %u bytes to device handle: %s",
+                tuntap->dev_name, (DWORD) packet_size, win_strerror(err));
             return false;
         }
     }
