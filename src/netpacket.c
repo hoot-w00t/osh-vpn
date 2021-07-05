@@ -1,5 +1,12 @@
 #include "netpacket.h"
+
+#if defined(_WIN32) || defined (__CYGWIN__)
+#define ETH_P_IP 0x0800
+#define ETH_P_IPV6 0x86DD
+#else
 #include <netinet/ether.h>
+#endif
+
 #include <string.h>
 
 static const uint8_t ETH_DEST_OFFSET = 4;

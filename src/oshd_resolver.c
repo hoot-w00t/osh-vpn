@@ -9,7 +9,7 @@
 #include <errno.h>
 
 // If no TLD was configured the TUN/TAP device's name will be used
-#define get_tld() (oshd.resolver_tld ? oshd.resolver_tld : oshd.tuntap_dev)
+#define get_tld() (oshd.resolver_tld ? oshd.resolver_tld : oshd.tuntap->dev_name)
 
 #ifndef RESOLVER_GETLINE_SIZE
 #define RESOLVER_GETLINE_SIZE (256)
@@ -72,12 +72,25 @@ bool oshd_resolver_check(void)
                 oshd_resolver_name(oshd.resolver));
         return false;
     }
-    if (!oshd.resolver_tld && oshd.device_mode == MODE_NODEVICE) {
-        logger(LOG_ERR, "%s resolver requires a ResolverTLD when no TUN/TAP device is used",
-                oshd_resolver_name(oshd.resolver));
-        return false;
+
+    switch (oshd.resolver) {
+        case RESOLVER_HOSTSDUMP:
+            if (!oshd.resolver_tld && oshd.device_mode == MODE_NODEVICE) {
+                logger(LOG_ERR, "HostsDump resolver requires a ResolverTLD when no TUN/TAP device is used");
+                return false;
+            }
+            return true;
+
+        case RESOLVER_HOSTSDYNAMIC:
+            if (oshd.device_mode == MODE_NODEVICE) {
+                logger(LOG_ERR, "HostsDynamic resolver requires a TUN/TAP device");
+                return false;
+            }
+            return true;
+
+        default:
+            return true;
     }
-    return true;
 }
 
 // Append one network route formatted to a hosts file
@@ -126,7 +139,7 @@ static bool oshd_resolver_hostsdump_update(const char *tld)
 // Write the HostsDynamic suffix to buf which is of buf_size bytes
 static inline void hostsdynamic_suffix(char *buf, size_t buf_size)
 {
-    snprintf(buf, buf_size, "# osh-%s", oshd.tuntap_dev);
+    snprintf(buf, buf_size, "# osh-%s", oshd.tuntap->dev_name);
 }
 
 // Append one network route formatted to a hosts file
@@ -135,7 +148,7 @@ static bool oshd_resolver_hostsdynamic_append(const netaddr_t *addr,
 {
     char addrp[INET6_ADDRSTRLEN];
     FILE *file;
-    char suffix[sizeof(oshd.tuntap_dev) + 8];
+    char suffix[oshd.tuntap->dev_name_size + 8];
 
     logger_debug(DBG_RESOLVER, "HostsDynamic: Appending to %s", oshd.resolver_file);
     if (!(file = fopen(oshd.resolver_file, "a"))) {
@@ -159,6 +172,9 @@ static bool oshd_resolver_hostsdynamic_update(const char *tld)
     char *line = NULL;
     FILE *file;
     bool success = false;
+    char addr[INET6_ADDRSTRLEN];
+    char suffix[oshd.tuntap->dev_name_size + 8];
+    size_t suffix_len;
 
     logger_debug(DBG_RESOLVER, "HostsDynamic: Loading %s", oshd.resolver_file);
     if (!(file = fopen(oshd.resolver_file, "r+"))) {
@@ -183,10 +199,6 @@ static bool oshd_resolver_hostsdynamic_update(const char *tld)
         logger(LOG_ERR, "Failed to open %s: %s", oshd.resolver_file, strerror(errno));
         goto end;
     }
-
-    char addr[INET6_ADDRSTRLEN];
-    char suffix[sizeof(oshd.tuntap_dev) + 8];
-    size_t suffix_len;
 
     hostsdynamic_suffix(suffix, sizeof(suffix));
     suffix_len = strlen(suffix);

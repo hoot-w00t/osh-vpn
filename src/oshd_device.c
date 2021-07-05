@@ -1,5 +1,6 @@
 #include "oshd.h"
 #include "oshd_route.h"
+#include "oshd_device_mode.h"
 #include "node.h"
 #include "netpacket.h"
 #include "logger.h"
@@ -7,26 +8,48 @@
 #include <errno.h>
 #include <unistd.h>
 
+// Return the name of the device mode
+const char *device_mode_name(device_mode_t devmode)
+{
+    switch (devmode) {
+        case MODE_NODEVICE: return "NoDevice";
+        case MODE_TAP     : return "TAP";
+        case MODE_TUN     : return "TUN";
+             default      : return "Unknown mode";
+    }
+}
+
+// Returns true if the device mode is a TAP device
+bool device_mode_is_tap(device_mode_t devmode)
+{
+    switch (devmode) {
+        case MODE_TAP:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
 // Read network packets from the TUN/TAP device and send them to its destinations
 void oshd_read_tuntap_pkt(void)
 {
-    ssize_t pkt_size;
+    size_t pkt_size;
     uint8_t pkt[OSHPACKET_PAYLOAD_MAXSIZE];
     netpacket_t pkt_hdr;
     oshd_route_t *route;
 
 read_again:
-    if ((pkt_size = read(oshd.tuntap_fd, pkt, sizeof(pkt))) <= 0) {
-        // When we can't read any more data, exit the function
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return;
-
-        logger(LOG_CRIT, "%s: read(): %s", oshd.tuntap_dev, strerror(errno));
+    if (!tuntap_read(oshd.tuntap, pkt, sizeof(pkt), &pkt_size)) {
         oshd_stop();
         return;
     }
-    if (!netpacket_from_data(&pkt_hdr, pkt, oshd.is_tap)) {
-        logger(LOG_ERR, "%s: Failed to parse network packet", oshd.tuntap_dev);
+
+    if (pkt_size == 0) return;
+
+    if (!netpacket_from_data(&pkt_hdr, pkt, oshd.tuntap->is_tap)) {
+        logger(LOG_CRIT, "%s: Failed to parse network packet",
+            oshd.tuntap->dev_name);
         return;
     }
 
@@ -53,36 +76,15 @@ read_again:
 
         if (route) {
             logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zi bytes, to %s)",
-                oshd.tuntap_dev, oshd.name, pkt_src, pkt_dest, pkt_size,
+                oshd.tuntap->dev_name, oshd.name, pkt_src, pkt_dest, pkt_size,
                 route->dest_node->name);
         } else {
             logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zi bytes, broadcast)",
-                oshd.tuntap_dev, oshd.name, pkt_src, pkt_dest, pkt_size);
+                oshd.tuntap->dev_name, oshd.name, pkt_src, pkt_dest, pkt_size);
         }
     }
 
     // This is the same as having a while(1) loop on the whole function, in the
     // current case I find using goto cleaner than while
     goto read_again;
-}
-
-// Write network packet to the TUN/TAP device
-// Returns true on success, false on error
-bool oshd_write_tuntap_pkt(uint8_t *data, uint16_t data_len)
-{
-    ssize_t written;
-
-    if ((written = write(oshd.tuntap_fd, data, data_len)) != data_len) {
-        if (written < 0) {
-            // TODO: Only notify the user of the error if it is a non-fatal error
-            logger(LOG_ERR, "%s: write(): %s", oshd.tuntap_dev, strerror(errno));
-        } else {
-            logger(LOG_ERR, "%s: write(): %zi/%u bytes written", oshd.tuntap_dev, written, data_len);
-        }
-
-        // TODO: Only exit the program if we can no longer read/write to the TUN/TAP device
-        oshd_stop();
-        return false;
-    }
-    return true;
 }

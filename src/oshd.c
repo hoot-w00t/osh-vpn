@@ -43,7 +43,9 @@ static void oshd_discover_device_routes(void)
 
     for (struct ifaddrs *ifa = ifaces; ifa; ifa = ifa->ifa_next) {
         if (   ifa->ifa_name
-            && !strcmp(ifa->ifa_name, oshd.tuntap_dev)
+            && oshd.tuntap
+            && (   (oshd.tuntap->dev_name && !strcmp(ifa->ifa_name, oshd.tuntap->dev_name))
+                || (oshd.tuntap->dev_id && !strcmp(ifa->ifa_name, oshd.tuntap->dev_id)))
             && ifa->ifa_addr
             && (   ifa->ifa_addr->sa_family == AF_INET
                 || ifa->ifa_addr->sa_family == AF_INET6))
@@ -66,22 +68,11 @@ static void oshd_discover_device_routes(void)
 
             oshd_route_add_local(&addr);
             logger(LOG_INFO, "Discovered local route %s (%s)", addrw,
-                oshd.tuntap_dev);
+                oshd.tuntap->dev_name);
         }
     }
 
     freeifaddrs(ifaces);
-}
-
-// Return the name of the device mode
-const char *device_mode_name(device_mode_t devmode)
-{
-    switch (devmode) {
-        case MODE_NODEVICE: return "NoDevice";
-        case MODE_TAP     : return "TAP";
-        case MODE_TUN     : return "TUN";
-             default      : return "Unknown mode";
-    }
 }
 
 // Load a private or a public key from the keys directory
@@ -226,11 +217,14 @@ bool oshd_init(void)
 {
     int offset = 0;
 
-    if (oshd.tuntap_used) {
-        if ((oshd.tuntap_fd = tuntap_open(oshd.tuntap_dev, oshd.is_tap)) < 0)
+    if (oshd.device_mode != MODE_NODEVICE) {
+        oshd.tuntap = tuntap_open(oshd.tuntap_devname,
+            device_mode_is_tap(oshd.device_mode));
+
+        if (!oshd.tuntap)
             return false;
-        set_nonblocking(oshd.tuntap_fd);
-        setenv("OSHD_DEVICE", oshd.tuntap_dev, 1);
+
+        setenv("OSHD_DEVICE", oshd.tuntap->dev_name, 1);
         if (!oshd_cmd_execute("DevUp"))
             return false;
         pfd_off += 1;
@@ -243,8 +237,8 @@ bool oshd_init(void)
     }
 
     pfd_resize();
-    if (oshd.tuntap_used) {
-        pfd[offset].fd = oshd.tuntap_fd;
+    if (oshd.tuntap) {
+        pfd[offset].fd = tuntap_pollfd(oshd.tuntap);
         pfd[offset].events = POLLIN;
         offset += 1;
     }
@@ -278,9 +272,10 @@ bool oshd_init(void)
 void oshd_free(void)
 {
     oshd.run = false;
-    if (oshd.tuntap_fd > 0) {
+    free(oshd.tuntap_devname);
+    if (oshd.tuntap) {
         oshd_cmd_execute("DevDown");
-        close(oshd.tuntap_fd);
+        tuntap_close(oshd.tuntap);
     }
     if (oshd.server_fd > 0) {
         close(oshd.server_fd);
@@ -330,7 +325,7 @@ void oshd_loop(void)
     oshd_resolver_update();
 
     // Discover the TUN/TAP device's addresses
-    if (oshd.tuntap_used)
+    if (oshd.tuntap)
         oshd_discover_device_routes();
 
     // Queue the connections to our remotes
@@ -378,7 +373,7 @@ void oshd_loop(void)
 
             --events;
 
-            if (pfd[i].fd == oshd.tuntap_fd) {
+            if (pfd[i].fd == tuntap_pollfd(oshd.tuntap)) {
                 if ((pfd[i].revents & POLLIN) && oshd.run) {
                     // Data is available on the TUN/TAP device
                     oshd_read_tuntap_pkt();

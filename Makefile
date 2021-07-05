@@ -1,3 +1,4 @@
+UNAME		=	$(shell uname)
 CC		=	cc
 PKG_CONFIG	=	pkg-config
 
@@ -19,8 +20,13 @@ VERSION_GIT_H	=	include/version_git.h
 VERSION_GIT	=	$(strip $(shell cat $(VERSION_GIT_H) 2>/dev/null))
 HEAD_COMMIT	=	$(strip $(shell git describe --always --tags --abbrev=10))
 
+ifeq ($(UNAME), Linux)
 BIN		=	oshd
 TEST_BIN	=	oshd_tests
+else
+BIN		=	oshd.exe
+TEST_BIN	=	oshd_tests.exe
+endif
 
 INSTALL_PREFIX	=	/usr/local
 INSTALL_PRE_BIN	=	$(INSTALL_PREFIX)/bin
