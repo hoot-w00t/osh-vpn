@@ -14,7 +14,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -yq build-essential git libssl-dev
 
-      - uses: actions/checkout@v2
+      - name: Clone main repository
+        uses: actions/checkout@v2
         with:
           submodules: true
       - name: Build project
@@ -31,10 +32,30 @@ jobs:
         uses: egor-tensin/setup-cygwin@v3
         with:
           platform: x64
-          packages: make gcc-core pkgconf libssl-devel
+          packages: make gcc-core pkgconf libssl-devel python3
 
-      - uses: actions/checkout@v2
+      - name: Clone main repository
+        uses: actions/checkout@v2
         with:
           submodules: true
       - name: Build project
         run: make -C "$GITHUB_WORKSPACE" OTHER_CFLAGS="-Werror"
+
+      - name: Clone mpreisler/mingw-bundledlls repository
+        uses: actions/checkout@v2
+        with:
+          repository: mpreisler/mingw-bundledlls
+          path: mingw-bundledlls
+
+      - name: Copy the required DLLs
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          ./mingw-bundledlls/mingw-bundledlls --copy oshd.exe
+
+      - name: Upload binaries and DLLs artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: osh-vpn-cygwin
+          path: |
+            ${{ github.workspace }}/*.exe
+            ${{ github.workspace }}/*.dll
