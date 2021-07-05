@@ -101,17 +101,14 @@ static bool tuntap_device_enable(tuntap_t *tuntap)
 }
 
 // Read from the device handle and write the data to the pollfd pipe
-#define pollfd_buf_offset (sizeof(DWORD) + 4)
+#define pollfd_buf_offset (sizeof(DWORD))
 static void *tuntap_pollfd_thread(void *data)
 {
     tuntap_t *tuntap = (tuntap_t *) data;
     OVERLAPPED *ol = (OVERLAPPED *) tuntap->read_ol;
 
-    // The tap-windows6 driver doesn't include the 4-byte TUN header like
-    // Linux, so we have to create it
     uint8_t _buf[2048 + pollfd_buf_offset];
     uint8_t *buf = _buf + pollfd_buf_offset;
-    memset(_buf, 0, pollfd_buf_offset);
     DWORD buf_size = sizeof(_buf) - pollfd_buf_offset;
     DWORD read_bytes;
     DWORD err;
@@ -139,9 +136,6 @@ static void *tuntap_pollfd_thread(void *data)
                 break;
             }
         }
-
-        // Add the 4 byte TUN header
-        read_bytes += 4;
 
         // Write the packet's size
         *((DWORD *) _buf) = read_bytes;
@@ -451,10 +445,6 @@ bool tuntap_write(tuntap_t *tuntap, void *packet, size_t packet_size)
     OVERLAPPED *ol = (OVERLAPPED *) tuntap->write_ol;
     DWORD written_bytes;
 
-    // The tap-windows6 does not use the TUN header, skip it
-    packet = ((uint8_t *) packet) + 4;
-    packet_size -= 4;
-
     // Reset the overlapped event handle
     ResetEvent(ol->hEvent);
     if (WriteFile(tuntap->device_handle, packet, (DWORD) packet_size, &written_bytes, ol)) {
@@ -504,7 +494,8 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
     }
 
     memset(&ifr, 0, sizeof(ifr));
-    ifr.ifr_flags = tap ? IFF_TAP : IFF_TUN;
+    ifr.ifr_flags = tap ? (IFF_TAP | IFF_NO_PI)
+                        : (IFF_TUN | IFF_NO_PI);
     if (devname) {
         size_t devname_len = strlen(devname);
 
