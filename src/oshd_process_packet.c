@@ -760,17 +760,12 @@ bool oshd_process_packet(node_t *node, uint8_t *packet)
             return true;
         }
 
-        if (dest) {
-            if (dest->next_hop) {
-                logger_debug(DBG_ROUTING, "Forwarding %s packet from %s to %s through %s",
-                    oshpacket_type_name(hdr->type), src->name, dest->name, dest->next_hop->id->name);
-                node_queue_packet_forward(dest->next_hop, hdr);
-            } else {
-                logger(LOG_INFO, "Dropping %s packet from %s to %s: No route",
-                    oshpacket_type_name(hdr->type), src->name, dest->name);
-            }
+        if (dest->next_hop) {
+            logger_debug(DBG_ROUTING, "Forwarding %s packet from %s to %s through %s",
+                oshpacket_type_name(hdr->type), src->name, dest->name, dest->next_hop->id->name);
+            node_queue_packet_forward(dest->next_hop, hdr);
         } else {
-            logger(LOG_WARN, "Dropping %s packet from %s to %s: Unknown destination",
+            logger(LOG_INFO, "Dropping %s packet from %s to %s: No route",
                 oshpacket_type_name(hdr->type), src->name, dest->name);
         }
         return true;
