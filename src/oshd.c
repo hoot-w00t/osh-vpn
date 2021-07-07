@@ -85,7 +85,22 @@ static void oshd_discover_device_addrs(void)
             continue;
         }
 
-        // TODO: Add a parameter to limit which interfaces can be discovered
+        // TODO: Add a parameter allow which interfaces can be discovered
+        //       instead of excluding those that shouldn't be
+
+        // Check if this device is excluded
+        bool excluded = false;
+
+        for (size_t i = 0; i < oshd.excluded_devices_count; ++i) {
+            if (!strcmp(ifa->ifa_name, oshd.excluded_devices[i])) {
+                excluded = true;
+                break;
+            }
+        }
+        if (excluded) {
+            logger_debug(DBG_OSHD, "Excluded device: %s (%s)", addrw, ifa->ifa_name);
+            continue;
+        }
 
         // Otherwise if this address is a loopback address, ignore it
         if (netaddr_is_loopback(&addr)) {
@@ -336,6 +351,10 @@ void oshd_free(void)
 
     free(oshd.resolver_tld);
     free(oshd.resolver_file);
+
+    for (size_t i = 0; i < oshd.excluded_devices_count; ++i)
+        free(oshd.excluded_devices[i]);
+    free(oshd.excluded_devices);
 
     event_cancel_queue();
 

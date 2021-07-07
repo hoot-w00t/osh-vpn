@@ -56,6 +56,11 @@ typedef struct oshd {
     oshd_route_t **routes;
     size_t routes_count;
 
+    // Array of network device names/IDs which should be excluded from the
+    // endpoint discovery
+    char **excluded_devices;
+    size_t excluded_devices_count;
+
     // Minimum and maximum reconnection delays (in seconds)
     time_t reconnect_delay_min;
     time_t reconnect_delay_max;

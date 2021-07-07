@@ -116,6 +116,17 @@ static bool oshd_param_device(ecp_t *ecp)
     return true;
 }
 
+// ExcludeDevice
+static bool oshd_param_excludedevice(ecp_t *ecp)
+{
+    oshd.excluded_devices = xreallocarray(oshd.excluded_devices,
+        oshd.excluded_devices_count + 1, sizeof(char *));
+    oshd.excluded_devices[oshd.excluded_devices_count] = xstrdup(ecp_value(ecp));
+    oshd.excluded_devices_count += 1;
+    logger_debug(DBG_CONF, "Excluding device '%s'", ecp_value(ecp));
+    return true;
+}
+
 // DevUp
 static bool oshd_param_devup(ecp_t *ecp)
 {
@@ -308,6 +319,7 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "Port", .type = VALUE_REQUIRED, &oshd_param_port },
     { .name = "Mode", .type = VALUE_REQUIRED, &oshd_param_mode },
     { .name = "Device", .type = VALUE_REQUIRED, &oshd_param_device },
+    { .name = "ExcludeDevice", .type = VALUE_REQUIRED, &oshd_param_excludedevice },
     { .name = "DevUp", .type = VALUE_REQUIRED, &oshd_param_devup },
     { .name = "DevDown", .type = VALUE_REQUIRED, &oshd_param_devdown },
     { .name = "Remote", .type = VALUE_REQUIRED, &oshd_param_remote },
