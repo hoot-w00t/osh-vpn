@@ -278,14 +278,18 @@ static bool oshd_process_hello_end(node_t *node, oshpacket_hdr_t *pkt,
 
     // The remote node is now authenticated
 
+    node->authenticated = node->hello_auth;
+    node->id = node->hello_id;
+    node->id->node_socket = node;
+
     // After successful authentication we can consider that the reconnection
     // succeeded, reset the reconnection delay and set reconnect_success
     node_reconnect_delay(node, oshd.reconnect_delay_min);
     node->reconnect_success = true;
 
-    node->authenticated = node->hello_auth;
-    node->id = node->hello_id;
-    node->id->node_socket = node;
+    // Link this socket's reconnection addresses to its node_id
+    if (node->reconnect_endpoints)
+        endpoint_group_add_group(node->id->endpoints, node->reconnect_endpoints);
 
     if (node->hello_id->next_hop) {
         logger_debug(DBG_STATEEXG, "%s: %s: Previously accessible through %s (%s)",
