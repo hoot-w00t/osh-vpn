@@ -292,9 +292,8 @@ void oshd_free(void)
     oshd.nodes = NULL;
 
     for (size_t i = 0; i < oshd.remote_count; ++i)
-        free(oshd.remote_addrs[i]);
-    free(oshd.remote_addrs);
-    free(oshd.remote_ports);
+        endpoint_group_free(oshd.remote_endpoints[i]);
+    free(oshd.remote_endpoints);
 
     oshd_cmd_unset_all();
 
@@ -330,8 +329,7 @@ void oshd_loop(void)
 
     // Queue the connections to our remotes
     for (size_t i = 0; i < oshd.remote_count; ++i) {
-        oshd_connect_queue(oshd.remote_addrs[i], oshd.remote_ports[i],
-            oshd.reconnect_delay_min);
+        oshd_connect_queue(oshd.remote_endpoints[i], oshd.reconnect_delay_min);
     }
 
     // Osh actually starts

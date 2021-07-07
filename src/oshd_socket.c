@@ -100,15 +100,12 @@ bool oshd_connect_async(node_t *node)
     logger(LOG_INFO, "Established connection with %s", node->addrw);
     node->connected = true;
 
-    // We can reset the reconnection delay to the minimum
-    node_reconnect_delay(node, oshd.reconnect_delay_min);
-
     // We are the initiator, so we initiate the authentication
     return node_queue_initial_packet(node);
 }
 
 // Queue node connection (non-blocking connect)
-bool oshd_connect_queue(const char *address, const uint16_t port, time_t delay)
+bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay)
 {
     node_t *node;
     int client_fd;
@@ -116,23 +113,33 @@ bool oshd_connect_queue(const char *address, const uint16_t port, time_t delay)
     netaddr_t naddr;
     struct sockaddr_in6 d_sin;
     socklen_t d_sin_len = sizeof(struct sockaddr_in6);
+    endpoint_t *endpoint = endpoint_group_selected_ep(endpoints);
 
     // Initialize and create a socket to connect to address:port
     memset(d_addr, 0, sizeof(d_addr));
     memset(&d_sin, 0, d_sin_len);
-    client_fd = tcp_outgoing_socket(address, port, d_addr, sizeof(d_addr),
-        (struct sockaddr *) &d_sin, d_sin_len);
+
+    if (!endpoint) {
+        // If this warning appears the code is glitched
+        logger(LOG_WARN, "oshd_connect_queue called with no endpoint");
+        return false;
+    }
+
+    client_fd = tcp_outgoing_socket(endpoint->hostname, endpoint->port, d_addr,
+        sizeof(d_addr), (struct sockaddr *) &d_sin, d_sin_len);
 
     if (client_fd < 0) {
-        node_reconnect_exp(address, port, delay);
+        // Either the socket could not be created or there was a DNS lookup
+        // error, try the next endpoint
+        node_reconnect_endpoints_next(endpoints, delay);
         return false;
     }
 
     // The socket was created successfully, we can initialize some of the node's
     // socket information
     netaddr_pton(&naddr, d_addr);
-    node = node_init(client_fd, true, &naddr, port);
-    node_reconnect_to(node, address, port, delay);
+    node = node_init(client_fd, true, &naddr, endpoint->port);
+    node_reconnect_to(node, endpoints, delay);
     memcpy(&node->sin, &d_sin, d_sin_len);
 
     // Set all the socket options
@@ -142,30 +149,6 @@ bool oshd_connect_queue(const char *address, const uint16_t port, time_t delay)
 
     logger(LOG_INFO, "Trying to connect to %s...", node->addrw);
     return oshd_connect_async(node);
-}
-
-// Try to connect to a node (blocking)
-bool oshd_connect(const char *address, const uint16_t port, time_t delay)
-{
-    node_t *node;
-    int client_fd;
-    char d_addr[128];
-    netaddr_t naddr;
-
-    // These are the same steps as in the oshd_connect_queue function
-    // but here we will have a connected socket when returning
-    memset(d_addr, 0, sizeof(d_addr));
-    if ((client_fd = tcp_connect(address, port, d_addr, sizeof(d_addr))) < 0) {
-        node_reconnect_exp(address, port, delay);
-        return false;
-    }
-    netaddr_pton(&naddr, d_addr);
-    node = node_init(client_fd, true, &naddr, port);
-    node_reconnect_to(node, address, port, delay);
-    node->connected = true;
-    oshd_setsockopts(client_fd);
-    event_queue_node_add(node);
-    return node_queue_initial_packet(node);
 }
 
 // Send queued data to node

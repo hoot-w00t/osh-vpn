@@ -1,6 +1,7 @@
 #ifndef _OSH_NODE_H
 #define _OSH_NODE_H
 
+#include "endpoints.h"
 #include "netaddr.h"
 #include "netbuffer.h"
 #include "oshpacket.h"
@@ -156,12 +157,15 @@ struct node {
     // Remote "address:port" string
     char addrw[128];
 
-    // If *reconnect_addr is not NULL, contains a string of the remote address
+    // If *reconnect_endpoints is not NULL, contains one or multiple endpoints
     // to try to reconnect to when this socket disconnects
-    // This reconnection will occurs after reconnect_delay seconds
-    char *reconnect_addr;
-    uint16_t reconnect_port;
+    // Reconnections will loop through all endpoints, if none works after a full
+    // loop the delay will increase
+    // reconnect_success is used internally to know when a connection succeeded
+    // to reset the delay and select the first endpoint in the group
+    endpoint_group_t *reconnect_endpoints;
     time_t reconnect_delay;
+    bool reconnect_success;
 
     int32_t rtt;             // RTT latency in milliseconds
     struct timeval rtt_ping; // Timestamp of the last sent PING request
@@ -190,10 +194,12 @@ node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port);
 
 time_t node_reconnect_delay_limit(time_t delay);
 void node_reconnect_delay(node_t *node, time_t delay);
-void node_reconnect_to(node_t *node, const char *addr, uint16_t port,
+void node_reconnect_to(node_t *node, endpoint_group_t *reconnect_endpoints,
     time_t delay);
-#define node_reconnect_disable(node) node_reconnect_to((node), NULL, 0, 0)
-void node_reconnect_exp(const char *addr, uint16_t port, time_t delay);
+void node_reconnect_add(node_t *node, endpoint_t *endpoint);
+void node_reconnect_disable(node_t *node);
+void node_reconnect_endpoints(endpoint_group_t *reconnect_endpoints, time_t delay);
+void node_reconnect_endpoints_next(endpoint_group_t *reconnect_endpoints, time_t delay);
 void node_reconnect(node_t *node);
 
 bool node_valid_name(const char *name);

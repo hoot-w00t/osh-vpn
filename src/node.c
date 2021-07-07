@@ -562,7 +562,7 @@ void node_destroy(node_t *node)
     free(node->io.recvbuf);
     netbuffer_free(node->io.sendq);
     node_reset_ciphers(node);
-    free(node->reconnect_addr);
+    endpoint_group_free(node->reconnect_endpoints);
     free(node);
 }
 
@@ -613,34 +613,83 @@ void node_reconnect_delay(node_t *node, time_t delay)
     node->reconnect_delay = node_reconnect_delay_limit(delay);
 }
 
-// Set the node's socket reconnection information
-void node_reconnect_to(node_t *node, const char *addr, uint16_t port,
+// Set the node's socket reconnection endpoints
+// Destroys the previous endpoints if there were some
+void node_reconnect_to(node_t *node, endpoint_group_t *reconnect_endpoints,
     time_t delay)
 {
-    free(node->reconnect_addr);
-    node->reconnect_addr = addr ? xstrdup(addr) : NULL;
-    node->reconnect_port = port;
+    endpoint_group_free(node->reconnect_endpoints);
+    if (!reconnect_endpoints) {
+        // If this warning appears something in the code should be using
+        // node_reconnect_disable instead of this function, this situation
+        // should not happen
+        logger(LOG_WARN, "%s: node_reconnect_to called without any endpoints",
+            node->addrw);
+        node->reconnect_endpoints = NULL;
+    } else {
+        node->reconnect_endpoints = endpoint_group_dup(reconnect_endpoints);
+    }
     node_reconnect_delay(node, delay);
 }
 
-// Queue a reconnection to addr:port in delay seconds
-// Doubles the delay for future reconnections
-void node_reconnect_exp(const char *addr, uint16_t port, time_t delay)
+// Add new endpoint to the reconnect_endpoints
+// If there were no reconnection endpoints, creates an empty group
+void node_reconnect_add(node_t *node, endpoint_t *endpoint)
 {
-    const time_t l_event_delay = node_reconnect_delay_limit(delay);
-    const time_t l_delay = node_reconnect_delay_limit(delay * 2);
-
-    logger(LOG_INFO, "Retrying to connect to %s:%u in %li seconds",
-        addr, port, l_event_delay);
-    event_queue_connect(addr, port, l_delay, l_event_delay);
+    if (!node->reconnect_endpoints)
+        node->reconnect_endpoints = endpoint_group_create();
+    endpoint_group_add_ep(node->reconnect_endpoints, endpoint);
 }
 
-// If node has a reconnect_addr, queue a reconnection
+// Disable the node's reconnection
+void node_reconnect_disable(node_t *node)
+{
+    endpoint_group_free(node->reconnect_endpoints);
+    node->reconnect_endpoints = NULL;
+    node_reconnect_delay(node, oshd.reconnect_delay_min);
+}
+
+// Queue a reconnection to one or multiple endpoints with delay seconds between
+// each loop
+// Doubles the delay for future reconnections
+void node_reconnect_endpoints(endpoint_group_t *reconnect_endpoints, time_t delay)
+{
+    time_t event_delay = node_reconnect_delay_limit(delay);
+
+    if (endpoint_group_selected_ep(reconnect_endpoints)) {
+        // We still have an endpoint, queue a reconnection to it
+        event_queue_connect(reconnect_endpoints, event_delay, event_delay);
+    } else {
+        // We don't have an endpoint, this means that we reached the end of the
+        // list
+        // Increment the delay go back to the start of the list
+        event_delay = node_reconnect_delay_limit(delay * 2);
+
+        if (endpoint_group_select_start(reconnect_endpoints) > 0)
+            event_queue_connect(reconnect_endpoints, event_delay, event_delay);
+    }
+}
+
+// Selects the next endpoint in the list before calling node_reconnect_endpoints
+void node_reconnect_endpoints_next(endpoint_group_t *reconnect_endpoints, time_t delay)
+{
+    endpoint_group_select_next(reconnect_endpoints);
+    node_reconnect_endpoints(reconnect_endpoints, delay);
+}
+
+// If node has a reconnect_endpoints, queue a reconnection
+// If the previous reconnection was a success, start from the beginning of the
+// list, otherwise choose the next endpoint in the list
 void node_reconnect(node_t *node)
 {
-    if (node->reconnect_addr) {
-        node_reconnect_exp(node->reconnect_addr, node->reconnect_port,
-            node->reconnect_delay);
+    if (node->reconnect_endpoints) {
+        if (node->reconnect_success) {
+            node->reconnect_success = false;
+            endpoint_group_select_start(node->reconnect_endpoints);
+            node_reconnect_endpoints(node->reconnect_endpoints, node->reconnect_delay);
+        } else {
+            node_reconnect_endpoints_next(node->reconnect_endpoints, node->reconnect_delay);
+        }
     }
 }
 

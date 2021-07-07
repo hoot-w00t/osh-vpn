@@ -235,22 +235,23 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
         // This node should not be used
         node->hello_auth = false;
 
-        // If the node has a reconnection we will disable it to prevent
-        // duplicate connections (which will also be refused by the remote node)
-        if (node->reconnect_addr) {
-            // If the other authenticated socket does not have a reconnection
-            // set, we can set it to this node's
-            if (!node->hello_id->node_socket->reconnect_addr) {
+        // If the node has some reconnection endpoints we will transfer those to
+        // the existing connection to prevent duplicate connections (which would
+        // be refused by the remote node while the other socket is connected)
+        if (node->reconnect_endpoints) {
+            // Add this node's reconnection endpoints to the other node's
+            for (size_t i = 0; i < node->reconnect_endpoints->endpoints_count; ++i) {
                 logger(LOG_INFO, "%s: Moving reconnection to %s:%u to %s (%s)",
-                    node->addrw, node->reconnect_addr, node->reconnect_port,
-                    node->hello_id->name, node->hello_id->node_socket->addrw);
-                node_reconnect_to(node->hello_id->node_socket, node->reconnect_addr,
-                    node->reconnect_port, node->reconnect_delay);
-            } else {
-                // TODO: Add a way to try reconnecting to multiple addresses
-                logger(LOG_INFO, "%s: Disabling reconnection for %s:%u",
-                    node->addrw, node->reconnect_addr, node->reconnect_port);
+                    node->addrw,
+                    node->reconnect_endpoints->endpoints[i].hostname,
+                    node->reconnect_endpoints->endpoints[i].port,
+                    node->hello_id->name,
+                    node->hello_id->node_socket->addrw);
+                node_reconnect_add(node->hello_id->node_socket,
+                    &node->reconnect_endpoints->endpoints[i]);
             }
+
+            // Disable reconnection for this node
             node_reconnect_disable(node);
         }
         return node_queue_hello_end(node);
@@ -276,6 +277,11 @@ static bool oshd_process_hello_end(node_t *node, oshpacket_hdr_t *pkt,
     node_id_t *me = node_id_find_local();
 
     // The remote node is now authenticated
+
+    // After successful authentication we can consider that the reconnection
+    // succeeded, reset the reconnection delay and set reconnect_success
+    node_reconnect_delay(node, oshd.reconnect_delay_min);
+    node->reconnect_success = true;
 
     node->authenticated = node->hello_auth;
     node->id = node->hello_id;

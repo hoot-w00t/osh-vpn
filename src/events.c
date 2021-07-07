@@ -167,8 +167,7 @@ void event_cancel(event_t *event)
 
 // Queue connect event
 typedef struct connect_event_data {
-    char *addr;
-    uint16_t port;
+    endpoint_group_t *endpoints;
     time_t delay;
 } connect_event_data_t;
 
@@ -177,7 +176,7 @@ static void connect_event_freedata(void *data,
 {
     connect_event_data_t *e_data = (connect_event_data_t *) data;
 
-    free(e_data->addr);
+    endpoint_group_free(e_data->endpoints);
     free(e_data);
 }
 
@@ -185,19 +184,27 @@ static void connect_event_handler(void *data)
 {
     connect_event_data_t *e_data = (connect_event_data_t *) data;
 
-    oshd_connect_queue(e_data->addr, e_data->port, e_data->delay);
+    oshd_connect_queue(e_data->endpoints, e_data->delay);
 }
 
-void event_queue_connect(const char *addr, uint16_t port, time_t delay,
+void event_queue_connect(const endpoint_group_t *endpoints, time_t delay,
     time_t event_delay)
 {
     struct timeval trigger;
+    endpoint_t *endpoint;
     connect_event_data_t *data = xalloc(sizeof(connect_event_data_t));
 
     tv_delay(&trigger, event_delay);
-    data->addr = xstrdup(addr);
-    data->port = port;
+    data->endpoints = endpoint_group_dup(endpoints);
     data->delay = delay;
+
+    // If there is a delay for this connection then it is a reconnection
+    endpoint = endpoint_group_selected_ep(data->endpoints);
+    if (delay > 0 && endpoint) {
+        logger(LOG_INFO, "Retrying to connect to %s:%u in %li seconds",
+            endpoint->hostname, endpoint->port, delay);
+    }
+
     event_queue(event_create(connect_event_handler, connect_event_freedata,
         data, &trigger, EVENT_TRIGGER_ONCE));
 }

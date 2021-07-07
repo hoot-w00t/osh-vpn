@@ -135,40 +135,64 @@ static bool oshd_param_devdown(ecp_t *ecp)
 // Remote
 static bool oshd_param_remote(ecp_t *ecp)
 {
-    char *addr = xstrdup(ecp_value(ecp));
-    char *port = addr;
+    const char remote_separator[] = ",";
 
-    // Skip the address to get to the next value (separated with whitespaces)
-    for (; *port && *port != ' ' && *port != '\t'; ++port);
+    // Duplicate the value to use it with strtok
+    char *tokens = xstrdup(ecp_value(ecp));
+    char *token = strtok(tokens, remote_separator);
 
-    // If there are still characters after the address, separate the address and
-    // port values
-    if (*port) *port++ = '\0';
+    // Add the new empty endpoint group
+    oshd.remote_endpoints = xreallocarray(oshd.remote_endpoints,
+        oshd.remote_count + 1, sizeof(endpoint_group_t *));
+    oshd.remote_endpoints[oshd.remote_count] = endpoint_group_create();
 
-    // Go to the start of the second parameter, skipping whitespaces
-    for (; *port == ' ' || *port == '\t'; ++port);
+    logger_debug(DBG_CONF, "Remote: Processing tokens from '%s'", ecp_value(ecp));
 
-    // Append a new address and port to the remote lists
-    oshd.remote_addrs = xreallocarray(oshd.remote_addrs, oshd.remote_count + 1,
-        sizeof(char *));
-    oshd.remote_ports = xreallocarray(oshd.remote_ports, oshd.remote_count + 1,
-        sizeof(uint16_t));
+    // Iterate through all tokens to add multiple endpoints to this group
+    for (; token; token = strtok(NULL, remote_separator)) {
+        // Skip whitespaces before the endpoint address
+        size_t addr_off = 0;
+        for (; token[addr_off] == ' ' || token[addr_off] == '\t'; ++addr_off);
+        if (!token[addr_off]) {
+            logger_debug(DBG_CONF, "Remote: Skipping empty token '%s'", token);
+            continue;
+        }
 
-    // Set the address
-    oshd.remote_addrs[oshd.remote_count] = addr;
+        // Duplicate the address
+        char *addr = xstrdup(token + addr_off);
+        char *port = addr;
 
-    // Set the port
-    if ((*port)) {
-        oshd.remote_ports[oshd.remote_count] = (uint16_t) atoi(port);
-    } else {
-        oshd.remote_ports[oshd.remote_count] = OSHD_DEFAULT_PORT;
+        logger_debug(DBG_CONF, "Remote: Processing token '%s'", addr);
+
+        // Skip the address to get to the next value (separated with whitespaces)
+        for (; *port && *port != ' ' && *port != '\t'; ++port);
+
+        // If there are still characters after the address, separate the address and
+        // port values
+        if (*port) *port++ = '\0';
+
+        // Go to the start of the second parameter, skipping whitespaces
+        for (; *port == ' ' || *port == '\t'; ++port);
+
+        // Convert the port value to a number
+        uint16_t port_nb = (*port) ? ((uint16_t) atoi(port)) : OSHD_DEFAULT_PORT;
+
+        // Add the endpoint to the group
+        // TODO: Determine the area
+        if (endpoint_group_add(oshd.remote_endpoints[oshd.remote_count],
+                addr, port_nb, NETAREA_UNK))
+        {
+            logger_debug(DBG_CONF, "Remote: %s:%u added", addr, port_nb);
+        } else {
+            logger_debug(DBG_CONF, "Remote: %s:%u ignored", addr, port_nb);
+        }
+
+        // Free the temporary address
+        free(addr);
     }
 
-    logger_debug(DBG_CONF, "Remote: %s:%u added",
-        oshd.remote_addrs[oshd.remote_count],
-        oshd.remote_ports[oshd.remote_count]);
-
     oshd.remote_count += 1;
+    free(tokens);
     return true;
 }
 

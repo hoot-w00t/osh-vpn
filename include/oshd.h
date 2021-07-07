@@ -34,11 +34,9 @@ typedef struct oshd {
     uint16_t server_port; // TCP server port
     bool server_enabled;  // true if the TCP server will be opened and used
 
-    char **remote_addrs;    // List of remote addresses to connect to
-                            // Loaded from the configuration file
-    uint16_t *remote_ports; // List of remote ports corresponding to the remote
-                            // addresses
-    size_t remote_count;    // Amount of entries in those arrays
+    // List of remote endpoints to connect to
+    endpoint_group_t **remote_endpoints;
+    size_t remote_count;
 
     // Array of the node's sockets, all direct connections
     node_t **nodes;
