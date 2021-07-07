@@ -91,7 +91,7 @@ node_id_t *node_id_add(const char *name)
         oshd.node_tree_count += 1;
 
         strncpy(id->name, name, NODE_NAME_SIZE);
-        id->endpoints = endpoint_group_create();
+        id->endpoints = endpoint_group_create(id);
 
         node_id_update_edges_hash(id);
     }
@@ -564,7 +564,6 @@ void node_destroy(node_t *node)
     free(node->io.recvbuf);
     netbuffer_free(node->io.sendq);
     node_reset_ciphers(node);
-    endpoint_group_free(node->reconnect_endpoints);
     free(node);
 }
 
@@ -620,7 +619,6 @@ void node_reconnect_delay(node_t *node, time_t delay)
 void node_reconnect_to(node_t *node, endpoint_group_t *reconnect_endpoints,
     time_t delay)
 {
-    endpoint_group_free(node->reconnect_endpoints);
     if (!reconnect_endpoints) {
         // If this warning appears something in the code should be using
         // node_reconnect_disable instead of this function, this situation
@@ -629,24 +627,14 @@ void node_reconnect_to(node_t *node, endpoint_group_t *reconnect_endpoints,
             node->addrw);
         node->reconnect_endpoints = NULL;
     } else {
-        node->reconnect_endpoints = endpoint_group_dup(reconnect_endpoints);
+        node->reconnect_endpoints = reconnect_endpoints;
     }
     node_reconnect_delay(node, delay);
-}
-
-// Add new endpoint to the reconnect_endpoints
-// If there were no reconnection endpoints, creates an empty group
-void node_reconnect_add(node_t *node, endpoint_t *endpoint)
-{
-    if (!node->reconnect_endpoints)
-        node->reconnect_endpoints = endpoint_group_create();
-    endpoint_group_add_ep(node->reconnect_endpoints, endpoint);
 }
 
 // Disable the node's reconnection
 void node_reconnect_disable(node_t *node)
 {
-    endpoint_group_free(node->reconnect_endpoints);
     node->reconnect_endpoints = NULL;
     node_reconnect_delay(node, oshd.reconnect_delay_min);
 }

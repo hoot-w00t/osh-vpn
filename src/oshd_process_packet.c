@@ -240,16 +240,12 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
         // be refused by the remote node while the other socket is connected)
         if (node->reconnect_endpoints) {
             // Add this node's reconnection endpoints to the other node's
-            for (size_t i = 0; i < node->reconnect_endpoints->endpoints_count; ++i) {
-                logger(LOG_INFO, "%s: Moving reconnection to %s:%u to %s (%s)",
-                    node->addrw,
-                    node->reconnect_endpoints->endpoints[i].hostname,
-                    node->reconnect_endpoints->endpoints[i].port,
-                    node->hello_id->name,
-                    node->hello_id->node_socket->addrw);
-                node_reconnect_add(node->hello_id->node_socket,
-                    &node->reconnect_endpoints->endpoints[i]);
-            }
+            logger(LOG_INFO, "%s: Moving reconnection endpoints to %s (%s)",
+                node->addrw,
+                node->hello_id->name,
+                node->hello_id->node_socket->addrw);
+            endpoint_group_add_group(node->hello_id->endpoints,
+                node->reconnect_endpoints);
 
             // Disable reconnection for this node
             node_reconnect_disable(node);
@@ -287,9 +283,15 @@ static bool oshd_process_hello_end(node_t *node, oshpacket_hdr_t *pkt,
     node_reconnect_delay(node, oshd.reconnect_delay_min);
     node->reconnect_success = true;
 
-    // Link this socket's reconnection addresses to its node_id
-    if (node->reconnect_endpoints)
+    // If we have a reconnect_endpoints but without userdata, this connection
+    // is "local", it comes from the configuration
+    // So we copy the endpoints to the node ID it is authenticated as
+    if (node->reconnect_endpoints && !node->reconnect_endpoints->userdata)
         endpoint_group_add_group(node->id->endpoints, node->reconnect_endpoints);
+
+    // Always attach this socket's reconnection addresses to its node ID's
+    // endpoints
+    node_reconnect_to(node, node->id->endpoints, oshd.reconnect_delay_min);
 
     if (node->hello_id->next_hop) {
         logger_debug(DBG_STATEEXG, "%s: %s: Previously accessible through %s (%s)",

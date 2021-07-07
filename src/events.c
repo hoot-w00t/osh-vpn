@@ -176,7 +176,6 @@ static void connect_event_freedata(void *data,
 {
     connect_event_data_t *e_data = (connect_event_data_t *) data;
 
-    endpoint_group_free(e_data->endpoints);
     free(e_data);
 }
 
@@ -187,7 +186,7 @@ static void connect_event_handler(void *data)
     oshd_connect_queue(e_data->endpoints, e_data->delay);
 }
 
-void event_queue_connect(const endpoint_group_t *endpoints, time_t delay,
+void event_queue_connect(endpoint_group_t *endpoints, time_t delay,
     time_t event_delay)
 {
     struct timeval trigger;
@@ -195,7 +194,7 @@ void event_queue_connect(const endpoint_group_t *endpoints, time_t delay,
     connect_event_data_t *data = xalloc(sizeof(connect_event_data_t));
 
     tv_delay(&trigger, event_delay);
-    data->endpoints = endpoint_group_dup(endpoints);
+    data->endpoints = endpoints;
     data->delay = delay;
 
     // If there is a delay for this connection then it is a reconnection

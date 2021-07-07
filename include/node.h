@@ -200,7 +200,6 @@ time_t node_reconnect_delay_limit(time_t delay);
 void node_reconnect_delay(node_t *node, time_t delay);
 void node_reconnect_to(node_t *node, endpoint_group_t *reconnect_endpoints,
     time_t delay);
-void node_reconnect_add(node_t *node, endpoint_t *endpoint);
 void node_reconnect_disable(node_t *node);
 void node_reconnect_endpoints(endpoint_group_t *reconnect_endpoints, time_t delay);
 void node_reconnect_endpoints_next(endpoint_group_t *reconnect_endpoints, time_t delay);

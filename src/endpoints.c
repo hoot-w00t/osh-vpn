@@ -29,15 +29,18 @@ bool endpoint_eq(const endpoint_t *endpoint, const char *hostname,
 
 
 // Allocate an empty endpoint group
-endpoint_group_t *endpoint_group_create(void)
+endpoint_group_t *endpoint_group_create(void *userdata)
 {
-    return xzalloc(sizeof(endpoint_group_t));
+    endpoint_group_t *group = xzalloc(sizeof(endpoint_group_t));
+
+    group->userdata = userdata;
+    return group;
 }
 
 // Allocate a copy of group
 endpoint_group_t *endpoint_group_dup(const endpoint_group_t *group)
 {
-    endpoint_group_t *dup = endpoint_group_create();
+    endpoint_group_t *dup = endpoint_group_create(group->userdata);
 
     dup->endpoints_count = group->endpoints_count;
     dup->selected = group->selected;

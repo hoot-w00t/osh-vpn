@@ -27,9 +27,10 @@ typedef struct endpoint_group {
     endpoint_t *endpoints;
     size_t endpoints_count;
     size_t selected;
+    void *userdata;
 } endpoint_group_t;
 
-endpoint_group_t *endpoint_group_create(void);
+endpoint_group_t *endpoint_group_create(void *userdata);
 endpoint_group_t *endpoint_group_dup(const endpoint_group_t *group);
 void endpoint_group_free(endpoint_group_t *group);
 

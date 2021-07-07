@@ -155,7 +155,7 @@ static bool oshd_param_remote(ecp_t *ecp)
     // Add the new empty endpoint group
     oshd.remote_endpoints = xreallocarray(oshd.remote_endpoints,
         oshd.remote_count + 1, sizeof(endpoint_group_t *));
-    oshd.remote_endpoints[oshd.remote_count] = endpoint_group_create();
+    oshd.remote_endpoints[oshd.remote_count] = endpoint_group_create(NULL);
 
     logger_debug(DBG_CONF, "Remote: Processing tokens from '%s'", ecp_value(ecp));
 
