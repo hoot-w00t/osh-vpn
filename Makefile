@@ -38,6 +38,7 @@ INSTALL_ETC	=	$(INSTALL_PRE_ETC)/oshd
 SRC		=	src/crypto/cipher.c		\
 			src/crypto/pkey.c		\
 			src/crypto/sha3.c		\
+			src/endpoints.c			\
 			src/events.c			\
 			src/logger.c			\
 			src/main.c			\
