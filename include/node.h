@@ -74,7 +74,7 @@ struct node_id {
     // A hash of the node's edges, ordered the same as on other nodes
     // If the local node's edges_hash differs with another node's edges_hash of
     // the local node, it means that the remote node went out of sync
-    // The remote node must then clear thoses edges and the local node will send
+    // The remote node must then clear those edges and the local node will send
     // its valid edges to re-sync
     uint8_t edges_hash[EVP_MAX_MD_SIZE];
     char edges_hash_hex[(EVP_MAX_MD_SIZE * 2) + 1];
