@@ -38,7 +38,7 @@ static bool oshd_setsockopts(int s)
 }
 
 // Accept incoming connection
-bool oshd_accept(void)
+bool oshd_accept(int server_fd)
 {
     node_t *node;
     netaddr_t addr;
@@ -48,8 +48,8 @@ bool oshd_accept(void)
     int client_fd;
 
     // Accept the incoming socket
-    if ((client_fd = accept(oshd.server_fd, (struct sockaddr *) &sin, &sin_len)) < 0) {
-        logger(LOG_ERR, "accept: %s", strerror(errno));
+    if ((client_fd = accept(server_fd, (struct sockaddr *) &sin, &sin_len)) < 0) {
+        logger(LOG_ERR, "accept: %i: %s", server_fd, strerror(errno));
         return false;
     }
 

@@ -3,7 +3,7 @@
 
 #include "node.h"
 
-bool oshd_accept(void);
+bool oshd_accept(int server_fd);
 bool oshd_connect_queue(const char *address, const uint16_t port, time_t delay);
 bool oshd_connect_async(node_t *node);
 bool oshd_connect(const char *address, const uint16_t port, time_t delay);

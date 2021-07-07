@@ -381,7 +381,7 @@ void oshd_loop(void)
             } else if (pfd[i].fd == oshd.server_fd) {
                 if ((pfd[i].revents & POLLIN) && oshd.run) {
                     // The server is ready to accept an incoming connection
-                    oshd_accept();
+                    oshd_accept(pfd[i].fd);
                 }
             } else {
                 if (pfd[i].revents & (POLLERR | POLLHUP)) {
