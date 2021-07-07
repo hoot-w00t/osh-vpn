@@ -29,8 +29,11 @@ static struct pollfd *pfd = NULL;
 static size_t pfd_off = 0;
 static size_t pfd_count = 0;
 
-// Get the TUN/TAP device's addresses and add them to the daemon's local routes
-static void oshd_discover_device_routes(void)
+// Discover all addresses on the network devices
+// Adds TUN/TAP device addresses to the daemon's local routes
+// Adds other valid endpoints to the daemon's endpoints (which can be exchanged
+// with the rest of the network to allow automatic connections between nodes)
+static void oshd_discover_device_addrs(void)
 {
     struct ifaddrs *ifaces;
     char addrw[INET6_ADDRSTRLEN];
@@ -42,34 +45,59 @@ static void oshd_discover_device_routes(void)
     }
 
     for (struct ifaddrs *ifa = ifaces; ifa; ifa = ifa->ifa_next) {
-        if (   ifa->ifa_name
-            && oshd.tuntap
-            && (   (oshd.tuntap->dev_name && !strcmp(ifa->ifa_name, oshd.tuntap->dev_name))
-                || (oshd.tuntap->dev_id && !strcmp(ifa->ifa_name, oshd.tuntap->dev_id)))
-            && ifa->ifa_addr
-            && (   ifa->ifa_addr->sa_family == AF_INET
-                || ifa->ifa_addr->sa_family == AF_INET6))
+        if (   !ifa->ifa_name
+            || !ifa->ifa_addr
+            || !(   ifa->ifa_addr->sa_family == AF_INET
+                 || ifa->ifa_addr->sa_family == AF_INET6))
         {
-            size_t af_size = ifa->ifa_addr->sa_family == AF_INET
-                ? sizeof(struct sockaddr_in)
-                : sizeof(struct sockaddr_in6);
+            // Skip this entry if it has no name, no address or an address
+            // family that is not IPv4/6
+            continue;
+        }
 
-            int err = getnameinfo(ifa->ifa_addr, af_size, addrw, sizeof(addrw),
-                NULL, 0, NI_NUMERICHOST);
+        size_t af_size = ifa->ifa_addr->sa_family == AF_INET
+            ? sizeof(struct sockaddr_in)
+            : sizeof(struct sockaddr_in6);
 
-            if (err) {
-                logger(LOG_ERR, "getnameinfo: %s", gai_strerror(err));
-                continue;
-            }
+        int err = getnameinfo(ifa->ifa_addr, af_size, addrw, sizeof(addrw),
+            NULL, 0, NI_NUMERICHOST);
 
-            memset(&addr, 0, sizeof(addr));
-            if (!netaddr_pton(&addr, addrw))
-                continue;
+        if (err) {
+            logger(LOG_ERR, "getnameinfo: %s", gai_strerror(err));
+            continue;
+        }
 
+        memset(&addr, 0, sizeof(addr));
+        if (!netaddr_pton(&addr, addrw))
+            continue;
+
+        // If this interface is our TUN/TAP device add the address to our
+        // local routes
+        // If this is a TAP device these addresses will be used for the
+        // resolver, the MAC addresses are discovered automatically
+        if (   oshd.tuntap
+            && (   (oshd.tuntap->dev_name && !strcmp(ifa->ifa_name, oshd.tuntap->dev_name))
+                || (oshd.tuntap->dev_id   && !strcmp(ifa->ifa_name, oshd.tuntap->dev_id))))
+        {
             oshd_route_add_local(&addr);
             logger(LOG_INFO, "Discovered local route %s (%s)", addrw,
                 oshd.tuntap->dev_name);
+            continue;
         }
+
+        // TODO: Add a parameter to limit which interfaces can be discovered
+
+        // Otherwise if this address is a loopback address, ignore it
+        if (netaddr_is_loopback(&addr)) {
+            logger_debug(DBG_OSHD, "Ignoring loopback: %s (%s)", addrw, ifa->ifa_name);
+            continue;
+        }
+
+        // Finally discover the local endpoint
+        logger(LOG_INFO, "Discovered %s endpoint: %s (%s)",
+            netarea_name(netaddr_area(&addr)), addrw, ifa->ifa_name);
+        endpoint_group_add(node_id_find_local()->endpoints,
+            addrw, oshd.server_port, netaddr_area(&addr));
     }
 
     freeifaddrs(ifaces);
@@ -323,9 +351,8 @@ void oshd_loop(void)
     // Update the resolver with its initial state
     oshd_resolver_update();
 
-    // Discover the TUN/TAP device's addresses
-    if (oshd.tuntap)
-        oshd_discover_device_routes();
+    // Discover network devices' addresses
+    oshd_discover_device_addrs();
 
     // Queue the connections to our remotes
     for (size_t i = 0; i < oshd.remote_count; ++i) {

@@ -91,6 +91,7 @@ node_id_t *node_id_add(const char *name)
         oshd.node_tree_count += 1;
 
         strncpy(id->name, name, NODE_NAME_SIZE);
+        id->endpoints = endpoint_group_create();
 
         node_id_update_edges_hash(id);
     }
@@ -104,6 +105,7 @@ void node_id_free(node_id_t *nid)
     free(nid->pubkey_raw);
     free(nid->edges);
     free(nid->resolver_routes);
+    endpoint_group_free(nid->endpoints);
     free(nid);
 }
 

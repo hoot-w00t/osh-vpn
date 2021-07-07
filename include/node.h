@@ -85,6 +85,10 @@ struct node_id {
     netaddr_t *resolver_routes;
     size_t resolver_routes_count;
 
+    // The node's endpoints, these are real endpoints to which Osh can try to
+    // connect to
+    endpoint_group_t *endpoints;
+
     // true if the node ID is our ID (name == oshd.name)
     bool local_node;
 
