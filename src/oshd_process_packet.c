@@ -286,8 +286,10 @@ static bool oshd_process_hello_end(node_t *node, oshpacket_hdr_t *pkt,
     // If we have a reconnect_endpoints but without userdata, this connection
     // is "local", it comes from the configuration
     // So we copy the endpoints to the node ID it is authenticated as
-    if (node->reconnect_endpoints && !node->reconnect_endpoints->userdata)
+    if (node->reconnect_endpoints && !node->reconnect_endpoints->userdata) {
         endpoint_group_add_group(node->id->endpoints, node->reconnect_endpoints);
+        node->id->endpoints_local = true;
+    }
 
     // Always attach this socket's reconnection addresses to its node ID's
     // endpoints
