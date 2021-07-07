@@ -33,6 +33,7 @@ void netaddr_mask(netaddr_t *masked_addr, const netaddr_t *addr,
 void netaddr_mask_cidr(netaddr_t *masked_addr, const netaddr_t *addr,
     cidr_t cidr);
 
+bool netaddr_is_zero(const netaddr_t *addr);
 bool netaddr_is_loopback(const netaddr_t *addr);
 netarea_t netaddr_area(const netaddr_t *addr);
 

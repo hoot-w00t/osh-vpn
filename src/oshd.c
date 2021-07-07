@@ -102,6 +102,12 @@ static void oshd_discover_device_addrs(void)
             continue;
         }
 
+        // Zeroed out addresses are obviously not valid
+        if (netaddr_is_zero(&addr)) {
+            logger_debug(DBG_OSHD, "Ignoring zeroed: %s (%s)", addrw, ifa->ifa_name);
+            continue;
+        }
+
         // Otherwise if this address is a loopback address, ignore it
         if (netaddr_is_loopback(&addr)) {
             logger_debug(DBG_OSHD, "Ignoring loopback: %s (%s)", addrw, ifa->ifa_name);

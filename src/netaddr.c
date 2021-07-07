@@ -183,6 +183,23 @@ void netaddr_mask_cidr(netaddr_t *masked_addr, const netaddr_t *addr,
     netaddr_mask(masked_addr, addr, &mask);
 }
 
+// Returns true if *addr is all zero
+bool netaddr_is_zero(const netaddr_t *addr)
+{
+    const uint8_t zero[16] = {0};
+
+    switch (addr->type) {
+        case MAC:
+            return !memcmp(addr->data, zero, 6);
+        case IP4:
+            return !memcmp(addr->data, zero, 4);
+        case IP6:
+            return !memcmp(addr->data, zero, 16);
+        default:
+            return false;
+    }
+}
+
 // Returns true if *addr is a loopback address
 bool netaddr_is_loopback(const netaddr_t *addr)
 {
