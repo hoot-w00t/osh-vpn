@@ -110,6 +110,20 @@ bool endpoint_group_add(endpoint_group_t *group, const char *hostname,
     return true;
 }
 
+// Add all endpoints from src to dest (avoids duplicate endpoints)
+// Returns the number of new endpoints added to dest
+size_t endpoint_group_add_group(endpoint_group_t *dest,
+    const endpoint_group_t *src)
+{
+    size_t added = 0;
+
+    for (size_t i = 0; i < src->endpoints_count; ++i) {
+        if (endpoint_group_add_ep(dest, &src->endpoints[i]))
+            added += 1;
+    }
+    return added;
+}
+
 // Clear all endpoints from group
 void endpoint_group_clear(endpoint_group_t *group)
 {

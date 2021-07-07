@@ -42,6 +42,8 @@ bool endpoint_group_add(endpoint_group_t *group, const char *hostname,
     uint16_t port, netarea_t area);
 #define endpoint_group_add_ep(group, endpoint) \
     endpoint_group_add(group, (endpoint)->hostname, (endpoint)->port, (endpoint)->area)
+size_t endpoint_group_add_group(endpoint_group_t *dest,
+    const endpoint_group_t *src);
 
 void endpoint_group_clear(endpoint_group_t *group);
 
