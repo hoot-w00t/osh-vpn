@@ -373,7 +373,7 @@ void oshd_loop(void)
 
             --events;
 
-            if (pfd[i].fd == tuntap_pollfd(oshd.tuntap)) {
+            if (oshd.tuntap && pfd[i].fd == tuntap_pollfd(oshd.tuntap)) {
                 if ((pfd[i].revents & POLLIN) && oshd.run) {
                     // Data is available on the TUN/TAP device
                     oshd_read_tuntap_pkt();
