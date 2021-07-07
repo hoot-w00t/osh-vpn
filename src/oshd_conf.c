@@ -178,13 +178,22 @@ static bool oshd_param_remote(ecp_t *ecp)
         uint16_t port_nb = (*port) ? ((uint16_t) atoi(port)) : OSHD_DEFAULT_PORT;
 
         // Add the endpoint to the group
-        // TODO: Determine the area
-        if (endpoint_group_add(oshd.remote_endpoints[oshd.remote_count],
-                addr, port_nb, NETAREA_UNK))
-        {
-            logger_debug(DBG_CONF, "Remote: %s:%u added", addr, port_nb);
+        netaddr_t naddr;
+        netarea_t area;
+
+        if (!netaddr_lookup(&naddr, addr)) {
+            area = NETAREA_UNK;
         } else {
-            logger_debug(DBG_CONF, "Remote: %s:%u ignored", addr, port_nb);
+            area = netaddr_area(&naddr);
+        }
+        if (endpoint_group_add(oshd.remote_endpoints[oshd.remote_count],
+                addr, port_nb, area))
+        {
+            logger_debug(DBG_CONF, "Remote: %s:%u (%s) added",
+                addr, port_nb, netarea_name(area));
+        } else {
+            logger_debug(DBG_CONF, "Remote: %s:%u (%s) ignored",
+                addr, port_nb, netarea_name(area));
         }
 
         // Free the temporary address
