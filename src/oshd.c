@@ -231,9 +231,17 @@ bool oshd_init(void)
     }
 
     if (oshd.server_enabled) {
-        if ((oshd.server_fd = tcp4_bind(NULL, oshd.server_port, 10)) < 0)
+        oshd.server_fd = tcp4_bind(NULL, oshd.server_port, 10);
+        oshd.server_fd6 = tcp6_bind(NULL, oshd.server_port, 10);
+
+        // If no server was opened, stop here
+        if (oshd.server_fd < 0 && oshd.server_fd6 < 0)
             return false;
-        pfd_off += 1;
+
+        if (oshd.server_fd > 0)
+            pfd_off += 1;
+        if (oshd.server_fd6 > 0)
+            pfd_off += 1;
     }
 
     pfd_resize();
@@ -243,9 +251,16 @@ bool oshd_init(void)
         offset += 1;
     }
     if (oshd.server_enabled) {
-        pfd[offset].fd = oshd.server_fd;
-        pfd[offset].events = POLLIN;
-        offset += 1;
+        if (oshd.server_fd > 0) {
+            pfd[offset].fd = oshd.server_fd;
+            pfd[offset].events = POLLIN;
+            offset += 1;
+        }
+        if (oshd.server_fd6 > 0) {
+            pfd[offset].fd = oshd.server_fd6;
+            pfd[offset].events = POLLIN;
+            offset += 1;
+        }
     }
 
     // Create our local node's ID in the tree
@@ -277,9 +292,10 @@ void oshd_free(void)
         oshd_cmd_execute("DevDown");
         tuntap_close(oshd.tuntap);
     }
-    if (oshd.server_fd > 0) {
+    if (oshd.server_fd > 0)
         close(oshd.server_fd);
-    }
+    if (oshd.server_fd6 > 0)
+        close(oshd.server_fd6);
 
     for (size_t i = 0; i < oshd.nodes_count; ++i)
         node_destroy(oshd.nodes[i]);
@@ -378,7 +394,7 @@ void oshd_loop(void)
                     // Data is available on the TUN/TAP device
                     oshd_read_tuntap_pkt();
                 }
-            } else if (pfd[i].fd == oshd.server_fd) {
+            } else if (pfd[i].fd == oshd.server_fd || pfd[i].fd == oshd.server_fd6) {
                 if ((pfd[i].revents & POLLIN) && oshd.run) {
                     // The server is ready to accept an incoming connection
                     oshd_accept(pfd[i].fd);

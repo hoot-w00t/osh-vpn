@@ -299,6 +299,7 @@ void oshd_init_conf(void)
     oshd.keys_dir = xstrdup("./");
 
     oshd.server_fd = -1;
+    oshd.server_fd6 = -1;
     oshd.server_port = OSHD_DEFAULT_PORT;
     oshd.server_enabled = true;
 
