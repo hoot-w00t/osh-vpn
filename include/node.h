@@ -194,6 +194,7 @@ bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
     size_t pubkey_size);
 void node_id_add_resolver_route(node_id_t *nid, const netaddr_t *addr);
 void node_id_clear_resolver_routes(node_id_t *nid);
+void node_id_expire_endpoints(node_id_t *nid);
 
 void node_tree_dump_digraph(void);
 void node_tree_dump(void);

@@ -46,6 +46,7 @@ typedef enum oshpacket_type {
     PONG,
     DATA,
     PUBKEY,
+    ENDPOINT_EXPIRE,
     ENDPOINT,
     EDGE_ADD,
     EDGE_DEL,
@@ -96,6 +97,10 @@ typedef struct __attribute__((__packed__)) oshpacket_pubkey {
     char node_name[NODE_NAME_SIZE];
     uint8_t node_pubkey[PUBLIC_KEY_SIZE];
 } oshpacket_pubkey_t;
+
+typedef struct __attribute__((__packed__)) oshpacket_endpoint_expire {
+    char node_name[NODE_NAME_SIZE];
+} oshpacket_endpoint_expire_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_endpoint {
     char node_name[NODE_NAME_SIZE];

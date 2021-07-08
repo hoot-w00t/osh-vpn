@@ -631,6 +631,39 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
             return true;
         }
 
+        case ENDPOINT_EXPIRE: {
+            if (pkt->payload_size != sizeof(oshpacket_endpoint_expire_t)) {
+                logger(LOG_ERR, "%s: %s: Invalid ENDPOINT_EXPIRE size: %u bytes",
+                    node->addrw, node->id->name, pkt->payload_size);
+                return false;
+            }
+
+            oshpacket_endpoint_expire_t *expire = (oshpacket_endpoint_expire_t *) payload;
+            char node_name[NODE_NAME_SIZE + 1];
+
+            memset(node_name, 0, sizeof(node_name));
+            memcpy(node_name, expire->node_name, 16);
+
+            if (!node_valid_name(node_name)) {
+                logger(LOG_ERR, "%s: %s: Endpoint expire: Invalid name",
+                        node->addrw, node->id->name);
+                return false;
+            }
+
+            node_id_t *id = node_id_find(node_name);
+
+            if (!id) {
+                logger(LOG_ERR, "%s: %s: Endpoint expire: Unknown node: %s",
+                        node->addrw, node->id->name, node_name);
+                    return false;
+            }
+
+            logger_debug(DBG_ENDPOINTS, "%s: %s: %s requested to expire %s",
+                node->addrw, node->id->name, src_node->name, id->name);
+            node_id_expire_endpoints(id);
+            return true;
+        }
+
         case ENDPOINT: {
             if (   pkt->payload_size == 0
                 || pkt->payload_size % sizeof(oshpacket_endpoint_t) != 0)

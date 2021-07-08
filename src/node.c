@@ -223,6 +223,17 @@ void node_id_clear_resolver_routes(node_id_t *nid)
     }
 }
 
+// Clear remote endpoints from a node
+void node_id_expire_endpoints(node_id_t *nid)
+{
+    logger_debug(DBG_ENDPOINTS, "%s: Expiring remote endpoints",
+        nid->name);
+    endpoint_group_clear(nid->endpoints);
+    if (nid->endpoints_local)
+        endpoint_group_add_group(nid->endpoints, nid->endpoints_local);
+    gettimeofday(&nid->endpoints_last_update, NULL);
+}
+
 // Dynamically resize array and add *n to the end, then increment the count
 static void node_id_array_append(node_id_t ***arr, size_t *count, node_id_t *n)
 {
@@ -1116,7 +1127,7 @@ bool node_queue_local_endpoint_broadcast(node_t *exclude)
     node_id_t *local_id = node_id_find_local();
     oshpacket_endpoint_t *endpoints;
     size_t count = local_id->endpoints->endpoints_count;
-    bool success;
+    bool expire_success, broadcast_success;
 
     if (count == 0)
         return true;
@@ -1139,10 +1150,17 @@ bool node_queue_local_endpoint_broadcast(node_t *exclude)
         endpoints[i].port = htons(local_id->endpoints->endpoints[i].port);
     }
 
-    success = node_queue_packet_fragmented(exclude, ENDPOINT, endpoints,
+    oshpacket_endpoint_expire_t expire;
+
+    memcpy(expire.node_name, local_id->name, NODE_NAME_SIZE);
+
+    expire_success = node_queue_packet_broadcast(exclude, ENDPOINT_EXPIRE,
+        (uint8_t *) &expire, sizeof(expire));
+    broadcast_success = node_queue_packet_fragmented(exclude, ENDPOINT, endpoints,
         sizeof(oshpacket_endpoint_t) * count, sizeof(oshpacket_endpoint_t), true);
+
     free(endpoints);
-    return success;
+    return expire_success && broadcast_success;
 }
 
 // Queue ENDPOINT exchange packet

@@ -366,17 +366,11 @@ static void periodic_endpoints_event_handler(__attribute__((unused)) void *data)
             continue;
 
         if (id->local_node) {
-            logger_debug(DBG_ENDPOINTS, "Refreshing local endpoints after %li seconds",
-                delta);
+            logger_debug(DBG_ENDPOINTS, "Refreshing local endpoints");
             oshd_discover_local_endpoints();
             node_queue_local_endpoint_broadcast(NULL);
         } else {
-            logger_debug(DBG_ENDPOINTS, "Expiring remote endpoints of %s after %li seconds",
-                id->name, delta);
-            endpoint_group_clear(id->endpoints);
-            if (id->endpoints_local)
-                endpoint_group_add_group(id->endpoints, id->endpoints_local);
-            gettimeofday(&id->endpoints_last_update, NULL);
+            node_id_expire_endpoints(id);
         }
     }
 
