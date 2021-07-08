@@ -341,3 +341,54 @@ void event_queue_node_auth_timeout(node_t *node, time_t timeout_delay)
     node->auth_timeout_event = event;
     event_queue(event);
 }
+
+
+// Periodically refresh endpoints from the node tree
+// Clear endpoints that timed out and try to establish connections to nodes to
+// which we don't have a direct connection
+// TODO: Sort the nodes by distance to try to establish connections to the
+//       farthest nodes first, this should help to balance the load more
+//       efficiently
+static void periodic_endpoints_event_handler(__attribute__((unused)) void *data)
+{
+    const time_t expiry_delay = 1800; // 30 minutes (1800 seconds)
+    struct timeval now;
+    time_t delta;
+    node_id_t *id;
+
+    logger_debug(DBG_ENDPOINTS, "Periodic endpoints refreshing");
+    gettimeofday(&now, NULL);
+    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
+        id = oshd.node_tree[i];
+
+        delta = now.tv_sec - id->endpoints_last_update.tv_sec;
+        if (delta < expiry_delay)
+            continue;
+
+        if (id->local_node) {
+            logger_debug(DBG_ENDPOINTS, "Refreshing local endpoints after %li seconds",
+                delta);
+            oshd_discover_local_endpoints();
+        } else {
+            logger_debug(DBG_ENDPOINTS, "Expiring remote endpoints of %s after %li seconds",
+                id->name, delta);
+            endpoint_group_clear(id->endpoints);
+            if (id->endpoints_local)
+                endpoint_group_add_group(id->endpoints, id->endpoints_local);
+            gettimeofday(&id->endpoints_last_update, NULL);
+        }
+    }
+
+    // Try to connect to nodes here
+}
+
+// This function should only be called once outside of the event handler
+void event_queue_periodic_endpoints(void)
+{
+    const time_t endpoints_delay = 300; // 5 minutes (300 seconds)
+    struct timeval trigger;
+
+    tv_delay(&trigger, endpoints_delay);
+    event_queue(event_create(periodic_endpoints_event_handler, NULL,
+        NULL, &trigger, endpoints_delay));
+}

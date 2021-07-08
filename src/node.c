@@ -92,6 +92,7 @@ node_id_t *node_id_add(const char *name)
 
         strncpy(id->name, name, NODE_NAME_SIZE);
         id->endpoints = endpoint_group_create(id);
+        gettimeofday(&id->endpoints_last_update, NULL);
 
         node_id_update_edges_hash(id);
     }

@@ -441,6 +441,7 @@ void oshd_loop(void)
 
     // Osh actually starts
     event_queue_periodic_ping();
+    event_queue_periodic_endpoints();
 
     // We continue running while oshd.run is true and there are still connected
     // nodes

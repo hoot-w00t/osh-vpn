@@ -246,6 +246,7 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
                 node->hello_id->node_socket->addrw);
             endpoint_group_add_group(node->hello_id->endpoints,
                 node->reconnect_endpoints);
+            gettimeofday(&node->hello_id->endpoints_last_update, NULL);
 
             // Disable reconnection for this node
             node_reconnect_disable(node);
@@ -289,6 +290,7 @@ static bool oshd_process_hello_end(node_t *node, oshpacket_hdr_t *pkt,
     if (node->reconnect_endpoints && !node->reconnect_endpoints->userdata) {
         endpoint_group_add_group(node->id->endpoints, node->reconnect_endpoints);
         node->id->endpoints_local = node->reconnect_endpoints;
+        gettimeofday(&node->hello_id->endpoints_last_update, NULL);
     }
 
     // Always attach this socket's reconnection addresses to its node ID's

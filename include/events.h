@@ -53,5 +53,6 @@ void event_queue_periodic_ping(void);
 void event_queue_node_add(node_t *node);
 void event_queue_node_remove(node_t *node);
 void event_queue_node_auth_timeout(node_t *node, time_t timeout_delay);
+void event_queue_periodic_endpoints(void);
 
 #endif
