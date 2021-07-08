@@ -46,6 +46,7 @@ typedef enum oshpacket_type {
     PONG,
     DATA,
     PUBKEY,
+    ENDPOINT,
     EDGE_ADD,
     EDGE_DEL,
     ROUTE_ADD
@@ -95,6 +96,13 @@ typedef struct __attribute__((__packed__)) oshpacket_pubkey {
     char node_name[NODE_NAME_SIZE];
     uint8_t node_pubkey[PUBLIC_KEY_SIZE];
 } oshpacket_pubkey_t;
+
+typedef struct __attribute__((__packed__)) oshpacket_endpoint {
+    char node_name[NODE_NAME_SIZE];
+    netaddr_type_t addr_type : 8;
+    uint8_t addr_data[16];
+    uint16_t port;
+} oshpacket_endpoint_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_edge {
     char src_node[NODE_NAME_SIZE];

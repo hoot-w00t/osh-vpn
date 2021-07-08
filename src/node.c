@@ -93,6 +93,7 @@ node_id_t *node_id_add(const char *name)
         strncpy(id->name, name, NODE_NAME_SIZE);
         id->endpoints = endpoint_group_create(id);
         gettimeofday(&id->endpoints_last_update, NULL);
+        gettimeofday(&id->endpoints_next_retry, NULL);
 
         node_id_update_edges_hash(id);
     }
@@ -1106,6 +1107,78 @@ bool node_queue_pubkey_exg(node_t *node)
     success = node_queue_packet_fragmented(node, PUBKEY, pubkeys,
         sizeof(oshpacket_pubkey_t) * count, sizeof(oshpacket_pubkey_t), false);
     free(pubkeys);
+    return success;
+}
+
+// Broadcast local endpoints
+bool node_queue_local_endpoint_broadcast(node_t *exclude)
+{
+    node_id_t *local_id = node_id_find_local();
+    oshpacket_endpoint_t *endpoints;
+    size_t count = local_id->endpoints->endpoints_count;
+    bool success;
+
+    if (count == 0)
+        return true;
+
+    endpoints = xalloc(count * sizeof(oshpacket_endpoint_t));
+    for (size_t i = 0; i < count; ++i) {
+        netaddr_t addr;
+
+        if (!netaddr_lookup(&addr, local_id->endpoints->endpoints[i].hostname)) {
+            logger(LOG_WARN,
+                "Skipping local endpoint %s:%u in endpoint broadcast (lookup failed)",
+                local_id->endpoints->endpoints[i].hostname,
+                local_id->endpoints->endpoints[i].port);
+            continue;
+        }
+
+        memcpy(endpoints[i].node_name, local_id->name, NODE_NAME_SIZE);
+        endpoints[i].addr_type = addr.type;
+        memcpy(endpoints[i].addr_data, addr.data, 16);
+        endpoints[i].port = htons(local_id->endpoints->endpoints[i].port);
+    }
+
+    success = node_queue_packet_fragmented(exclude, ENDPOINT, endpoints,
+        sizeof(oshpacket_endpoint_t) * count, sizeof(oshpacket_endpoint_t), true);
+    free(endpoints);
+    return success;
+}
+
+// Queue ENDPOINT exchange packet
+bool node_queue_endpoint_exg(node_t *node)
+{
+    oshpacket_endpoint_t *endpoints = NULL;
+    size_t count = 0;
+    bool success;
+
+    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
+        for (size_t j = 0; j < oshd.node_tree[i]->endpoints->endpoints_count; ++j) {
+            netaddr_t addr;
+
+            if (!netaddr_lookup(&addr, oshd.node_tree[i]->endpoints->endpoints[j].hostname)) {
+                logger(LOG_WARN,
+                    "%s: %s: Skipping endpoint %s:%u in endpoint exchange (lookup failed)",
+                    node->addrw,
+                    node->id->name,
+                    oshd.node_tree[i]->endpoints->endpoints[j].hostname,
+                    oshd.node_tree[i]->endpoints->endpoints[j].port);
+                continue;
+            }
+
+            endpoints = xreallocarray(endpoints, count + 1, sizeof(oshpacket_endpoint_t));
+
+            memcpy(endpoints[count].node_name, oshd.node_tree[i]->name, NODE_NAME_SIZE);
+            endpoints[count].addr_type = addr.type;
+            memcpy(endpoints[count].addr_data, addr.data, 16);
+            endpoints[count].port = htons(oshd.node_tree[i]->endpoints->endpoints[j].port);
+            count += 1;
+        }
+    }
+
+    success = node_queue_packet_fragmented(node, ENDPOINT, endpoints,
+        sizeof(oshpacket_endpoint_t) * count, sizeof(oshpacket_endpoint_t), false);
+    free(endpoints);
     return success;
 }
 

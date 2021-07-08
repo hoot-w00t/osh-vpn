@@ -337,6 +337,10 @@ static bool oshd_process_hello_end(node_t *node, oshpacket_hdr_t *pkt,
     if (!node_queue_pubkey_exg(node))
         return false;
 
+    // We exchange all known endpoints
+    if (!node_queue_endpoint_exg(node))
+        return false;
+
     // We finished queuing our state exchange packets
     if (!node_queue_stateexg_end(node))
         return false;
@@ -621,6 +625,67 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                     logger(LOG_ERR, "%s: %s: Failed to load public key for %s",
                         node->addrw, node->id->name, node_name);
                     return false;
+                }
+            }
+
+            return true;
+        }
+
+        case ENDPOINT: {
+            if (   pkt->payload_size == 0
+                || pkt->payload_size % sizeof(oshpacket_endpoint_t) != 0)
+            {
+                logger(LOG_ERR, "%s: %s: Invalid ENDPOINT size: %u bytes",
+                    node->addrw, node->id->name, pkt->payload_size);
+                return false;
+            }
+
+            if (node->state_exg) {
+                // Broadcast the endpoints to our end of the network
+                logger_debug(DBG_STATEEXG,
+                    "%s: %s: State exchange: Relaying ENDPOINT packet",
+                    node->addrw, node->id->name);
+                node_queue_packet_broadcast(node, ENDPOINT, payload,
+                    pkt->payload_size);
+            }
+
+            size_t count = pkt->payload_size / sizeof(oshpacket_endpoint_t);
+            oshpacket_endpoint_t *endpoints = (oshpacket_endpoint_t *) payload;
+            char node_name[NODE_NAME_SIZE + 1];
+            memset(node_name, 0, sizeof(node_name));
+
+            for (size_t i = 0; i < count; ++i) {
+                memcpy(node_name, endpoints[i].node_name, NODE_NAME_SIZE);
+                if (!node_valid_name(node_name)) {
+                    logger(LOG_ERR, "%s: %s: Endpoint: Invalid name",
+                        node->addrw, node->id->name);
+                    return false;
+                }
+
+                node_id_t *id = node_id_find(node_name);
+
+                if (!id) {
+                    logger(LOG_ERR, "%s: %s: Endpoint: Unknown node: %s",
+                        node->addrw, node->id->name, node_name);
+                    return false;
+                }
+
+                netaddr_t addr;
+                netarea_t area;
+                char hostname[INET6_ADDRSTRLEN];
+
+                addr.type = endpoints[i].addr_type;
+                memcpy(addr.data, endpoints[i].addr_data, 16);
+                netaddr_ntop(hostname, sizeof(hostname), &addr);
+                area = netaddr_area(&addr);
+
+                if (endpoint_group_add(id->endpoints, hostname,
+                        ntohs(endpoints[i].port), area))
+                {
+                    logger_debug(DBG_ENDPOINTS, "%s: %s: Adding %s endpoint %s:%u to %s",
+                        node->addrw, node->id->name, netarea_name(area),
+                        hostname, ntohs(endpoints[i].port), id->name);
+                    gettimeofday(&id->endpoints_last_update, NULL);
                 }
             }
 

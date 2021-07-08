@@ -369,6 +369,7 @@ static void periodic_endpoints_event_handler(__attribute__((unused)) void *data)
             logger_debug(DBG_ENDPOINTS, "Refreshing local endpoints after %li seconds",
                 delta);
             oshd_discover_local_endpoints();
+            node_queue_local_endpoint_broadcast(NULL);
         } else {
             logger_debug(DBG_ENDPOINTS, "Expiring remote endpoints of %s after %li seconds",
                 id->name, delta);
@@ -379,7 +380,33 @@ static void periodic_endpoints_event_handler(__attribute__((unused)) void *data)
         }
     }
 
-    // Try to connect to nodes here
+    logger_debug(DBG_ENDPOINTS, "Trying to establish more direct connections");
+
+    // Queue no more than 5 connection at a time
+    size_t remaining_tries = 5;
+
+    for (size_t i = 1; i < oshd.node_tree_count && remaining_tries > 0; ++i) {
+        id = oshd.node_tree[i];
+
+        // If the node has no direct connection but at least one endpoint and is
+        // not a local endpoint group, then there is no other way to initiate a
+        // connection, so do it now
+        // We also use a timestamp to not retry every time
+        if (   !id->endpoints_local
+            && !id->node_socket
+            &&  id->endpoints->endpoints_count > 0
+            &&  now.tv_sec >= id->endpoints_next_retry.tv_sec)
+        {
+            logger_debug(DBG_ENDPOINTS, "Trying to connect to %s", id->name);
+
+            // If this connection fails to establish, do not retry during the
+            // next 30 minutes
+            tv_delay(&id->endpoints_next_retry, expiry_delay);
+            event_queue_connect(oshd.node_tree[i]->endpoints,
+                oshd.reconnect_delay_min, 0);
+            remaining_tries -= 1;
+        }
+    }
 }
 
 // This function should only be called once outside of the event handler

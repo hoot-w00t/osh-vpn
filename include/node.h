@@ -95,6 +95,7 @@ struct node_id {
     endpoint_group_t *endpoints;
     endpoint_group_t *endpoints_local;
     struct timeval endpoints_last_update;
+    struct timeval endpoints_next_retry;
 
     // true if the node ID is our ID (name == oshd.name)
     bool local_node;
@@ -230,6 +231,8 @@ bool node_queue_ping(node_t *node);
 bool node_queue_pong(node_t *node);
 bool node_queue_pubkey_broadcast(node_t *exclude, node_id_t *id);
 bool node_queue_pubkey_exg(node_t *node);
+bool node_queue_local_endpoint_broadcast(node_t *exclude);
+bool node_queue_endpoint_exg(node_t *node);
 bool node_queue_edge(node_t *node, oshpacket_type_t type,
     const char *src, const char *dest);
 bool node_queue_edge_broadcast(node_t *exclude, oshpacket_type_t type,
