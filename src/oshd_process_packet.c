@@ -288,7 +288,7 @@ static bool oshd_process_hello_end(node_t *node, oshpacket_hdr_t *pkt,
     // So we copy the endpoints to the node ID it is authenticated as
     if (node->reconnect_endpoints && !node->reconnect_endpoints->userdata) {
         endpoint_group_add_group(node->id->endpoints, node->reconnect_endpoints);
-        node->id->endpoints_local = true;
+        node->id->endpoints_local = node->reconnect_endpoints;
     }
 
     // Always attach this socket's reconnection addresses to its node ID's

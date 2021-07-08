@@ -90,7 +90,7 @@ struct node_id {
     // endpoints_local is set to true when this node ID authenticates on a
     // connection from a local endpoint group (in the configuration)
     endpoint_group_t *endpoints;
-    bool endpoints_local;
+    endpoint_group_t *endpoints_local;
 
     // true if the node ID is our ID (name == oshd.name)
     bool local_node;
