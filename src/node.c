@@ -708,6 +708,24 @@ void node_reconnect(node_t *node)
             node->reconnect_success = false;
             endpoint_group_select_start(node->reconnect_endpoints);
             node_reconnect_endpoints(node->reconnect_endpoints, node->reconnect_delay);
+
+            // If this node's reconnect endpoints is linked to a node ID and it
+            // only has endpoints exchanged on the network, set the next retry
+            // timestamp to prevent the endpoints event from queuing the same
+            // group again
+            node_id_t *id = (node_id_t *) node->reconnect_endpoints->userdata;
+
+            if (id && !id->endpoints_local) {
+                // The delay before retrying to connect is the maximum time one
+                // endpoint can take to connect multiplied by the number of
+                // endpoints in the group
+                // 30 is the authentication timeout delay
+                time_t delay_per_endpoint = node->reconnect_delay + 30;
+                time_t group_delay = delay_per_endpoint * node->reconnect_endpoints->endpoints_count;
+
+                gettimeofday(&id->endpoints_next_retry, NULL);
+                id->endpoints_next_retry.tv_sec += group_delay;
+            }
         } else {
             node_reconnect_endpoints_next(node->reconnect_endpoints, node->reconnect_delay);
         }
