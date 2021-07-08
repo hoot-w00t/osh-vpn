@@ -89,8 +89,12 @@ struct node_id {
     // connect to
     // endpoints_local is set to true when this node ID authenticates on a
     // connection from a local endpoint group (in the configuration)
+    // last_update is a timestamp of the last addition to the group, endpoints
+    // received from the network will regularily timeout and get cleared. It is
+    // then up to the nodes to broadcast their endpoints to the network again
     endpoint_group_t *endpoints;
     endpoint_group_t *endpoints_local;
+    struct timeval endpoints_last_update;
 
     // true if the node ID is our ID (name == oshd.name)
     bool local_node;
