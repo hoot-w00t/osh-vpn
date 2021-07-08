@@ -318,7 +318,11 @@ static void node_auth_timeout_event_handler(void *data)
     node_t *node = (node_t *) data;
 
     if (!node->authenticated) {
-        logger(LOG_WARN, "%s: Authentication timed out", node->addrw);
+        if (node->connected) {
+            logger(LOG_WARN, "%s: Authentication timed out", node->addrw);
+        } else {
+            logger(LOG_WARN, "%s: Timed out", node->addrw);
+        }
         node->auth_timeout_event = NULL;
         event_queue_node_remove(node);
     }
