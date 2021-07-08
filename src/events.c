@@ -199,7 +199,7 @@ void event_queue_connect(endpoint_group_t *endpoints, time_t delay,
 
     // If there is a delay for this connection then it is a reconnection
     endpoint = endpoint_group_selected_ep(data->endpoints);
-    if (delay > 0 && endpoint) {
+    if (event_delay > 0 && endpoint) {
         logger(LOG_INFO, "Retrying to connect to %s:%u in %li seconds",
             endpoint->hostname, endpoint->port, delay);
     }
