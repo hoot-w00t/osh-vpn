@@ -653,23 +653,27 @@ void node_reconnect_endpoints(endpoint_group_t *reconnect_endpoints, time_t dela
         // We don't have an endpoint, this means that we reached the end of the
         // list
 
-        // If this endpoint group doesn't have userdata it is a local endpoint
-        // group, we will always retry to connect
-        // If it has a userdata (node_id_t *) and its endpoints_local is true,
-        // it also means that this is a local endpoint group
-        // However if there is userdata and its endpoints_local is false, we
-        // will give up trying to connect after several tries
+        if (endpoint_group_select_start(reconnect_endpoints) > 0) {
+            // There are endpoints in the group, maybe try to reconnect
 
-        node_id_t *id = (node_id_t *) reconnect_endpoints->userdata;
+            // If this endpoint group doesn't have userdata it is a local endpoint
+            // group, we will always retry to connect
+            // If it has a userdata (node_id_t *) and its endpoints_local is true,
+            // it also means that this is a local endpoint group
+            // However if there is userdata and its endpoints_local is false, we
+            // will give up trying to connect after several tries
 
-        if (id && !id->endpoints_local) {
-            logger(LOG_INFO, "Giving up reconnecting to %s", id->name);
-        } else {
-            // Increment the delay and go back to the start of the list
-            event_delay = node_reconnect_delay_limit(delay * 2);
+            node_id_t *id = (node_id_t *) reconnect_endpoints->userdata;
 
-            if (endpoint_group_select_start(reconnect_endpoints) > 0)
+            if (id && !id->endpoints_local) {
+                logger(LOG_INFO, "Giving up reconnecting to %s", id->name);
+            } else {
+                // Increment the delay and go back to the start of the list
+                event_delay = node_reconnect_delay_limit(delay * 2);
                 event_queue_connect(reconnect_endpoints, event_delay, event_delay);
+            }
+        } else {
+            // The group is empty, there is nothing to do
         }
     }
 }
