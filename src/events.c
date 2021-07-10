@@ -389,7 +389,7 @@ void event_queue_endpoints_refresh(void)
         NULL, &trigger, endpoints_delay));
 }
 
-// Regularily try to establish connections to nodes to which we don't have a
+// Regularly try to establish connections to nodes to which we don't have a
 // direct connection
 // If ConnectionsLimit is set, automatic connections will always leave enough
 // slots for the remotes in the configuration

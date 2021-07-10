@@ -90,7 +90,7 @@ struct node_id {
     // endpoints_local is set to true when this node ID authenticates on a
     // connection from a local endpoint group (in the configuration)
     // last_update is a timestamp of the last addition to the group, endpoints
-    // received from the network will regularily timeout and get cleared. It is
+    // received from the network will regularly timeout and get cleared. It is
     // then up to the nodes to broadcast their endpoints to the network again
     endpoint_group_t *endpoints;
     endpoint_group_t *endpoints_local;
