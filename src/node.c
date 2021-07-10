@@ -601,7 +601,7 @@ node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port)
     // Queue the authentication timeout event for the node
     // When it triggers if the socket is not authenticated it will be
     // disconnected
-    event_queue_node_auth_timeout(node, 30);
+    event_queue_node_auth_timeout(node, NODE_AUTH_TIMEOUT);
 
     return node;
 }
@@ -719,8 +719,7 @@ void node_reconnect(node_t *node)
                 // The delay before retrying to connect is the maximum time one
                 // endpoint can take to connect multiplied by the number of
                 // endpoints in the group
-                // 30 is the authentication timeout delay
-                time_t delay_per_endpoint = node->reconnect_delay + 30;
+                time_t delay_per_endpoint = node->reconnect_delay + NODE_AUTH_TIMEOUT;
                 time_t group_delay = delay_per_endpoint * node->reconnect_endpoints->endpoints_count;
 
                 gettimeofday(&id->endpoints_next_retry, NULL);

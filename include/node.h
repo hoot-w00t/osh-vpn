@@ -30,6 +30,12 @@
 #error "NODE_RECVBUF_SIZE must be OSHPACKET_MAXSIZE or higher"
 #endif
 
+#ifndef NODE_AUTH_TIMEOUT
+// Time in seconds to authenticate a node, if it is not authenticated after this
+// delay, drop the connection
+#define NODE_AUTH_TIMEOUT (30)
+#endif
+
 typedef struct node_id node_id_t;
 typedef struct node node_t;
 
