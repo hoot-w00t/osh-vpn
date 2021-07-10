@@ -93,6 +93,7 @@ void oshd_discover_local_endpoints(void)
     struct ifaddrs *ifaces;
     char addrw[INET6_ADDRSTRLEN];
     netaddr_t addr;
+    netarea_t area;
     node_id_t *local_id = node_id_find_local();
 
     endpoint_group_clear(local_id->endpoints);
@@ -136,6 +137,7 @@ void oshd_discover_local_endpoints(void)
         memset(&addr, 0, sizeof(addr));
         if (!netaddr_pton(&addr, addrw))
             continue;
+        area = netaddr_area(&addr);
 
         // TODO: Add a parameter allow which interfaces can be discovered
         //       instead of excluding those that shouldn't be
@@ -168,9 +170,9 @@ void oshd_discover_local_endpoints(void)
 
         // Finally discover the local endpoint
         logger_debug(DBG_ENDPOINTS, "Discovered %s endpoint: %s (%s)",
-            netarea_name(netaddr_area(&addr)), addrw, ifa->ifa_name);
+            netarea_name(area), addrw, ifa->ifa_name);
         endpoint_group_add(local_id->endpoints,
-            addrw, oshd.server_port, netaddr_area(&addr));
+            addrw, oshd.server_port, area);
     }
 
     gettimeofday(&local_id->endpoints_last_update, NULL);
