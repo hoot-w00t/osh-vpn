@@ -12,6 +12,20 @@
 
 #define OSHD_DEFAULT_PORT (9270)
 
+typedef enum ac_strategy {
+    AC_STRATEGY_DISABLED = 0,
+    AC_STRATEGY_LAZY
+} ac_strategy_t;
+
+static inline const char *ac_strategy_name(ac_strategy_t ac_strategy)
+{
+    switch (ac_strategy) {
+        case AC_STRATEGY_DISABLED: return "Disabled";
+        case AC_STRATEGY_LAZY    : return "Lazy";
+             default             : return "Unknown";
+    }
+}
+
 typedef struct oshd {
     // Name of the local node
     char name[NODE_NAME_SIZE + 1];
@@ -24,6 +38,9 @@ typedef struct oshd {
 
     // true if local endpoints should be shared with the network
     bool shareendpoints;
+
+    // Automatic connections strategy
+    ac_strategy_t ac_strategy;
 
     // The local node's private and public keys
     EVP_PKEY *privkey;

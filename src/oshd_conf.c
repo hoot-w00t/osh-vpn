@@ -81,6 +81,23 @@ static bool oshd_param_shareendpoints(__attribute__((unused)) ecp_t *ecp)
     return true;
 }
 
+// AutomaticConnections
+static bool oshd_param_automaticconnections(ecp_t *ecp)
+{
+    if (!strcasecmp(ecp_value(ecp), "disabled")) {
+        oshd.ac_strategy = AC_STRATEGY_DISABLED;
+    } else if (!strcasecmp(ecp_value(ecp), "lazy")) {
+        oshd.ac_strategy = AC_STRATEGY_LAZY;
+    } else {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "Invalid AutomaticConnections: '%s'", ecp_value(ecp));
+        return false;
+    }
+    logger_debug(DBG_CONF, "Automatic connections strategy: %s",
+        ac_strategy_name(oshd.ac_strategy));
+    return true;
+}
+
 // Port
 static bool oshd_param_port(ecp_t *ecp)
 {
@@ -334,6 +351,7 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "KeysDir", .type = VALUE_REQUIRED, &oshd_param_keysdir },
     { .name = "RemoteAuth", .type = VALUE_NONE, &oshd_param_remoteauth },
     { .name = "ShareEndpoints", .type = VALUE_NONE, &oshd_param_shareendpoints },
+    { .name = "AutomaticConnections", .type = VALUE_REQUIRED, &oshd_param_automaticconnections },
     { .name = "Port", .type = VALUE_REQUIRED, &oshd_param_port },
     { .name = "Mode", .type = VALUE_REQUIRED, &oshd_param_mode },
     { .name = "Device", .type = VALUE_REQUIRED, &oshd_param_device },
