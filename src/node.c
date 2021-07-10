@@ -4,7 +4,7 @@
 #include "logger.h"
 #include "xalloc.h"
 #include "random.h"
-#include "crypto/sha3.h"
+#include "crypto/hash.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -63,7 +63,7 @@ static void node_id_update_edges_hash(node_id_t *nid)
     free(ordered_edges);
 
     // Compute the SHA3-512 hash of this checksum
-    if (!sha3_512_hash((uint8_t *) buf, strlen(buf),
+    if (!hash_sha3_512((uint8_t *) buf, strlen(buf),
             nid->edges_hash, &nid->edges_hash_size))
     {
         logger(LOG_CRIT, "Edges hash could not be computed for %s", nid->name);

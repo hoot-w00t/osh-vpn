@@ -1,7 +1,7 @@
 #include "node.h"
 #include "oshd_device.h"
 #include "oshd.h"
-#include "crypto/sha3.h"
+#include "crypto/hash.h"
 #include "netpacket.h"
 #include "logger.h"
 #include <stdlib.h>
@@ -76,8 +76,8 @@ static bool oshd_process_handshake(node_t *node, oshpacket_hdr_t *pkt,
     unsigned int recv_hash_size;
 
     logger_debug(DBG_HANDSHAKE, "%s: Hashing shared secrets", node->addrw);
-    if (   !sha3_512_hash(send_secret, send_secret_size, send_hash, &send_hash_size)
-        || !sha3_512_hash(recv_secret, recv_secret_size, recv_hash, &recv_hash_size))
+    if (   !hash_sha3_512(send_secret, send_secret_size, send_hash, &send_hash_size)
+        || !hash_sha3_512(recv_secret, recv_secret_size, recv_hash, &recv_hash_size))
     {
         free(send_secret);
         free(recv_secret);
