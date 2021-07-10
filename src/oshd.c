@@ -2,6 +2,7 @@
 
 #include "oshd_cmd.h"
 #include "oshd_device.h"
+#include "oshd_discovery.h"
 #include "oshd_socket.h"
 #include "oshd_route.h"
 #include "oshd.h"
@@ -19,8 +20,6 @@
 #include <poll.h>
 #include <signal.h>
 #include <dirent.h>
-#include <ifaddrs.h>
-#include <netdb.h>
 
 // Global variable
 oshd_t oshd;
@@ -28,156 +27,6 @@ oshd_t oshd;
 static struct pollfd *pfd = NULL;
 static size_t pfd_off = 0;
 static size_t pfd_count = 0;
-
-// Discover all addresses on the TUN/TAP device and add them to our local routes
-void oshd_discover_local_routes(void)
-{
-    struct ifaddrs *ifaces;
-    char addrw[INET6_ADDRSTRLEN];
-    netaddr_t addr;
-
-    if (getifaddrs(&ifaces) < 0) {
-        logger(LOG_ERR, "getifaddrs: %s", strerror(errno));
-        return;
-    }
-
-    for (struct ifaddrs *ifa = ifaces; ifa; ifa = ifa->ifa_next) {
-        if (   !ifa->ifa_name
-            || !ifa->ifa_addr
-            || !(   ifa->ifa_addr->sa_family == AF_INET
-                 || ifa->ifa_addr->sa_family == AF_INET6))
-        {
-            // Skip this entry if it has no name, no address or an address
-            // family that is not IPv4/6
-            continue;
-        }
-
-        size_t af_size = ifa->ifa_addr->sa_family == AF_INET
-            ? sizeof(struct sockaddr_in)
-            : sizeof(struct sockaddr_in6);
-
-        int err = getnameinfo(ifa->ifa_addr, af_size, addrw, sizeof(addrw),
-            NULL, 0, NI_NUMERICHOST);
-
-        if (err) {
-            logger(LOG_ERR, "getnameinfo: %s", gai_strerror(err));
-            continue;
-        }
-
-        memset(&addr, 0, sizeof(addr));
-        if (!netaddr_pton(&addr, addrw))
-            continue;
-
-        // If this interface is our TUN/TAP device add the address to our
-        // local routes
-        // If this is a TAP device these addresses will be used for the
-        // resolver, the MAC addresses are discovered automatically
-        if (   oshd.tuntap
-            && (   (oshd.tuntap->dev_name && !strcmp(ifa->ifa_name, oshd.tuntap->dev_name))
-                || (oshd.tuntap->dev_id   && !strcmp(ifa->ifa_name, oshd.tuntap->dev_id))))
-        {
-            oshd_route_add_local(&addr);
-            logger(LOG_INFO, "Discovered local route %s (%s)", addrw,
-                oshd.tuntap->dev_name);
-        }
-    }
-
-    freeifaddrs(ifaces);
-}
-
-// Discover endpoints from the network devices (excluding the TUN/TAP device and
-// the devices explicitly excluded)
-// Clear the previous endpoints of the local node and add those new endpoints
-void oshd_discover_local_endpoints(void)
-{
-    struct ifaddrs *ifaces;
-    char addrw[INET6_ADDRSTRLEN];
-    netaddr_t addr;
-    netarea_t area;
-    node_id_t *local_id = node_id_find_local();
-
-    endpoint_group_clear(local_id->endpoints);
-
-    if (getifaddrs(&ifaces) < 0) {
-        logger(LOG_ERR, "getifaddrs: %s", strerror(errno));
-        return;
-    }
-
-    for (struct ifaddrs *ifa = ifaces; ifa; ifa = ifa->ifa_next) {
-        if (   !ifa->ifa_name
-            || !ifa->ifa_addr
-            || !(   ifa->ifa_addr->sa_family == AF_INET
-                 || ifa->ifa_addr->sa_family == AF_INET6))
-        {
-            // Skip this entry if it has no name, no address or an address
-            // family that is not IPv4/6
-            continue;
-        }
-
-        // If this interface is our TUN/TAP device, skip it
-        if (   oshd.tuntap
-            && (   (oshd.tuntap->dev_name && !strcmp(ifa->ifa_name, oshd.tuntap->dev_name))
-                || (oshd.tuntap->dev_id   && !strcmp(ifa->ifa_name, oshd.tuntap->dev_id))))
-        {
-            continue;
-        }
-
-        size_t af_size = ifa->ifa_addr->sa_family == AF_INET
-            ? sizeof(struct sockaddr_in)
-            : sizeof(struct sockaddr_in6);
-
-        int err = getnameinfo(ifa->ifa_addr, af_size, addrw, sizeof(addrw),
-            NULL, 0, NI_NUMERICHOST);
-
-        if (err) {
-            logger(LOG_ERR, "getnameinfo: %s", gai_strerror(err));
-            continue;
-        }
-
-        memset(&addr, 0, sizeof(addr));
-        if (!netaddr_pton(&addr, addrw))
-            continue;
-        area = netaddr_area(&addr);
-
-        // TODO: Add a parameter allow which interfaces can be discovered
-        //       instead of excluding those that shouldn't be
-
-        // Check if this device is excluded
-        bool excluded = false;
-
-        for (size_t i = 0; i < oshd.excluded_devices_count; ++i) {
-            if (!strcmp(ifa->ifa_name, oshd.excluded_devices[i])) {
-                excluded = true;
-                break;
-            }
-        }
-        if (excluded) {
-            logger_debug(DBG_OSHD, "Excluded device: %s (%s)", addrw, ifa->ifa_name);
-            continue;
-        }
-
-        // Zeroed out addresses are obviously not valid
-        if (netaddr_is_zero(&addr)) {
-            logger_debug(DBG_OSHD, "Ignoring zeroed: %s (%s)", addrw, ifa->ifa_name);
-            continue;
-        }
-
-        // Otherwise if this address is a loopback address, ignore it
-        if (netaddr_is_loopback(&addr)) {
-            logger_debug(DBG_OSHD, "Ignoring loopback: %s (%s)", addrw, ifa->ifa_name);
-            continue;
-        }
-
-        // Finally discover the local endpoint
-        logger_debug(DBG_ENDPOINTS, "Discovered %s endpoint: %s (%s)",
-            netarea_name(area), addrw, ifa->ifa_name);
-        endpoint_group_add(local_id->endpoints,
-            addrw, oshd.server_port, area);
-    }
-
-    gettimeofday(&local_id->endpoints_last_update, NULL);
-    freeifaddrs(ifaces);
-}
 
 // Load a private or a public key from the keys directory
 // name should be a node's name

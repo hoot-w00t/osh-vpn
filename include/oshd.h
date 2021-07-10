@@ -101,9 +101,6 @@ typedef struct oshd {
 // true if the maximum number of nodes is reached
 #define oshd_nodes_limited() (oshd.nodes_count_max != 0 && oshd.nodes_count >= oshd.nodes_count_max)
 
-void oshd_discover_local_routes(void);
-void oshd_discover_local_endpoints(void);
-
 EVP_PKEY *oshd_open_key(const char *name, bool private);
 bool oshd_open_keys(const char *dirname);
 

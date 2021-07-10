@@ -1,4 +1,5 @@
 #include "oshd.h"
+#include "oshd_discovery.h"
 #include "oshd_socket.h"
 #include "events.h"
 #include "logger.h"
