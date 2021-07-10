@@ -22,6 +22,9 @@ typedef struct oshd {
     // true of authentication using remote keys is allowed
     bool remote_auth;
 
+    // true if local endpoints should be shared with the network
+    bool shareendpoints;
+
     // The local node's private and public keys
     EVP_PKEY *privkey;
 

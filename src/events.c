@@ -370,9 +370,11 @@ static void periodic_endpoints_event_handler(__attribute__((unused)) void *data)
             continue;
 
         if (id->local_node) {
-            logger_debug(DBG_ENDPOINTS, "Refreshing local endpoints");
-            oshd_discover_local_endpoints();
-            node_queue_local_endpoint_broadcast(NULL);
+            if (oshd.shareendpoints) {
+                logger_debug(DBG_ENDPOINTS, "Refreshing local endpoints");
+                oshd_discover_local_endpoints();
+                node_queue_local_endpoint_broadcast(NULL);
+            }
         } else {
             node_id_expire_endpoints(id);
         }

@@ -73,6 +73,14 @@ static bool oshd_param_remoteauth(__attribute__((unused)) ecp_t *ecp)
     return true;
 }
 
+// ShareEndpoints
+static bool oshd_param_shareendpoints(__attribute__((unused)) ecp_t *ecp)
+{
+    oshd.shareendpoints = true;
+    logger_debug(DBG_CONF, "Enabled ShareEndpoints");
+    return true;
+}
+
 // Port
 static bool oshd_param_port(ecp_t *ecp)
 {
@@ -325,6 +333,7 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "Name", .type = VALUE_REQUIRED, &oshd_param_name },
     { .name = "KeysDir", .type = VALUE_REQUIRED, &oshd_param_keysdir },
     { .name = "RemoteAuth", .type = VALUE_NONE, &oshd_param_remoteauth },
+    { .name = "ShareEndpoints", .type = VALUE_NONE, &oshd_param_shareendpoints },
     { .name = "Port", .type = VALUE_REQUIRED, &oshd_param_port },
     { .name = "Mode", .type = VALUE_REQUIRED, &oshd_param_mode },
     { .name = "Device", .type = VALUE_REQUIRED, &oshd_param_device },

@@ -432,7 +432,8 @@ void oshd_loop(void)
     // Discover network devices' addresses
     if (oshd.tuntap)
         oshd_discover_local_routes();
-    oshd_discover_local_endpoints();
+    if (oshd.shareendpoints)
+        oshd_discover_local_endpoints();
 
     // Queue the connections to our remotes
     for (size_t i = 0; i < oshd.remote_count; ++i) {

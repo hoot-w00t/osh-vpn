@@ -1189,6 +1189,10 @@ bool node_queue_endpoint_exg(node_t *node)
     bool success;
 
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
+        // If we don't share our endpoints, skip our local node
+        if (oshd.node_tree[i]->local_node && !oshd.shareendpoints)
+            continue;
+
         for (size_t j = 0; j < oshd.node_tree[i]->endpoints->endpoints_count; ++j) {
             netaddr_t addr;
 
