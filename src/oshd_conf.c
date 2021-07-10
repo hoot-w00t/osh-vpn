@@ -65,11 +65,20 @@ static bool oshd_param_keysdir(ecp_t *ecp)
     return true;
 }
 
-// RemoteAuth
-static bool oshd_param_remoteauth(__attribute__((unused)) ecp_t *ecp)
+// KeysTrust
+static bool oshd_param_keystrust(ecp_t *ecp)
 {
-    oshd.remote_auth = true;
-    logger_debug(DBG_CONF, "Enabled RemoteAuth");
+    if (!strcasecmp(ecp_value(ecp), "local")) {
+        oshd.remote_auth = false;
+    } else if (!strcasecmp(ecp_value(ecp), "remote")) {
+        oshd.remote_auth = true;
+    } else {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "Invalid KeysTrust: '%s'", ecp_value(ecp));
+        return false;
+    }
+    logger_debug(DBG_CONF, "%s authentication using remote keys",
+        oshd.remote_auth ? "Enabled" : "Disabled");
     return true;
 }
 
@@ -271,7 +280,7 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "NoServer", .type = VALUE_NONE, &oshd_param_noserver },
     { .name = "Name", .type = VALUE_REQUIRED, &oshd_param_name },
     { .name = "KeysDir", .type = VALUE_REQUIRED, &oshd_param_keysdir },
-    { .name = "RemoteAuth", .type = VALUE_NONE, &oshd_param_remoteauth },
+    { .name = "KeysTrust", .type = VALUE_REQUIRED, &oshd_param_keystrust },
     { .name = "Port", .type = VALUE_REQUIRED, &oshd_param_port },
     { .name = "Mode", .type = VALUE_REQUIRED, &oshd_param_mode },
     { .name = "Device", .type = VALUE_REQUIRED, &oshd_param_device },

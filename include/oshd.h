@@ -19,7 +19,8 @@ typedef struct oshd {
     // Keys directory to fetch all private and public keys from
     char *keys_dir;
 
-    // true of authentication using remote keys is allowed
+    // true if authenticating nodes using remote keys is allowed, otherwise only
+    // local keys will be used
     bool remote_auth;
 
     // The local node's private and public keys
