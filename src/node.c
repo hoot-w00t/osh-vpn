@@ -282,8 +282,7 @@ static node_t *node_id_find_next_hop(node_id_t *dest_node)
 
     // We initialize our current queue with the current edges
     queue_count = (size_t) dest_node->edges_count;
-    queue = xalloc(sizeof(node_id_t *) * queue_count);
-    memcpy(queue, dest_node->edges, sizeof(node_id_t *) * queue_count);
+    queue = xmemdup(dest_node->edges, sizeof(node_id_t *) * queue_count);
 
 iterate_queue:
     // Iterate through the current queue to find a direct connection
@@ -494,8 +493,7 @@ static size_t node_tree_calc_hops_count(void)
 
     // We initialize our current queue with the current edges
     queue_count = (size_t) local_node->edges_count;
-    queue = xalloc(sizeof(node_id_t *) * queue_count);
-    memcpy(queue, local_node->edges, sizeof(node_id_t *) * queue_count);
+    queue = xmemdup(local_node->edges, sizeof(node_id_t *) * queue_count);
 
 iterate_queue:
     // Iterate through the current queue to find a direct connection
