@@ -695,14 +695,7 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                     return false;
                 }
 
-                node_id_t *id = node_id_find(node_name);
-
-                if (!id) {
-                    logger(LOG_ERR, "%s: %s: Endpoint: Unknown node: %s",
-                        node->addrw, node->id->name, node_name);
-                    return false;
-                }
-
+                node_id_t *id = node_id_add(node_name);
                 netaddr_t addr;
                 netarea_t area;
                 char hostname[INET6_ADDRSTRLEN];
