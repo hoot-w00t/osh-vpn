@@ -345,7 +345,7 @@ static void node_tree_dump_digraph_to(FILE *out)
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
         char *color;
         char *style;
-        char route[40];
+        char route[64];
 
         if (oshd.node_tree[i]->local_node) {
             // The local node is fully green
@@ -357,12 +357,14 @@ static void node_tree_dump_digraph_to(FILE *out)
             style = "solid";
             if (oshd.node_tree[i]->node_socket) {
                 color = "green";
-                snprintf(route, sizeof(route), "(direct, %ims)",
-                    oshd.node_tree[i]->node_socket->rtt);
+                snprintf(route, sizeof(route), "(direct, %ims, %zu hops)",
+                    oshd.node_tree[i]->node_socket->rtt,
+                    oshd.node_tree[i]->hops_count);
             } else {
                 color = "turquoise";
-                snprintf(route, sizeof(route), "(indirect through %s)",
-                    oshd.node_tree[i]->next_hop->id->name);
+                snprintf(route, sizeof(route), "(indirect through %s, %zu hops)",
+                    oshd.node_tree[i]->next_hop->id->name,
+                    oshd.node_tree[i]->hops_count);
             }
         } else {
             // Orphan nodes are outlined in red
@@ -444,10 +446,11 @@ void node_tree_dump(void)
     // Skip our local node, our edges are the direct connections
     // We start at 1 because the first element will always be our local node
     for (size_t i = 1; i < oshd.node_tree_count; ++i) {
-        printf("    %s (%s, next hop: %s): %zi edges: ",
+        printf("    %s (%s, next hop: %s, %zu hops): %zi edges: ",
             oshd.node_tree[i]->name,
             oshd.node_tree[i]->node_socket ? "direct" : "indirect",
             oshd.node_tree[i]->next_hop ? oshd.node_tree[i]->next_hop->id->name : "(no route)",
+            oshd.node_tree[i]->hops_count,
             oshd.node_tree[i]->edges_count);
 
         for (ssize_t j = 0; j < oshd.node_tree[i]->edges_count; ++j) {
@@ -458,6 +461,76 @@ void node_tree_dump(void)
         printf("\n");
     }
     printf("%zu nodes in the tree\n", oshd.node_tree_count);
+}
+
+// Calculate the hops_count from our local node for all nodes in the tree
+// Returns the maximum hops_count
+static size_t node_tree_calc_hops_count(void)
+{
+    node_id_t *local_node = node_id_find_local();
+
+    // We clear visited status for every node
+    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
+        // Nodes to which we don't have a route have a distance of 0
+        if (!oshd.node_tree[i]->next_hop)
+            oshd.node_tree[i]->hops_count = 0;
+
+        oshd.node_tree[i]->visited = false;
+    }
+
+    // We visited our local node
+    local_node->visited = 1;
+
+    // This is the current queue that we will explore
+    node_id_t **queue = NULL;
+    size_t queue_count = 0;
+
+    // This is the next queue that will be populated with
+    node_id_t **next_queue = NULL;
+    size_t next_queue_count = 0;
+
+    // This is the current hops_count
+    size_t hops_count = 0;
+
+    // We initialize our current queue with the current edges
+    queue_count = (size_t) local_node->edges_count;
+    queue = xalloc(sizeof(node_id_t *) * queue_count);
+    memcpy(queue, local_node->edges, sizeof(node_id_t *) * queue_count);
+
+iterate_queue:
+    // Iterate through the current queue to find a direct connection
+    for (size_t i = 0; i < queue_count; ++i) {
+        queue[i]->hops_count = hops_count;
+        queue[i]->visited = true;
+    }
+
+    // Iterate through the visited current queue again to queue the next
+    // unvisited nodes
+    for (size_t i = 0; i < queue_count; ++i) {
+        for (ssize_t j = 0; j < queue[i]->edges_count; ++j) {
+            if (!queue[i]->edges[j]->visited) {
+                node_id_array_append(&next_queue, &next_queue_count,
+                    queue[i]->edges[j]);
+            }
+        }
+    }
+
+    // If we have more edges to explore, queue them and loop
+    if (next_queue_count) {
+        free(queue);
+        queue = next_queue;
+        queue_count = next_queue_count;
+        next_queue = NULL;
+        next_queue_count = 0;
+        hops_count += 1;
+        goto iterate_queue;
+    }
+
+    // Free the temporary allocated memory
+    free(queue);
+    free(next_queue);
+
+    return hops_count;
 }
 
 static void node_tree_update_next_hops(void)
@@ -496,6 +569,9 @@ void node_tree_update(void)
     // After the node tree gets updated we need to re-calculate the next hops
     // of all nodes
     node_tree_update_next_hops();
+
+    // Calculate the hops_count of all nodes in the tree
+    node_tree_calc_hops_count();
 
     // We also need to delete all routes to orphan nodes
     oshd_route_del_orphan_routes();

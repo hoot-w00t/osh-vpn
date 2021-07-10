@@ -74,6 +74,10 @@ struct node_id {
     // The node socket to which we should queue packets for this destination
     node_t *next_hop;
 
+    // The number of hops to reach this node, how many others nodes will relay
+    // packets for this destination
+    size_t hops_count;
+
     // The node's "edges", a list of the node's direct neighbors
     node_id_t **edges;
     ssize_t edges_count;
