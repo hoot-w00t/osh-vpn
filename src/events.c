@@ -397,7 +397,7 @@ void event_queue_endpoints_refresh(void)
 // Calculates the maximum connections to queue at most in one iteration
 static size_t automatic_connections_remaining(size_t max_tries)
 {
-    const size_t target_connections = (oshd.node_tree_count * oshd.automatic_connections_percent) / 100;
+    const size_t target_connections = ((oshd.node_tree_count - 1) * oshd.automatic_connections_percent) / 100;
 
     // If we have more active connections than required, we don't need any more
     // automatic connections
@@ -429,16 +429,17 @@ static size_t automatic_connections_remaining(size_t max_tries)
 // every endpoint of every node on the network
 static time_t automatic_connections_next_retry_delay(void)
 {
+    const size_t tree_count = oshd.node_tree_count - 1;
     const time_t max_ep_delay = oshd.reconnect_delay_max + NODE_AUTH_TIMEOUT;
     time_t delay = 0;
 
     // Sum the maximum delay for all endpoints in the tree
-    for (size_t i = 0; i < oshd.node_tree_count; ++i)
+    for (size_t i = 0; i < tree_count; ++i)
         delay += max_ep_delay * oshd.node_tree[i]->endpoints->endpoints_count;
 
     // Add an approximation of the automatic connections interval after trying
     // to connect to all nodes on the tree
-    delay += oshd.automatic_connections_interval * (oshd.node_tree_count / 5);
+    delay += oshd.automatic_connections_interval * (tree_count / 5);
 
     return delay;
 }
