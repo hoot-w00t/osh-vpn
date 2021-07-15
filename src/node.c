@@ -790,7 +790,7 @@ void node_reconnect_endpoints(endpoint_group_t *reconnect_endpoints, time_t dela
             node_id_t *id = (node_id_t *) reconnect_endpoints->userdata;
 
             if (id && !id->endpoints_local) {
-                logger(LOG_INFO, "Giving up reconnecting to %s", id->name);
+                logger(LOG_INFO, "Giving up trying to reconnect to %s", id->name);
             } else {
                 // Increment the delay and go back to the start of the list
                 event_delay = node_reconnect_delay_limit(delay * 2);
