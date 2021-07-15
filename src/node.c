@@ -28,6 +28,27 @@ node_id_t *node_id_find_local(void)
     return oshd.node_tree[0];
 }
 
+// Sort oshd.node_tree_ordered_hops from highest to lowest hops_count
+// (bubble-sort)
+static void node_id_sort_hops(void)
+{
+    node_id_t **tree = oshd.node_tree_ordered_hops;
+    bool sorted = false;
+
+    while (!sorted) {
+        sorted = true;
+        for (size_t i = 1; i < oshd.node_tree_count; ++i) {
+            if (tree[i - 1]->hops_count < tree[i]->hops_count) {
+                node_id_t *tmp = tree[i - 1];
+
+                tree[i - 1] = tree[i];
+                tree[i] = tmp;
+                sorted = false;
+            }
+        }
+    }
+}
+
 // Update the node_id's edges_hash
 static void node_id_update_edges_hash(node_id_t *nid)
 {
@@ -83,14 +104,30 @@ node_id_t *node_id_add(const char *name)
     node_id_t *id;
 
     if (!(id = node_id_find(name))) {
+        size_t new_count = oshd.node_tree_count + 1;
+
+        // Create the new node ID
         id = xzalloc(sizeof(node_id_t));
-        oshd.node_tree = xreallocarray(oshd.node_tree, oshd.node_tree_count + 1,
+
+        // Expand the main node tree and other lists ordered differently to hold
+        // the new ID
+        oshd.node_tree = xreallocarray(oshd.node_tree, new_count,
             sizeof(node_id_t *));
+        oshd.node_tree_ordered_hops = xreallocarray(oshd.node_tree_ordered_hops,
+            new_count, sizeof(node_id_t *));
 
         oshd.node_tree[oshd.node_tree_count] = id;
-        oshd.node_tree_count += 1;
+
+        // We don't need to sort this new ID by hops_count as it will be
+        // initialized to 0 and this list will always end with hops count of 0
+        oshd.node_tree_ordered_hops[oshd.node_tree_count] = id;
+
+        oshd.node_tree_count = new_count;
 
         strncpy(id->name, name, NODE_NAME_SIZE);
+        id->endpoints = endpoint_group_create(id);
+        gettimeofday(&id->endpoints_last_update, NULL);
+        gettimeofday(&id->endpoints_next_retry, NULL);
 
         node_id_update_edges_hash(id);
     }
@@ -104,6 +141,7 @@ void node_id_free(node_id_t *nid)
     free(nid->pubkey_raw);
     free(nid->edges);
     free(nid->resolver_routes);
+    endpoint_group_free(nid->endpoints);
     free(nid);
 }
 
@@ -219,6 +257,17 @@ void node_id_clear_resolver_routes(node_id_t *nid)
     }
 }
 
+// Clear remote endpoints from a node
+void node_id_expire_endpoints(node_id_t *nid)
+{
+    logger_debug(DBG_ENDPOINTS, "%s: Expiring remote endpoints",
+        nid->name);
+    endpoint_group_clear(nid->endpoints);
+    if (nid->endpoints_local)
+        endpoint_group_add_group(nid->endpoints, nid->endpoints_local);
+    gettimeofday(&nid->endpoints_last_update, NULL);
+}
+
 // Dynamically resize array and add *n to the end, then increment the count
 static void node_id_array_append(node_id_t ***arr, size_t *count, node_id_t *n)
 {
@@ -267,8 +316,7 @@ static node_t *node_id_find_next_hop(node_id_t *dest_node)
 
     // We initialize our current queue with the current edges
     queue_count = (size_t) dest_node->edges_count;
-    queue = xalloc(sizeof(node_id_t *) * queue_count);
-    memcpy(queue, dest_node->edges, sizeof(node_id_t *) * queue_count);
+    queue = xmemdup(dest_node->edges, sizeof(node_id_t *) * queue_count);
 
 iterate_queue:
     // Iterate through the current queue to find a direct connection
@@ -330,7 +378,7 @@ static void node_tree_dump_digraph_to(FILE *out)
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
         char *color;
         char *style;
-        char route[40];
+        char route[64];
 
         if (oshd.node_tree[i]->local_node) {
             // The local node is fully green
@@ -342,12 +390,14 @@ static void node_tree_dump_digraph_to(FILE *out)
             style = "solid";
             if (oshd.node_tree[i]->node_socket) {
                 color = "green";
-                snprintf(route, sizeof(route), "(direct, %ims)",
-                    oshd.node_tree[i]->node_socket->rtt);
+                snprintf(route, sizeof(route), "(direct, %ims, %zu hops)",
+                    oshd.node_tree[i]->node_socket->rtt,
+                    oshd.node_tree[i]->hops_count);
             } else {
                 color = "turquoise";
-                snprintf(route, sizeof(route), "(indirect through %s)",
-                    oshd.node_tree[i]->next_hop->id->name);
+                snprintf(route, sizeof(route), "(indirect through %s, %zu hops)",
+                    oshd.node_tree[i]->next_hop->id->name,
+                    oshd.node_tree[i]->hops_count);
             }
         } else {
             // Orphan nodes are outlined in red
@@ -429,10 +479,11 @@ void node_tree_dump(void)
     // Skip our local node, our edges are the direct connections
     // We start at 1 because the first element will always be our local node
     for (size_t i = 1; i < oshd.node_tree_count; ++i) {
-        printf("    %s (%s, next hop: %s): %zi edges: ",
+        printf("    %s (%s, next hop: %s, %zu hops): %zi edges: ",
             oshd.node_tree[i]->name,
             oshd.node_tree[i]->node_socket ? "direct" : "indirect",
             oshd.node_tree[i]->next_hop ? oshd.node_tree[i]->next_hop->id->name : "(no route)",
+            oshd.node_tree[i]->hops_count,
             oshd.node_tree[i]->edges_count);
 
         for (ssize_t j = 0; j < oshd.node_tree[i]->edges_count; ++j) {
@@ -443,6 +494,78 @@ void node_tree_dump(void)
         printf("\n");
     }
     printf("%zu nodes in the tree\n", oshd.node_tree_count);
+}
+
+// Calculate the hops_count from our local node for all nodes in the tree
+// Sorts oshd.node_tree_ordered_hops before returning
+// Returns the maximum hops_count
+static size_t node_tree_calc_hops_count(void)
+{
+    node_id_t *local_node = node_id_find_local();
+
+    // We clear visited status for every node
+    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
+        // Nodes to which we don't have a route have a distance of 0
+        if (!oshd.node_tree[i]->next_hop)
+            oshd.node_tree[i]->hops_count = 0;
+
+        oshd.node_tree[i]->visited = false;
+    }
+
+    // We visited our local node
+    local_node->visited = 1;
+
+    // This is the current queue that we will explore
+    node_id_t **queue = NULL;
+    size_t queue_count = 0;
+
+    // This is the next queue that will be populated with
+    node_id_t **next_queue = NULL;
+    size_t next_queue_count = 0;
+
+    // This is the current hops_count
+    size_t hops_count = 0;
+
+    // We initialize our current queue with the current edges
+    queue_count = (size_t) local_node->edges_count;
+    queue = xmemdup(local_node->edges, sizeof(node_id_t *) * queue_count);
+
+iterate_queue:
+    // Iterate through the current queue to find a direct connection
+    for (size_t i = 0; i < queue_count; ++i) {
+        queue[i]->hops_count = hops_count;
+        queue[i]->visited = true;
+    }
+
+    // Iterate through the visited current queue again to queue the next
+    // unvisited nodes
+    for (size_t i = 0; i < queue_count; ++i) {
+        for (ssize_t j = 0; j < queue[i]->edges_count; ++j) {
+            if (!queue[i]->edges[j]->visited) {
+                node_id_array_append(&next_queue, &next_queue_count,
+                    queue[i]->edges[j]);
+            }
+        }
+    }
+
+    // If we have more edges to explore, queue them and loop
+    if (next_queue_count) {
+        free(queue);
+        queue = next_queue;
+        queue_count = next_queue_count;
+        next_queue = NULL;
+        next_queue_count = 0;
+        hops_count += 1;
+        goto iterate_queue;
+    }
+
+    // Free the temporary allocated memory
+    free(queue);
+    free(next_queue);
+
+    // Before returning, sort the node IDs with their updated hops count
+    node_id_sort_hops();
+    return hops_count;
 }
 
 static void node_tree_update_next_hops(void)
@@ -481,6 +604,9 @@ void node_tree_update(void)
     // After the node tree gets updated we need to re-calculate the next hops
     // of all nodes
     node_tree_update_next_hops();
+
+    // Calculate the hops_count of all nodes in the tree
+    node_tree_calc_hops_count();
 
     // We also need to delete all routes to orphan nodes
     oshd_route_del_orphan_routes();
@@ -562,7 +688,6 @@ void node_destroy(node_t *node)
     free(node->io.recvbuf);
     netbuffer_free(node->io.sendq);
     node_reset_ciphers(node);
-    free(node->reconnect_addr);
     free(node);
 }
 
@@ -587,7 +712,7 @@ node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port)
     // Queue the authentication timeout event for the node
     // When it triggers if the socket is not authenticated it will be
     // disconnected
-    event_queue_node_auth_timeout(node, 30);
+    event_queue_node_auth_timeout(node, NODE_AUTH_TIMEOUT);
 
     return node;
 }
@@ -613,34 +738,107 @@ void node_reconnect_delay(node_t *node, time_t delay)
     node->reconnect_delay = node_reconnect_delay_limit(delay);
 }
 
-// Set the node's socket reconnection information
-void node_reconnect_to(node_t *node, const char *addr, uint16_t port,
+// Set the node's socket reconnection endpoints
+// Destroys the previous endpoints if there were some
+void node_reconnect_to(node_t *node, endpoint_group_t *reconnect_endpoints,
     time_t delay)
 {
-    free(node->reconnect_addr);
-    node->reconnect_addr = addr ? xstrdup(addr) : NULL;
-    node->reconnect_port = port;
+    if (!reconnect_endpoints) {
+        // If this warning appears something in the code should be using
+        // node_reconnect_disable instead of this function, this situation
+        // should not happen
+        logger(LOG_WARN, "%s: node_reconnect_to called without any endpoints",
+            node->addrw);
+        node->reconnect_endpoints = NULL;
+    } else {
+        node->reconnect_endpoints = reconnect_endpoints;
+    }
     node_reconnect_delay(node, delay);
 }
 
-// Queue a reconnection to addr:port in delay seconds
-// Doubles the delay for future reconnections
-void node_reconnect_exp(const char *addr, uint16_t port, time_t delay)
+// Disable the node's reconnection
+void node_reconnect_disable(node_t *node)
 {
-    const time_t l_event_delay = node_reconnect_delay_limit(delay);
-    const time_t l_delay = node_reconnect_delay_limit(delay * 2);
-
-    logger(LOG_INFO, "Retrying to connect to %s:%u in %li seconds",
-        addr, port, l_event_delay);
-    event_queue_connect(addr, port, l_delay, l_event_delay);
+    node->reconnect_endpoints = NULL;
+    node_reconnect_delay(node, oshd.reconnect_delay_min);
 }
 
-// If node has a reconnect_addr, queue a reconnection
+// Queue a reconnection to one or multiple endpoints with delay seconds between
+// each loop
+// Doubles the delay for future reconnections
+void node_reconnect_endpoints(endpoint_group_t *reconnect_endpoints, time_t delay)
+{
+    time_t event_delay = node_reconnect_delay_limit(delay);
+
+    if (endpoint_group_selected_ep(reconnect_endpoints)) {
+        // We still have an endpoint, queue a reconnection to it
+        event_queue_connect(reconnect_endpoints, event_delay, event_delay);
+    } else {
+        // We don't have an endpoint, this means that we reached the end of the
+        // list
+
+        if (endpoint_group_select_start(reconnect_endpoints) > 0) {
+            // There are endpoints in the group, maybe try to reconnect
+
+            // If this endpoint group doesn't have userdata it is a local endpoint
+            // group, we will always retry to connect
+            // If it has a userdata (node_id_t *) and its endpoints_local is true,
+            // it also means that this is a local endpoint group
+            // However if there is userdata and its endpoints_local is false, we
+            // will give up trying to connect after several tries
+
+            node_id_t *id = (node_id_t *) reconnect_endpoints->userdata;
+
+            if (id && !id->endpoints_local) {
+                logger(LOG_INFO, "Giving up trying to reconnect to %s", id->name);
+            } else {
+                // Increment the delay and go back to the start of the list
+                event_delay = node_reconnect_delay_limit(delay * 2);
+                event_queue_connect(reconnect_endpoints, event_delay, event_delay);
+            }
+        } else {
+            // The group is empty, there is nothing to do
+        }
+    }
+}
+
+// Selects the next endpoint in the list before calling node_reconnect_endpoints
+void node_reconnect_endpoints_next(endpoint_group_t *reconnect_endpoints, time_t delay)
+{
+    endpoint_group_select_next(reconnect_endpoints);
+    node_reconnect_endpoints(reconnect_endpoints, delay);
+}
+
+// If node has a reconnect_endpoints, queue a reconnection
+// If the previous reconnection was a success, start from the beginning of the
+// list, otherwise choose the next endpoint in the list
 void node_reconnect(node_t *node)
 {
-    if (node->reconnect_addr) {
-        node_reconnect_exp(node->reconnect_addr, node->reconnect_port,
-            node->reconnect_delay);
+    if (node->reconnect_endpoints) {
+        if (node->reconnect_success) {
+            node->reconnect_success = false;
+            endpoint_group_select_start(node->reconnect_endpoints);
+            node_reconnect_endpoints(node->reconnect_endpoints, node->reconnect_delay);
+
+            // If this node's reconnect endpoints is linked to a node ID and it
+            // only has endpoints exchanged on the network, set the next retry
+            // timestamp to prevent the endpoints event from queuing the same
+            // group again
+            node_id_t *id = (node_id_t *) node->reconnect_endpoints->userdata;
+
+            if (id && !id->endpoints_local) {
+                // The delay before retrying to connect is the maximum time one
+                // endpoint can take to connect multiplied by the number of
+                // endpoints in the group
+                time_t delay_per_endpoint = node->reconnect_delay + NODE_AUTH_TIMEOUT;
+                time_t group_delay = delay_per_endpoint * node->reconnect_endpoints->endpoints_count;
+
+                gettimeofday(&id->endpoints_next_retry, NULL);
+                id->endpoints_next_retry.tv_sec += group_delay;
+            }
+        } else {
+            node_reconnect_endpoints_next(node->reconnect_endpoints, node->reconnect_delay);
+        }
     }
 }
 
@@ -1048,6 +1246,89 @@ bool node_queue_pubkey_exg(node_t *node)
     success = node_queue_packet_fragmented(node, PUBKEY, pubkeys,
         sizeof(oshpacket_pubkey_t) * count, sizeof(oshpacket_pubkey_t), false);
     free(pubkeys);
+    return success;
+}
+
+// Broadcast local endpoints
+bool node_queue_local_endpoint_broadcast(node_t *exclude)
+{
+    node_id_t *local_id = node_id_find_local();
+    oshpacket_endpoint_t *endpoints;
+    size_t count = local_id->endpoints->endpoints_count;
+    bool expire_success, broadcast_success;
+
+    if (count == 0)
+        return true;
+
+    endpoints = xalloc(count * sizeof(oshpacket_endpoint_t));
+    for (size_t i = 0; i < count; ++i) {
+        netaddr_t addr;
+
+        if (!netaddr_lookup(&addr, local_id->endpoints->endpoints[i].hostname)) {
+            logger(LOG_WARN,
+                "Skipping local endpoint %s:%u in endpoint broadcast (lookup failed)",
+                local_id->endpoints->endpoints[i].hostname,
+                local_id->endpoints->endpoints[i].port);
+            continue;
+        }
+
+        memcpy(endpoints[i].node_name, local_id->name, NODE_NAME_SIZE);
+        endpoints[i].addr_type = addr.type;
+        memcpy(endpoints[i].addr_data, addr.data, 16);
+        endpoints[i].port = htons(local_id->endpoints->endpoints[i].port);
+    }
+
+    oshpacket_endpoint_expire_t expire;
+
+    memcpy(expire.node_name, local_id->name, NODE_NAME_SIZE);
+
+    expire_success = node_queue_packet_broadcast(exclude, ENDPOINT_EXPIRE,
+        (uint8_t *) &expire, sizeof(expire));
+    broadcast_success = node_queue_packet_fragmented(exclude, ENDPOINT, endpoints,
+        sizeof(oshpacket_endpoint_t) * count, sizeof(oshpacket_endpoint_t), true);
+
+    free(endpoints);
+    return expire_success && broadcast_success;
+}
+
+// Queue ENDPOINT exchange packet
+bool node_queue_endpoint_exg(node_t *node)
+{
+    oshpacket_endpoint_t *endpoints = NULL;
+    size_t count = 0;
+    bool success;
+
+    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
+        // If we don't share our endpoints, skip our local node
+        if (oshd.node_tree[i]->local_node && !oshd.shareendpoints)
+            continue;
+
+        for (size_t j = 0; j < oshd.node_tree[i]->endpoints->endpoints_count; ++j) {
+            netaddr_t addr;
+
+            if (!netaddr_lookup(&addr, oshd.node_tree[i]->endpoints->endpoints[j].hostname)) {
+                logger(LOG_WARN,
+                    "%s: %s: Skipping endpoint %s:%u in endpoint exchange (lookup failed)",
+                    node->addrw,
+                    node->id->name,
+                    oshd.node_tree[i]->endpoints->endpoints[j].hostname,
+                    oshd.node_tree[i]->endpoints->endpoints[j].port);
+                continue;
+            }
+
+            endpoints = xreallocarray(endpoints, count + 1, sizeof(oshpacket_endpoint_t));
+
+            memcpy(endpoints[count].node_name, oshd.node_tree[i]->name, NODE_NAME_SIZE);
+            endpoints[count].addr_type = addr.type;
+            memcpy(endpoints[count].addr_data, addr.data, 16);
+            endpoints[count].port = htons(oshd.node_tree[i]->endpoints->endpoints[j].port);
+            count += 1;
+        }
+    }
+
+    success = node_queue_packet_fragmented(node, ENDPOINT, endpoints,
+        sizeof(oshpacket_endpoint_t) * count, sizeof(oshpacket_endpoint_t), false);
+    free(endpoints);
     return success;
 }
 

@@ -235,22 +235,20 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
         // This node should not be used
         node->hello_auth = false;
 
-        // If the node has a reconnection we will disable it to prevent
-        // duplicate connections (which will also be refused by the remote node)
-        if (node->reconnect_addr) {
-            // If the other authenticated socket does not have a reconnection
-            // set, we can set it to this node's
-            if (!node->hello_id->node_socket->reconnect_addr) {
-                logger(LOG_INFO, "%s: Moving reconnection to %s:%u to %s (%s)",
-                    node->addrw, node->reconnect_addr, node->reconnect_port,
-                    node->hello_id->name, node->hello_id->node_socket->addrw);
-                node_reconnect_to(node->hello_id->node_socket, node->reconnect_addr,
-                    node->reconnect_port, node->reconnect_delay);
-            } else {
-                // TODO: Add a way to try reconnecting to multiple addresses
-                logger(LOG_INFO, "%s: Disabling reconnection for %s:%u",
-                    node->addrw, node->reconnect_addr, node->reconnect_port);
-            }
+        // If the node has some reconnection endpoints we will transfer those to
+        // the existing connection to prevent duplicate connections (which would
+        // be refused by the remote node while the other socket is connected)
+        if (node->reconnect_endpoints) {
+            // Add this node's reconnection endpoints to the other node's
+            logger(LOG_INFO, "%s: Moving reconnection endpoints to %s (%s)",
+                node->addrw,
+                node->hello_id->name,
+                node->hello_id->node_socket->addrw);
+            endpoint_group_add_group(node->hello_id->endpoints,
+                node->reconnect_endpoints);
+            gettimeofday(&node->hello_id->endpoints_last_update, NULL);
+
+            // Disable reconnection for this node
             node_reconnect_disable(node);
         }
         return node_queue_hello_end(node);
@@ -280,6 +278,24 @@ static bool oshd_process_hello_end(node_t *node, oshpacket_hdr_t *pkt,
     node->authenticated = node->hello_auth;
     node->id = node->hello_id;
     node->id->node_socket = node;
+
+    // After successful authentication we can consider that the reconnection
+    // succeeded, reset the reconnection delay and set reconnect_success
+    node_reconnect_delay(node, oshd.reconnect_delay_min);
+    node->reconnect_success = true;
+
+    // If we have a reconnect_endpoints but without userdata, this connection
+    // is "local", it comes from the configuration
+    // So we copy the endpoints to the node ID it is authenticated as
+    if (node->reconnect_endpoints && !node->reconnect_endpoints->userdata) {
+        endpoint_group_add_group(node->id->endpoints, node->reconnect_endpoints);
+        node->id->endpoints_local = node->reconnect_endpoints;
+        gettimeofday(&node->hello_id->endpoints_last_update, NULL);
+    }
+
+    // Always attach this socket's reconnection addresses to its node ID's
+    // endpoints
+    node_reconnect_to(node, node->id->endpoints, oshd.reconnect_delay_min);
 
     if (node->hello_id->next_hop) {
         logger_debug(DBG_STATEEXG, "%s: %s: Previously accessible through %s (%s)",
@@ -319,6 +335,10 @@ static bool oshd_process_hello_end(node_t *node, oshpacket_hdr_t *pkt,
 
     // We exchange all known public keys of the nodes that are online
     if (!node_queue_pubkey_exg(node))
+        return false;
+
+    // We exchange all known endpoints
+    if (!node_queue_endpoint_exg(node))
         return false;
 
     // We finished queuing our state exchange packets
@@ -605,6 +625,93 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                     logger(LOG_ERR, "%s: %s: Failed to load public key for %s",
                         node->addrw, node->id->name, node_name);
                     return false;
+                }
+            }
+
+            return true;
+        }
+
+        case ENDPOINT_EXPIRE: {
+            if (pkt->payload_size != sizeof(oshpacket_endpoint_expire_t)) {
+                logger(LOG_ERR, "%s: %s: Invalid ENDPOINT_EXPIRE size: %u bytes",
+                    node->addrw, node->id->name, pkt->payload_size);
+                return false;
+            }
+
+            oshpacket_endpoint_expire_t *expire = (oshpacket_endpoint_expire_t *) payload;
+            char node_name[NODE_NAME_SIZE + 1];
+
+            memset(node_name, 0, sizeof(node_name));
+            memcpy(node_name, expire->node_name, 16);
+
+            if (!node_valid_name(node_name)) {
+                logger(LOG_ERR, "%s: %s: Endpoint expire: Invalid name",
+                        node->addrw, node->id->name);
+                return false;
+            }
+
+            node_id_t *id = node_id_find(node_name);
+
+            if (!id) {
+                logger(LOG_ERR, "%s: %s: Endpoint expire: Unknown node: %s",
+                        node->addrw, node->id->name, node_name);
+                    return false;
+            }
+
+            logger_debug(DBG_ENDPOINTS, "%s: %s: %s requested to expire %s",
+                node->addrw, node->id->name, src_node->name, id->name);
+            node_id_expire_endpoints(id);
+            return true;
+        }
+
+        case ENDPOINT: {
+            if (   pkt->payload_size == 0
+                || pkt->payload_size % sizeof(oshpacket_endpoint_t) != 0)
+            {
+                logger(LOG_ERR, "%s: %s: Invalid ENDPOINT size: %u bytes",
+                    node->addrw, node->id->name, pkt->payload_size);
+                return false;
+            }
+
+            if (node->state_exg) {
+                // Broadcast the endpoints to our end of the network
+                logger_debug(DBG_STATEEXG,
+                    "%s: %s: State exchange: Relaying ENDPOINT packet",
+                    node->addrw, node->id->name);
+                node_queue_packet_broadcast(node, ENDPOINT, payload,
+                    pkt->payload_size);
+            }
+
+            size_t count = pkt->payload_size / sizeof(oshpacket_endpoint_t);
+            oshpacket_endpoint_t *endpoints = (oshpacket_endpoint_t *) payload;
+            char node_name[NODE_NAME_SIZE + 1];
+            memset(node_name, 0, sizeof(node_name));
+
+            for (size_t i = 0; i < count; ++i) {
+                memcpy(node_name, endpoints[i].node_name, NODE_NAME_SIZE);
+                if (!node_valid_name(node_name)) {
+                    logger(LOG_ERR, "%s: %s: Endpoint: Invalid name",
+                        node->addrw, node->id->name);
+                    return false;
+                }
+
+                node_id_t *id = node_id_add(node_name);
+                netaddr_t addr;
+                netarea_t area;
+                char hostname[INET6_ADDRSTRLEN];
+
+                addr.type = endpoints[i].addr_type;
+                memcpy(addr.data, endpoints[i].addr_data, 16);
+                netaddr_ntop(hostname, sizeof(hostname), &addr);
+                area = netaddr_area(&addr);
+
+                if (endpoint_group_add(id->endpoints, hostname,
+                        ntohs(endpoints[i].port), area))
+                {
+                    logger_debug(DBG_ENDPOINTS, "%s: %s: Adding %s endpoint %s:%u to %s",
+                        node->addrw, node->id->name, netarea_name(area),
+                        hostname, ntohs(endpoints[i].port), id->name);
+                    gettimeofday(&id->endpoints_last_update, NULL);
                 }
             }
 

@@ -2,6 +2,7 @@
 
 #include "oshd_cmd.h"
 #include "oshd_device.h"
+#include "oshd_discovery.h"
 #include "oshd_socket.h"
 #include "oshd_route.h"
 #include "oshd.h"
@@ -19,8 +20,6 @@
 #include <poll.h>
 #include <signal.h>
 #include <dirent.h>
-#include <ifaddrs.h>
-#include <netdb.h>
 
 // Global variable
 oshd_t oshd;
@@ -28,52 +27,6 @@ oshd_t oshd;
 static struct pollfd *pfd = NULL;
 static size_t pfd_off = 0;
 static size_t pfd_count = 0;
-
-// Get the TUN/TAP device's addresses and add them to the daemon's local routes
-static void oshd_discover_device_routes(void)
-{
-    struct ifaddrs *ifaces;
-    char addrw[INET6_ADDRSTRLEN];
-    netaddr_t addr;
-
-    if (getifaddrs(&ifaces) < 0) {
-        logger(LOG_ERR, "getifaddrs: %s", strerror(errno));
-        return;
-    }
-
-    for (struct ifaddrs *ifa = ifaces; ifa; ifa = ifa->ifa_next) {
-        if (   ifa->ifa_name
-            && oshd.tuntap
-            && (   (oshd.tuntap->dev_name && !strcmp(ifa->ifa_name, oshd.tuntap->dev_name))
-                || (oshd.tuntap->dev_id && !strcmp(ifa->ifa_name, oshd.tuntap->dev_id)))
-            && ifa->ifa_addr
-            && (   ifa->ifa_addr->sa_family == AF_INET
-                || ifa->ifa_addr->sa_family == AF_INET6))
-        {
-            size_t af_size = ifa->ifa_addr->sa_family == AF_INET
-                ? sizeof(struct sockaddr_in)
-                : sizeof(struct sockaddr_in6);
-
-            int err = getnameinfo(ifa->ifa_addr, af_size, addrw, sizeof(addrw),
-                NULL, 0, NI_NUMERICHOST);
-
-            if (err) {
-                logger(LOG_ERR, "getnameinfo: %s", gai_strerror(err));
-                continue;
-            }
-
-            memset(&addr, 0, sizeof(addr));
-            if (!netaddr_pton(&addr, addrw))
-                continue;
-
-            oshd_route_add_local(&addr);
-            logger(LOG_INFO, "Discovered local route %s (%s)", addrw,
-                oshd.tuntap->dev_name);
-        }
-    }
-
-    freeifaddrs(ifaces);
-}
 
 // Load a private or a public key from the keys directory
 // name should be a node's name
@@ -308,15 +261,15 @@ void oshd_free(void)
     oshd.nodes = NULL;
 
     for (size_t i = 0; i < oshd.remote_count; ++i)
-        free(oshd.remote_addrs[i]);
-    free(oshd.remote_addrs);
-    free(oshd.remote_ports);
+        endpoint_group_free(oshd.remote_endpoints[i]);
+    free(oshd.remote_endpoints);
 
     oshd_cmd_unset_all();
 
     for (size_t i = 0; i < oshd.node_tree_count; ++i)
         node_id_free(oshd.node_tree[i]);
     free(oshd.node_tree);
+    free(oshd.node_tree_ordered_hops);
 
     free(oshd.local_routes);
     for (size_t i = 0; i < oshd.routes_count; ++i)
@@ -325,6 +278,10 @@ void oshd_free(void)
 
     free(oshd.resolver_tld);
     free(oshd.resolver_file);
+
+    for (size_t i = 0; i < oshd.excluded_devices_count; ++i)
+        free(oshd.excluded_devices[i]);
+    free(oshd.excluded_devices);
 
     event_cancel_queue();
 
@@ -340,18 +297,22 @@ void oshd_loop(void)
     // Update the resolver with its initial state
     oshd_resolver_update();
 
-    // Discover the TUN/TAP device's addresses
+    // Discover network devices' addresses
     if (oshd.tuntap)
-        oshd_discover_device_routes();
+        oshd_discover_local_routes();
+    if (oshd.shareendpoints)
+        oshd_discover_local_endpoints();
 
     // Queue the connections to our remotes
     for (size_t i = 0; i < oshd.remote_count; ++i) {
-        oshd_connect_queue(oshd.remote_addrs[i], oshd.remote_ports[i],
-            oshd.reconnect_delay_min);
+        oshd_connect_queue(oshd.remote_endpoints[i], oshd.reconnect_delay_min);
     }
 
     // Osh actually starts
     event_queue_periodic_ping();
+    event_queue_endpoints_refresh();
+    if (oshd.automatic_connections)
+        event_queue_automatic_connections();
 
     // We continue running while oshd.run is true and there are still connected
     // nodes

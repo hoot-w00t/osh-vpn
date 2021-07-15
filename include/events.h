@@ -47,11 +47,13 @@ void event_process_queued(void);
 void event_cancel_queue(void);
 void event_cancel(event_t *event);
 
-void event_queue_connect(const char *addr, uint16_t port, time_t delay,
+void event_queue_connect(endpoint_group_t *endpoints, time_t delay,
     time_t event_delay);
 void event_queue_periodic_ping(void);
 void event_queue_node_add(node_t *node);
 void event_queue_node_remove(node_t *node);
 void event_queue_node_auth_timeout(node_t *node, time_t timeout_delay);
+void event_queue_endpoints_refresh(void);
+void event_queue_automatic_connections(void);
 
 #endif

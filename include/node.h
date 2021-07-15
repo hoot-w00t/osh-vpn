@@ -1,6 +1,7 @@
 #ifndef _OSH_NODE_H
 #define _OSH_NODE_H
 
+#include "endpoints.h"
 #include "netaddr.h"
 #include "netbuffer.h"
 #include "oshpacket.h"
@@ -27,6 +28,12 @@
 
 #if (NODE_RECVBUF_SIZE < OSHPACKET_MAXSIZE)
 #error "NODE_RECVBUF_SIZE must be OSHPACKET_MAXSIZE or higher"
+#endif
+
+#ifndef NODE_AUTH_TIMEOUT
+// Time in seconds to authenticate a node, if it is not authenticated after this
+// delay, drop the connection
+#define NODE_AUTH_TIMEOUT (30)
 #endif
 
 typedef struct node_id node_id_t;
@@ -67,6 +74,10 @@ struct node_id {
     // The node socket to which we should queue packets for this destination
     node_t *next_hop;
 
+    // The number of hops to reach this node, how many others nodes will relay
+    // packets for this destination
+    size_t hops_count;
+
     // The node's "edges", a list of the node's direct neighbors
     node_id_t **edges;
     ssize_t edges_count;
@@ -83,6 +94,18 @@ struct node_id {
     // The node's routes, these are the VPN addresses
     netaddr_t *resolver_routes;
     size_t resolver_routes_count;
+
+    // The node's endpoints, these are real endpoints to which Osh can try to
+    // connect to
+    // endpoints_local is set to true when this node ID authenticates on a
+    // connection from a local endpoint group (in the configuration)
+    // last_update is a timestamp of the last addition to the group, endpoints
+    // received from the network will regularly timeout and get cleared. It is
+    // then up to the nodes to broadcast their endpoints to the network again
+    endpoint_group_t *endpoints;
+    endpoint_group_t *endpoints_local;
+    struct timeval endpoints_last_update;
+    struct timeval endpoints_next_retry;
 
     // true if the node ID is our ID (name == oshd.name)
     bool local_node;
@@ -156,12 +179,15 @@ struct node {
     // Remote "address:port" string
     char addrw[128];
 
-    // If *reconnect_addr is not NULL, contains a string of the remote address
+    // If *reconnect_endpoints is not NULL, contains one or multiple endpoints
     // to try to reconnect to when this socket disconnects
-    // This reconnection will occurs after reconnect_delay seconds
-    char *reconnect_addr;
-    uint16_t reconnect_port;
+    // Reconnections will loop through all endpoints, if none works after a full
+    // loop the delay will increase
+    // reconnect_success is used internally to know when a connection succeeded
+    // to reset the delay and select the first endpoint in the group
+    endpoint_group_t *reconnect_endpoints;
     time_t reconnect_delay;
+    bool reconnect_success;
 
     int32_t rtt;             // RTT latency in milliseconds
     struct timeval rtt_ping; // Timestamp of the last sent PING request
@@ -178,6 +204,7 @@ bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
     size_t pubkey_size);
 void node_id_add_resolver_route(node_id_t *nid, const netaddr_t *addr);
 void node_id_clear_resolver_routes(node_id_t *nid);
+void node_id_expire_endpoints(node_id_t *nid);
 
 void node_tree_dump_digraph(void);
 void node_tree_dump(void);
@@ -190,10 +217,11 @@ node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port);
 
 time_t node_reconnect_delay_limit(time_t delay);
 void node_reconnect_delay(node_t *node, time_t delay);
-void node_reconnect_to(node_t *node, const char *addr, uint16_t port,
+void node_reconnect_to(node_t *node, endpoint_group_t *reconnect_endpoints,
     time_t delay);
-#define node_reconnect_disable(node) node_reconnect_to((node), NULL, 0, 0)
-void node_reconnect_exp(const char *addr, uint16_t port, time_t delay);
+void node_reconnect_disable(node_t *node);
+void node_reconnect_endpoints(endpoint_group_t *reconnect_endpoints, time_t delay);
+void node_reconnect_endpoints_next(endpoint_group_t *reconnect_endpoints, time_t delay);
 void node_reconnect(node_t *node);
 
 bool node_valid_name(const char *name);
@@ -214,6 +242,8 @@ bool node_queue_ping(node_t *node);
 bool node_queue_pong(node_t *node);
 bool node_queue_pubkey_broadcast(node_t *exclude, node_id_t *id);
 bool node_queue_pubkey_exg(node_t *node);
+bool node_queue_local_endpoint_broadcast(node_t *exclude);
+bool node_queue_endpoint_exg(node_t *node);
 bool node_queue_edge(node_t *node, oshpacket_type_t type,
     const char *src, const char *dest);
 bool node_queue_edge_broadcast(node_t *exclude, oshpacket_type_t type,

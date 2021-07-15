@@ -26,9 +26,10 @@ typedef enum debug_what {
     DBG_ENCRYPTION,
     DBG_HANDSHAKE,
     DBG_STATEEXG,
-    DBG_RESOLVER
+    DBG_RESOLVER,
+    DBG_ENDPOINTS
 } debug_what_t;
-#define debug_what_size (14)
+#define debug_what_size (15)
 
 void logger_set_level(loglevel_t level);
 bool logger_set_level_name(const char *name);

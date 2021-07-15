@@ -82,6 +82,48 @@ static bool oshd_param_keystrust(ecp_t *ecp)
     return true;
 }
 
+// ShareEndpoints
+static bool oshd_param_shareendpoints(__attribute__((unused)) ecp_t *ecp)
+{
+    oshd.shareendpoints = true;
+    logger_debug(DBG_CONF, "Enabled ShareEndpoints");
+    return true;
+}
+
+// AutomaticConnections
+static bool oshd_param_automaticconnections(__attribute__((unused)) ecp_t *ecp)
+{
+    oshd.automatic_connections = true;
+    logger_debug(DBG_CONF, "%s automatic connections",
+        oshd.automatic_connections ? "Enabled" : "Disabled");
+    return true;
+}
+
+// AutomaticConnectionsInterval
+static bool oshd_param_automaticconnectionsinterval(ecp_t *ecp)
+{
+    oshd.automatic_connections_interval = (time_t) atoi(ecp_value(ecp));
+    logger_debug(DBG_CONF, "Set AutomaticConnectionsInterval to %li seconds",
+        oshd.automatic_connections_interval);
+    return true;
+}
+
+// AutomaticConnectionsPercent
+static bool oshd_param_automaticconnectionspercent(ecp_t *ecp)
+{
+    const size_t percent = (size_t) atoi(ecp_value(ecp));
+
+    if (percent == 0 || percent > 100) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "Invalid AutomaticConnectionsPercent: %s", ecp_value(ecp));
+        return false;
+    }
+    oshd.automatic_connections_percent = percent;
+    logger_debug(DBG_CONF, "Set AutomaticConnectionsPercent to %zu%%",
+        oshd.automatic_connections_percent);
+    return true;
+}
+
 // Port
 static bool oshd_param_port(ecp_t *ecp)
 {
@@ -125,6 +167,17 @@ static bool oshd_param_device(ecp_t *ecp)
     return true;
 }
 
+// ExcludeDevice
+static bool oshd_param_excludedevice(ecp_t *ecp)
+{
+    oshd.excluded_devices = xreallocarray(oshd.excluded_devices,
+        oshd.excluded_devices_count + 1, sizeof(char *));
+    oshd.excluded_devices[oshd.excluded_devices_count] = xstrdup(ecp_value(ecp));
+    oshd.excluded_devices_count += 1;
+    logger_debug(DBG_CONF, "Excluding device '%s'", ecp_value(ecp));
+    return true;
+}
+
 // DevUp
 static bool oshd_param_devup(ecp_t *ecp)
 {
@@ -144,40 +197,73 @@ static bool oshd_param_devdown(ecp_t *ecp)
 // Remote
 static bool oshd_param_remote(ecp_t *ecp)
 {
-    char *addr = xstrdup(ecp_value(ecp));
-    char *port = addr;
+    const char remote_separator[] = ",";
 
-    // Skip the address to get to the next value (separated with whitespaces)
-    for (; *port && *port != ' ' && *port != '\t'; ++port);
+    // Duplicate the value to use it with strtok
+    char *tokens = xstrdup(ecp_value(ecp));
+    char *token = strtok(tokens, remote_separator);
 
-    // If there are still characters after the address, separate the address and
-    // port values
-    if (*port) *port++ = '\0';
+    // Add the new empty endpoint group
+    oshd.remote_endpoints = xreallocarray(oshd.remote_endpoints,
+        oshd.remote_count + 1, sizeof(endpoint_group_t *));
+    oshd.remote_endpoints[oshd.remote_count] = endpoint_group_create(NULL);
 
-    // Go to the start of the second parameter, skipping whitespaces
-    for (; *port == ' ' || *port == '\t'; ++port);
+    logger_debug(DBG_CONF, "Remote: Processing tokens from '%s'", ecp_value(ecp));
 
-    // Append a new address and port to the remote lists
-    oshd.remote_addrs = xreallocarray(oshd.remote_addrs, oshd.remote_count + 1,
-        sizeof(char *));
-    oshd.remote_ports = xreallocarray(oshd.remote_ports, oshd.remote_count + 1,
-        sizeof(uint16_t));
+    // Iterate through all tokens to add multiple endpoints to this group
+    for (; token; token = strtok(NULL, remote_separator)) {
+        // Skip whitespaces before the endpoint address
+        size_t addr_off = 0;
+        for (; token[addr_off] == ' ' || token[addr_off] == '\t'; ++addr_off);
+        if (!token[addr_off]) {
+            logger_debug(DBG_CONF, "Remote: Skipping empty token '%s'", token);
+            continue;
+        }
 
-    // Set the address
-    oshd.remote_addrs[oshd.remote_count] = addr;
+        // Duplicate the address
+        char *addr = xstrdup(token + addr_off);
+        char *port = addr;
 
-    // Set the port
-    if ((*port)) {
-        oshd.remote_ports[oshd.remote_count] = (uint16_t) atoi(port);
-    } else {
-        oshd.remote_ports[oshd.remote_count] = OSHD_DEFAULT_PORT;
+        logger_debug(DBG_CONF, "Remote: Processing token '%s'", addr);
+
+        // Skip the address to get to the next value (separated with whitespaces)
+        for (; *port && *port != ' ' && *port != '\t'; ++port);
+
+        // If there are still characters after the address, separate the address and
+        // port values
+        if (*port) *port++ = '\0';
+
+        // Go to the start of the second parameter, skipping whitespaces
+        for (; *port == ' ' || *port == '\t'; ++port);
+
+        // Convert the port value to a number
+        uint16_t port_nb = (*port) ? ((uint16_t) atoi(port)) : OSHD_DEFAULT_PORT;
+
+        // Add the endpoint to the group
+        netaddr_t naddr;
+        netarea_t area;
+
+        if (!netaddr_lookup(&naddr, addr)) {
+            area = NETAREA_UNK;
+        } else {
+            area = netaddr_area(&naddr);
+        }
+        if (endpoint_group_add(oshd.remote_endpoints[oshd.remote_count],
+                addr, port_nb, area))
+        {
+            logger_debug(DBG_CONF, "Remote: %s:%u (%s) added",
+                addr, port_nb, netarea_name(area));
+        } else {
+            logger_debug(DBG_CONF, "Remote: %s:%u (%s) ignored",
+                addr, port_nb, netarea_name(area));
+        }
+
+        // Free the temporary address
+        free(addr);
     }
 
-    logger_debug(DBG_CONF, "Remote: %s:%u added",
-        oshd.remote_addrs[oshd.remote_count],
-        oshd.remote_ports[oshd.remote_count]);
-
     oshd.remote_count += 1;
+    free(tokens);
     return true;
 }
 
@@ -204,6 +290,15 @@ static bool oshd_param_reconnectdelaymax(ecp_t *ecp)
         return false;
     }
     logger_debug(DBG_CONF, "Set ReconnectDelayMax to %li", oshd.reconnect_delay_max);
+    return true;
+}
+
+// ConnectionsLimit
+static bool oshd_param_connectionslimit(ecp_t *ecp)
+{
+    oshd.nodes_count_max = (size_t) atoi(ecp_value(ecp));
+    logger_debug(DBG_CONF, "Set ConnectionsLimit to %zu%s", oshd.nodes_count_max,
+        (oshd.nodes_count_max == 0) ? " (unlimited)" : "");
     return true;
 }
 
@@ -281,14 +376,20 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "Name", .type = VALUE_REQUIRED, &oshd_param_name },
     { .name = "KeysDir", .type = VALUE_REQUIRED, &oshd_param_keysdir },
     { .name = "KeysTrust", .type = VALUE_REQUIRED, &oshd_param_keystrust },
+    { .name = "ShareEndpoints", .type = VALUE_NONE, &oshd_param_shareendpoints },
+    { .name = "AutomaticConnections", .type = VALUE_NONE, &oshd_param_automaticconnections },
+    { .name = "AutomaticConnectionsInterval", .type = VALUE_REQUIRED, &oshd_param_automaticconnectionsinterval },
+    { .name = "AutomaticConnectionsPercent", .type = VALUE_REQUIRED, &oshd_param_automaticconnectionspercent },
     { .name = "Port", .type = VALUE_REQUIRED, &oshd_param_port },
     { .name = "Mode", .type = VALUE_REQUIRED, &oshd_param_mode },
     { .name = "Device", .type = VALUE_REQUIRED, &oshd_param_device },
+    { .name = "ExcludeDevice", .type = VALUE_REQUIRED, &oshd_param_excludedevice },
     { .name = "DevUp", .type = VALUE_REQUIRED, &oshd_param_devup },
     { .name = "DevDown", .type = VALUE_REQUIRED, &oshd_param_devdown },
     { .name = "Remote", .type = VALUE_REQUIRED, &oshd_param_remote },
     { .name = "ReconnectDelayMin", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymin },
     { .name = "ReconnectDelayMax", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymax },
+    { .name = "ConnectionsLimit", .type = VALUE_REQUIRED, &oshd_param_connectionslimit },
     { .name = "DigraphFile", .type = VALUE_REQUIRED, &oshd_param_digraphfile },
     { .name = "Resolver", .type = VALUE_REQUIRED, &oshd_param_resolver },
     { .name = "ResolverTLD", .type = VALUE_REQUIRED, &oshd_param_resolvertld },
@@ -314,6 +415,9 @@ void oshd_init_conf(void)
 
     oshd.reconnect_delay_min = 10;
     oshd.reconnect_delay_max = 60;
+
+    oshd.automatic_connections_interval = 3600; // 1 hour (60m, 3600s)
+    oshd.automatic_connections_percent = 50;
 
     oshd.run = true;
 }
