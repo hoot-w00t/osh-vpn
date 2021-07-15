@@ -395,32 +395,72 @@ void event_queue_endpoints_refresh(void)
 // slots for the remotes in the configuration
 
 // Calculates the maximum connections to queue at most in one iteration
-// max_tries or less if the connections are limited
 static size_t automatic_connections_remaining(size_t max_tries)
 {
-    size_t remaining_tries = max_tries;
+    const size_t target_connections = (oshd.node_tree_count * oshd.automatic_connections_percent) / 100;
 
+    // If we have more active connections than required, we don't need any more
+    // automatic connections
+    // TODO: Maybe only count authenticated sockets as active connections
+    if (oshd.nodes_count >= target_connections)
+        return 0;
+
+    // Otherwise we calculate how many connections we should establish to reach
+    // the target percentage
+    size_t remaining_tries = target_connections - oshd.nodes_count;
+
+    // If connections are limited, make sure to always leave enough slots for
+    // the remotes from the configuration file
     if (oshd.nodes_count_max != 0) {
-        if (oshd.remote_count > oshd.nodes_count_max)
-            remaining_tries = 0;
+        if (oshd.remote_count >= oshd.nodes_count_max)
+            return 0;
         else
             remaining_tries = oshd.nodes_count_max - oshd.remote_count;
     }
+
+    // Make sure to not exceed the maximum amount of tries
     if (remaining_tries > max_tries)
         remaining_tries = max_tries;
+
     return remaining_tries;
 }
 
-// "Lazy" method, tries to connect to all nodes on the tree, every 30 minutes
-// it will try to establish at most 5 connections
-// Endpoints that are unreachable will only be tried again after 2 hours
-static void automatic_connections_lazy(__attribute__((unused)) void *data)
+// Calculates the total amount of time (in seconds) it can take to connect to
+// every endpoint of every node on the network
+static time_t automatic_connections_next_retry_delay(void)
 {
-    const time_t next_retry_delay = 7200; // 2 hours, 120 minutes
+    const time_t max_ep_delay = oshd.reconnect_delay_max + NODE_AUTH_TIMEOUT;
+    time_t delay = 0;
+
+    // Sum the maximum delay for all endpoints in the tree
+    for (size_t i = 0; i < oshd.node_tree_count; ++i)
+        delay += max_ep_delay * oshd.node_tree[i]->endpoints->endpoints_count;
+
+    // Add an approximation of the automatic connections interval after trying
+    // to connect to all nodes on the tree
+    delay += oshd.automatic_connections_interval * (oshd.node_tree_count / 5);
+
+    return delay;
+}
+
+// Automatic connections try to connect to more nodes on the tree at a given
+// interval (1 hour by default) until enough connections are established
+// (50% of the nodes in the tree by default)
+// It will try to establish at most 5 connections in one iteration, this is to
+// prevent queuing thousands of connections at once
+// After trying to automatically connect to a node there will be a delay before
+// the next try for this node, it should be long enough to let every node in the
+// tree get an automatic connection (this also prevents queuing too many
+// connections at once, but it should also prevent cases where some nodes would
+// never be automatically connected because others don't have a long enough
+// retry delay)
+static void automatic_connections_handler(__attribute__((unused)) void *data)
+{
+    const time_t next_retry_delay = automatic_connections_next_retry_delay();
     size_t remaining_tries = automatic_connections_remaining(5);
     struct timeval now;
 
-    logger_debug(DBG_ENDPOINTS, "Automatic connections (lazy, %zu at most)",
+    logger_debug(DBG_ENDPOINTS, "Automatic connections (%zu at most)",
         remaining_tries);
     gettimeofday(&now, NULL);
     for (size_t i = 0; i < oshd.node_tree_count && remaining_tries > 0; ++i) {
@@ -441,8 +481,8 @@ static void automatic_connections_lazy(__attribute__((unused)) void *data)
         {
             logger_debug(DBG_ENDPOINTS, "Automatically connecting to %s", id->name);
 
-            // If this connection fails to establish, do not retry during the
-            // next 2 hours
+            // Set the delay before trying to automatically connect to this node
+            // again
             tv_delay(&id->endpoints_next_retry, next_retry_delay);
             event_queue_connect(id->endpoints, oshd.reconnect_delay_min, 0);
             remaining_tries -= 1;
@@ -452,30 +492,11 @@ static void automatic_connections_lazy(__attribute__((unused)) void *data)
 
 // Queue a periodic event that will try to establish new connections
 // automatically
-// Uses the requested strategy, if disabled no event is queued
 void event_queue_automatic_connections(void)
 {
-    event_handler_t handler = NULL;
-    time_t delay;
     struct timeval trigger;
 
-    switch (oshd.ac_strategy) {
-        case AC_STRATEGY_DISABLED:
-            break;
-
-        case AC_STRATEGY_LAZY:
-            logger_debug(DBG_ENDPOINTS, "Lazy automatic reconnections");
-            delay = 1800; // 30 minutes
-            handler = automatic_connections_lazy;
-            break;
-
-        default: break;
-    }
-
-    if (!handler) {
-        logger_debug(DBG_ENDPOINTS, "Automatic reconnections are disabled");
-    } else {
-        tv_delay(&trigger, delay);
-        event_queue(event_create(handler, NULL, NULL, &trigger, delay));
-    }
+    tv_delay(&trigger, oshd.automatic_connections_interval);
+    event_queue(event_create(automatic_connections_handler, NULL, NULL,
+        &trigger, oshd.automatic_connections_interval));
 }

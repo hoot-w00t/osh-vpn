@@ -295,7 +295,8 @@ void oshd_loop(void)
     // Osh actually starts
     event_queue_periodic_ping();
     event_queue_endpoints_refresh();
-    event_queue_automatic_connections();
+    if (oshd.automatic_connections)
+        event_queue_automatic_connections();
 
     // We continue running while oshd.run is true and there are still connected
     // nodes

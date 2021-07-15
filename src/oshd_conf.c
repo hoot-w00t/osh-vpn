@@ -82,19 +82,36 @@ static bool oshd_param_shareendpoints(__attribute__((unused)) ecp_t *ecp)
 }
 
 // AutomaticConnections
-static bool oshd_param_automaticconnections(ecp_t *ecp)
+static bool oshd_param_automaticconnections(__attribute__((unused)) ecp_t *ecp)
 {
-    if (!strcasecmp(ecp_value(ecp), "disabled")) {
-        oshd.ac_strategy = AC_STRATEGY_DISABLED;
-    } else if (!strcasecmp(ecp_value(ecp), "lazy")) {
-        oshd.ac_strategy = AC_STRATEGY_LAZY;
-    } else {
+    oshd.automatic_connections = true;
+    logger_debug(DBG_CONF, "%s automatic connections",
+        oshd.automatic_connections ? "Enabled" : "Disabled");
+    return true;
+}
+
+// AutomaticConnectionsInterval
+static bool oshd_param_automaticconnectionsinterval(ecp_t *ecp)
+{
+    oshd.automatic_connections_interval = (time_t) atoi(ecp_value(ecp));
+    logger_debug(DBG_CONF, "Set AutomaticConnectionsInterval to %li seconds",
+        oshd.automatic_connections_interval);
+    return true;
+}
+
+// AutomaticConnectionsPercent
+static bool oshd_param_automaticconnectionspercent(ecp_t *ecp)
+{
+    const size_t percent = (size_t) atoi(ecp_value(ecp));
+
+    if (percent == 0 || percent > 100) {
         snprintf(oshd_conf_error, sizeof(oshd_conf_error),
-            "Invalid AutomaticConnections: '%s'", ecp_value(ecp));
+            "Invalid AutomaticConnectionsPercent: %s", ecp_value(ecp));
         return false;
     }
-    logger_debug(DBG_CONF, "Automatic connections strategy: %s",
-        ac_strategy_name(oshd.ac_strategy));
+    oshd.automatic_connections_percent = percent;
+    logger_debug(DBG_CONF, "Set AutomaticConnectionsPercent to %zu%%",
+        oshd.automatic_connections_percent);
     return true;
 }
 
@@ -351,7 +368,9 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "KeysDir", .type = VALUE_REQUIRED, &oshd_param_keysdir },
     { .name = "RemoteAuth", .type = VALUE_NONE, &oshd_param_remoteauth },
     { .name = "ShareEndpoints", .type = VALUE_NONE, &oshd_param_shareendpoints },
-    { .name = "AutomaticConnections", .type = VALUE_REQUIRED, &oshd_param_automaticconnections },
+    { .name = "AutomaticConnections", .type = VALUE_NONE, &oshd_param_automaticconnections },
+    { .name = "AutomaticConnectionsInterval", .type = VALUE_REQUIRED, &oshd_param_automaticconnectionsinterval },
+    { .name = "AutomaticConnectionsPercent", .type = VALUE_REQUIRED, &oshd_param_automaticconnectionspercent },
     { .name = "Port", .type = VALUE_REQUIRED, &oshd_param_port },
     { .name = "Mode", .type = VALUE_REQUIRED, &oshd_param_mode },
     { .name = "Device", .type = VALUE_REQUIRED, &oshd_param_device },
@@ -386,6 +405,9 @@ void oshd_init_conf(void)
 
     oshd.reconnect_delay_min = 10;
     oshd.reconnect_delay_max = 60;
+
+    oshd.automatic_connections_interval = 3600; // 1 hour (60m, 3600s)
+    oshd.automatic_connections_percent = 50;
 
     oshd.run = true;
 }
