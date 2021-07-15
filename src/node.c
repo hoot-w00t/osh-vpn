@@ -28,6 +28,27 @@ node_id_t *node_id_find_local(void)
     return oshd.node_tree[0];
 }
 
+// Sort oshd.node_tree_ordered_hops from highest to lowest hops_count
+// (bubble-sort)
+static void node_id_sort_hops(void)
+{
+    node_id_t **tree = oshd.node_tree_ordered_hops;
+    bool sorted = false;
+
+    while (!sorted) {
+        sorted = true;
+        for (size_t i = 1; i < oshd.node_tree_count; ++i) {
+            if (tree[i - 1]->hops_count < tree[i]->hops_count) {
+                node_id_t *tmp = tree[i - 1];
+
+                tree[i - 1] = tree[i];
+                tree[i] = tmp;
+                sorted = false;
+            }
+        }
+    }
+}
+
 // Update the node_id's edges_hash
 static void node_id_update_edges_hash(node_id_t *nid)
 {
@@ -83,12 +104,25 @@ node_id_t *node_id_add(const char *name)
     node_id_t *id;
 
     if (!(id = node_id_find(name))) {
+        size_t new_count = oshd.node_tree_count + 1;
+
+        // Create the new node ID
         id = xzalloc(sizeof(node_id_t));
-        oshd.node_tree = xreallocarray(oshd.node_tree, oshd.node_tree_count + 1,
+
+        // Expand the main node tree and other lists ordered differently to hold
+        // the new ID
+        oshd.node_tree = xreallocarray(oshd.node_tree, new_count,
             sizeof(node_id_t *));
+        oshd.node_tree_ordered_hops = xreallocarray(oshd.node_tree_ordered_hops,
+            new_count, sizeof(node_id_t *));
 
         oshd.node_tree[oshd.node_tree_count] = id;
-        oshd.node_tree_count += 1;
+
+        // We don't need to sort this new ID by hops_count as it will be
+        // initialized to 0 and this list will always end with hops count of 0
+        oshd.node_tree_ordered_hops[oshd.node_tree_count] = id;
+
+        oshd.node_tree_count = new_count;
 
         strncpy(id->name, name, NODE_NAME_SIZE);
         id->endpoints = endpoint_group_create(id);
@@ -463,6 +497,7 @@ void node_tree_dump(void)
 }
 
 // Calculate the hops_count from our local node for all nodes in the tree
+// Sorts oshd.node_tree_ordered_hops before returning
 // Returns the maximum hops_count
 static size_t node_tree_calc_hops_count(void)
 {
@@ -528,6 +563,8 @@ iterate_queue:
     free(queue);
     free(next_queue);
 
+    // Before returning, sort the node IDs with their updated hops count
+    node_id_sort_hops();
     return hops_count;
 }
 

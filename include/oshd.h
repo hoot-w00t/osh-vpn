@@ -68,6 +68,11 @@ typedef struct oshd {
     node_id_t **node_tree;
     size_t node_tree_count;
 
+    // Contains the same allocated pointers as node_tree, only the array pointer
+    // should be freed
+    // Node ID tree sorted by hops_count (highest to lowest)
+    node_id_t **node_tree_ordered_hops;
+
     // Array of the network routes of the local node
     netaddr_t *local_routes;
     size_t local_routes_count;

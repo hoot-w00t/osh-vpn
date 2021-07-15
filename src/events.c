@@ -394,30 +394,6 @@ void event_queue_endpoints_refresh(void)
 // If ConnectionsLimit is set, automatic connections will always leave enough
 // slots for the remotes in the configuration
 
-// Returns a dynamically allocated copy of the node tree ordered from highest
-// hops_count to lowest
-// (bubble-sort)
-static node_id_t **ordered_by_hops_count_tree(void)
-{
-    bool sorted = false;
-    node_id_t **ordered_tree = xmemdup(oshd.node_tree,
-        sizeof(node_id_t *) * oshd.node_tree_count);
-
-    while (!sorted) {
-        sorted = true;
-        for (size_t i = 1; i < oshd.node_tree_count; ++i) {
-            if (ordered_tree[i - 1]->hops_count < ordered_tree[i]->hops_count) {
-                node_id_t *tmp = ordered_tree[i - 1];
-
-                ordered_tree[i - 1] = ordered_tree[i];
-                ordered_tree[i] = tmp;
-                sorted = false;
-            }
-        }
-    }
-    return ordered_tree;
-}
-
 // Calculates the maximum connections to queue at most in one iteration
 // max_tries or less if the connections are limited
 static size_t automatic_connections_remaining(size_t max_tries)
@@ -442,14 +418,13 @@ static void automatic_connections_lazy(__attribute__((unused)) void *data)
 {
     const time_t next_retry_delay = 7200; // 2 hours, 120 minutes
     size_t remaining_tries = automatic_connections_remaining(5);
-    node_id_t **ordered_tree = ordered_by_hops_count_tree();
     struct timeval now;
 
     logger_debug(DBG_ENDPOINTS, "Automatic connections (lazy, %zu at most)",
         remaining_tries);
     gettimeofday(&now, NULL);
     for (size_t i = 0; i < oshd.node_tree_count && remaining_tries > 0; ++i) {
-        node_id_t *id = ordered_tree[i];
+        node_id_t *id = oshd.node_tree_ordered_hops[i];
 
         // Of course we won't try to connect to ourselves
         if (id->local_node)
@@ -473,7 +448,6 @@ static void automatic_connections_lazy(__attribute__((unused)) void *data)
             remaining_tries -= 1;
         }
     }
-    free(ordered_tree);
 }
 
 // Queue a periodic event that will try to establish new connections

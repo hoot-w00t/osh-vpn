@@ -253,6 +253,7 @@ void oshd_free(void)
     for (size_t i = 0; i < oshd.node_tree_count; ++i)
         node_id_free(oshd.node_tree[i]);
     free(oshd.node_tree);
+    free(oshd.node_tree_ordered_hops);
 
     free(oshd.local_routes);
     for (size_t i = 0; i < oshd.routes_count; ++i)
