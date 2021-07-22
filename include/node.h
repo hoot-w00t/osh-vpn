@@ -30,6 +30,13 @@
 #error "NODE_RECVBUF_SIZE must be OSHPACKET_MAXSIZE or higher"
 #endif
 
+#ifndef NODE_SENDQ_MAX_DATA_SIZE
+// Send queue size limit for queuing DATA packets
+// If the send queue already has this much data or more, DATA packets will be
+// dropped
+#define NODE_SENDQ_MAX_DATA_SIZE NODE_SENDQ_MIN_SIZE
+#endif
+
 #ifndef NODE_AUTH_TIMEOUT
 // Time in seconds to authenticate a node, if it is not authenticated after this
 // delay, drop the connection

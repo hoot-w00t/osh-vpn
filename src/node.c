@@ -859,8 +859,28 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
     uint8_t *payload, uint16_t payload_size)
 {
     const size_t packet_size = OSHPACKET_HDR_SIZE + payload_size;
-    uint8_t *slot = netbuffer_reserve(node->io.sendq, packet_size);
-    oshpacket_hdr_t *hdr = (oshpacket_hdr_t *) slot;
+    uint8_t *slot;
+    oshpacket_hdr_t *hdr;
+
+    // Drop DATA packets if the send queue exceeds a limit
+    // This is a very basic way to handle network congestion, but without it the
+    // send queue can accumulate an infinite amount of packets and this could
+    // create a denial of service between two nodes until we can catch up and
+    // the send queue flushes all of its data (this could take days in the worst
+    // cases)
+    if (   type == DATA
+        && netbuffer_data_size(node->io.sendq) >= NODE_SENDQ_MAX_DATA_SIZE)
+    {
+        logger_debug(DBG_TUNTAP,
+            "%s: Dropping %s packet of %u bytes: the send queue is full",
+            node->addrw,
+            oshpacket_type_name(type),
+            payload_size);
+        return false;
+    }
+
+    slot = netbuffer_reserve(node->io.sendq, packet_size);
+    hdr = (oshpacket_hdr_t *) slot;
 
     // Public part of the header
     hdr->magic = OSHPACKET_MAGIC;
@@ -943,6 +963,18 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
     if (!node->send_cipher) {
         logger(LOG_WARN, "%s: Dropping forwarded %s packet of %u bytes: No send_cipher",
             node->addrw, oshpacket_type_name(pkt->type), pkt->payload_size);
+        return false;
+    }
+
+    // Same basic network congestion handling as in node_queue_packet
+    if (   pkt->type == DATA
+        && netbuffer_data_size(node->io.sendq) >= NODE_SENDQ_MAX_DATA_SIZE)
+    {
+        logger_debug(DBG_TUNTAP,
+            "%s: Dropping forwarded %s packet of %u bytes: the send queue is full",
+            node->addrw,
+            oshpacket_type_name(pkt->type),
+            pkt->payload_size);
         return false;
     }
 
