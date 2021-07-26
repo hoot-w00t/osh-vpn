@@ -12,7 +12,7 @@ static char *conf_file = NULL;
 
 void print_version(void)
 {
-    printf("oshd %i.%i.%i-" OSH_COMMIT_HASH "\n",
+    printf("oshd %i.%i.%i (" OSH_VERSION_STR ")\n",
         OSH_VERSION_MAJOR, OSH_VERSION_MINOR, OSH_VERSION_PATCH);
 }
 
