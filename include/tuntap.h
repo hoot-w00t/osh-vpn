@@ -24,8 +24,13 @@ struct tuntap {
     int pollfd_read;         // File descriptor of a pipe for reading from the device
     int pollfd_write;        // File descriptor of the same pipe for writing on it
     pthread_t pollfd_thread; // Thread to pipe the adapter's data to pollfd_read
-    void *read_ol;           // TUN/TAP overlapped structure for reading
-    void *write_ol;          // TUN/TAP overlapped structure for writing
+    pthread_mutex_t pollfd_mtx;      // Mutex to prevent writing and reading at the
+                                     // same time on the pollfd pipe
+    pthread_cond_t pollfd_cond;      // Condition to block the pollfd thread when the
+                                     // pipe is full until tuntap_read is called
+    pthread_mutex_t pollfd_cond_mtx; // Mutex for the condition
+    void *read_ol;  // TUN/TAP overlapped structure for reading
+    void *write_ol; // TUN/TAP overlapped structure for writing
 #else
     // Device's file descriptor
     int fd;

@@ -112,6 +112,7 @@ static void *tuntap_pollfd_thread(void *data)
     DWORD buf_size = sizeof(_buf) - pollfd_hdr_size;
     DWORD read_bytes;
     DWORD err;
+    int ierr;
 
     while (1) {
         // Reset the overlapped event
@@ -142,9 +143,55 @@ static void *tuntap_pollfd_thread(void *data)
 
         // Write the packet size followed by the packet data to the pollfd pipe
         size_t total_size = read_bytes + pollfd_hdr_size;
-        ssize_t wb = write(tuntap->pollfd_write, _buf, total_size);
+        ssize_t wb;
+
+retry_write:
+        // Lock the pollfd mutex before writing
+        ierr = pthread_mutex_lock(&tuntap->pollfd_mtx);
+        if (ierr) {
+            logger(LOG_CRIT, "pollfd_thread: Failed to lock pollfd_mtx: %s",
+                strerror(ierr));
+            break;
+        }
+
+        wb = write(tuntap->pollfd_write, _buf, total_size);
+
+        // Unlock mutex after writing
+        ierr = pthread_mutex_unlock(&tuntap->pollfd_mtx);
+        if (ierr) {
+            logger(LOG_CRIT, "pollfd_thread: Failed to unlock pollfd_mtx: %s",
+                strerror(ierr));
+            break;
+        }
 
         if (wb < 0 || (size_t) wb != total_size) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // If write() will block we have to wait until tuntap_read is called
+                // This will happen when the pipe is full, after enough calls from
+                // tuntap_read the pipe won't be full anymore so we can retry to write
+                // the packet to it
+                // If we block on the write() call it will deadlock the whole program
+                // because the mutex won't ever be unlocked
+                ierr = pthread_mutex_lock(&tuntap->pollfd_cond_mtx);
+                if (ierr) {
+                    logger(LOG_CRIT, "pollfd_thread: Failed to lock pollfd_cond_mtx: %s",
+                        strerror(ierr));
+                    break;
+                }
+
+                logger_debug(DBG_TUNTAP, "pollfd_thread: write is blocking, waiting");
+                pthread_cond_wait(&tuntap->pollfd_cond, &tuntap->pollfd_cond_mtx);
+
+                ierr = pthread_mutex_unlock(&tuntap->pollfd_cond_mtx);
+                if (ierr) {
+                    logger(LOG_CRIT, "pollfd_thread: Failed to lock pollfd_cond_mtx: %s",
+                        strerror(ierr));
+                    break;
+                }
+                logger_debug(DBG_TUNTAP, "pollfd_thread: write should no longer block, retrying");
+                goto retry_write;
+            }
+
             logger(LOG_CRIT, "%s: Failed to write packet to pollfd: %s (%zi/%u)",
                 tuntap->dev_name, strerror(errno), wb, read_bytes);
         }
@@ -317,12 +364,10 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
     tuntap->pollfd_read = pollfd_pipe[0];
     tuntap->pollfd_write = pollfd_pipe[1];
 
-    // Only the reading file descriptor needs to be non-blocking as it will have
-    // to return EAGAIN or EWOULDBLOCK when no more data is ready to be read
-    // from the pipe
-    // The writing file descriptor should block and can because it will be on a
-    // separate thread
+    // Both file descriptors need to be non-blocking, a blocking write() will
+    // deadlock the program
     tuntap_nonblock(tuntap->pollfd_read);
+    tuntap_nonblock(tuntap->pollfd_write);
 
     // Enable the adapter
     if (!tuntap_device_enable(tuntap)) {
@@ -330,9 +375,34 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
         return NULL;
     }
 
+    int err;
+
+    // Initialize the pollfd mutex
+    err = pthread_mutex_init(&tuntap->pollfd_mtx, NULL);
+    if (err) {
+        logger(LOG_CRIT, "Failed to create pollfd mutex: %s", strerror(err));
+        tuntap_close(tuntap);
+        return NULL;
+    }
+
+    // Initialize the pollfd condition and its mutex
+    err = pthread_cond_init(&tuntap->pollfd_cond, NULL);
+    if (err) {
+        logger(LOG_CRIT, "Failed to create pollfd condition: %s", strerror(err));
+        tuntap_close(tuntap);
+        return NULL;
+    }
+
+    err = pthread_mutex_init(&tuntap->pollfd_cond_mtx, NULL);
+    if (err) {
+        logger(LOG_CRIT, "Failed to create pollfd condition mutex: %s", strerror(err));
+        tuntap_close(tuntap);
+        return NULL;
+    }
+
     // Create the thread to read from the device handle and write the packets to
     // the pollfd pipe
-    int err = pthread_create(&tuntap->pollfd_thread, NULL,
+    err = pthread_create(&tuntap->pollfd_thread, NULL,
         &tuntap_pollfd_thread, tuntap);
     if (err) {
         logger(LOG_CRIT, "Failed to create pollfd thread: %s", strerror(err));
@@ -385,6 +455,11 @@ void tuntap_close(tuntap_t *tuntap)
     if (tuntap->pollfd_write > 0)
         close(tuntap->pollfd_write);
 
+    // Destroy the pollfd mutex and condition
+    pthread_mutex_destroy(&tuntap->pollfd_mtx);
+    pthread_cond_destroy(&tuntap->pollfd_cond);
+    pthread_mutex_destroy(&tuntap->pollfd_cond_mtx);
+
     // Free the common parts of the tuntap_t structure and the structure itself
     tuntap_free_common(tuntap);
     free(tuntap);
@@ -392,8 +467,18 @@ void tuntap_close(tuntap_t *tuntap)
 
 bool tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
 {
+    bool success = false;
     DWORD size;
     ssize_t n;
+    int err;
+
+    // Lock the mutex before reading
+    err = pthread_mutex_lock(&tuntap->pollfd_mtx);
+    if (err) {
+        logger(LOG_CRIT, "tuntap_read: Failed to lock pollfd_mtx: %s",
+            strerror(err));
+        goto end;
+    }
 
     // Read the size of the next packet on the pipe
     n = read(tuntap->pollfd_read, &size, pollfd_hdr_size);
@@ -401,11 +486,12 @@ bool tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
         // If the read would block, no more data is ready to be read on the pipe
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             *pkt_size = 0;
-            return true;
+            success = true;
+            goto end;
         }
 
         // Otherwise the error will be handled by the caller
-        return false;
+        goto end;
     }
 
     // The packet size must be fully read
@@ -413,7 +499,7 @@ bool tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
         logger(LOG_CRIT, "tuntap_read: Incomplete packet header (%zi/%zu bytes)",
             n, pollfd_hdr_size);
         errno = EIO;
-        return false;
+        goto end;
     }
 
     // The destination buffer must be large enough to hold the packet
@@ -421,23 +507,43 @@ bool tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
         logger(LOG_CRIT, "tuntap_read: Buffer size is too small (%u/%zu bytes)",
             size, buf_size);
         errno = EINVAL;
-        return false;
+        goto end;
     }
 
     // Read the packet
     n = read(tuntap->pollfd_read, buf, size);
     if (n < 0)
-        return false;
+        goto end;
     if (n != size) {
         logger(LOG_CRIT, "tuntap_read: Incomplete packet (%zi/%u bytes)",
             n, size);
         errno = EIO;
-        return false;
+        goto end;
     }
 
     // Set the read packet's size
     *pkt_size = size;
-    return true;
+    success = true;
+
+end:
+    // Always unlock the mutex after all reads are done
+    err = pthread_mutex_unlock(&tuntap->pollfd_mtx);
+    if (err) {
+        logger(LOG_CRIT, "tuntap_read: Failed to unlock pollfd_mtx: %s",
+            strerror(err));
+        return false;
+    }
+
+    // Signal the condition for the pollfd thread
+    logger_debug(DBG_TUNTAP, "tuntap_read: Signaling pollfd_cond");
+    err = pthread_cond_signal(&tuntap->pollfd_cond);
+    if (err) {
+        logger(LOG_CRIT, "tuntap_read: Failed to signal pollfd_cond: %s",
+            strerror(err));
+        return false;
+    }
+
+    return success;
 }
 
 bool tuntap_write(tuntap_t *tuntap, void *packet, size_t packet_size)
