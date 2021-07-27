@@ -30,11 +30,23 @@
 #error "NODE_RECVBUF_SIZE must be OSHPACKET_MAXSIZE or higher"
 #endif
 
-#ifndef NODE_SENDQ_MAX_DATA_SIZE
+#ifndef NODE_SENDQ_DATA_SIZE_MAX
 // Send queue size limit for queuing DATA packets
-// If the send queue already has this much data or more, DATA packets will be
-// dropped
-#define NODE_SENDQ_MAX_DATA_SIZE NODE_SENDQ_MIN_SIZE
+// If the send queue already has this much data or more, DATA packets will all
+// be dropped
+#define NODE_SENDQ_DATA_SIZE_MAX NODE_SENDQ_MIN_SIZE
+#endif
+
+#ifndef NODE_SENDQ_DATA_SIZE_MIN
+// Minimum size of the send queue to start dropping packets
+#define NODE_SENDQ_DATA_SIZE_MIN (NODE_SENDQ_DATA_SIZE_MAX / 2)
+#endif
+
+// Size of the queue's "packet drop" range
+#define NODE_SENDQ_DATA_SIZE (NODE_SENDQ_DATA_SIZE_MAX - NODE_SENDQ_DATA_SIZE_MIN)
+
+#if (NODE_SENDQ_DATA_SIZE <= 0)
+#error "NODE_SENDQ_DATA_SIZE cannot be less than or equal to zero"
 #endif
 
 #ifndef NODE_AUTH_TIMEOUT
@@ -58,6 +70,7 @@ struct node_io {
     size_t recv_pkt_size; // Size of the next packet to receive
 
     netbuffer_t *sendq;   // Network buffer for queuing packets
+    size_t drop_counter;  // Counter for pseudo-random packet drops
 };
 
 struct node_id {
