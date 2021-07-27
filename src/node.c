@@ -855,10 +855,27 @@ bool node_valid_name(const char *name)
 }
 
 // Returns true if the DATA packet should be dropped (when the send queue is
-// full)
+// full or filling up too fast)
 static bool data_packet_should_drop(node_t *node)
 {
-    return netbuffer_data_size(node->io.sendq) >= NODE_SENDQ_MAX_DATA_SIZE;
+    if (netbuffer_data_size(node->io.sendq) >= NODE_SENDQ_DATA_SIZE_MIN) {
+        const size_t size_excess = netbuffer_data_size(node->io.sendq) - NODE_SENDQ_DATA_SIZE_MIN;
+        const size_t fill_percent = (size_excess * 100) / NODE_SENDQ_DATA_SIZE;
+        const size_t drop_counter_max = (100 / (fill_percent + 1)) + 1;
+
+        if ((node->io.drop_counter += 1) >= drop_counter_max) {
+            node->io.drop_counter = 0;
+            logger_debug(DBG_TUNTAP,
+                "%s: Data packet should drop: queue at %zu/%u bytes (%zu%%, drop counter: %zu)",
+                node->addrw,
+                size_excess,
+                NODE_SENDQ_DATA_SIZE,
+                fill_percent,
+                drop_counter_max);
+            return true;
+        }
+    }
+    return false;
 }
 
 // Queue a packet to the *node socket for *dest node
