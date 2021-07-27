@@ -854,6 +854,13 @@ bool node_valid_name(const char *name)
            && name_len == strspn(name, valid_charset);
 }
 
+// Returns true if the DATA packet should be dropped (when the send queue is
+// full)
+static bool data_packet_should_drop(node_t *node)
+{
+    return netbuffer_data_size(node->io.sendq) >= NODE_SENDQ_MAX_DATA_SIZE;
+}
+
 // Queue a packet to the *node socket for *dest node
 bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
     uint8_t *payload, uint16_t payload_size)
@@ -869,7 +876,7 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
     // the send queue flushes all of its data (this could take days in the worst
     // cases)
     if (   type == DATA
-        && netbuffer_data_size(node->io.sendq) >= NODE_SENDQ_MAX_DATA_SIZE)
+        && data_packet_should_drop(node))
     {
         logger_debug(DBG_TUNTAP,
             "%s: Dropping %s packet of %u bytes: the send queue is full",
@@ -968,7 +975,7 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
 
     // Same basic network congestion handling as in node_queue_packet
     if (   pkt->type == DATA
-        && netbuffer_data_size(node->io.sendq) >= NODE_SENDQ_MAX_DATA_SIZE)
+        && data_packet_should_drop(node))
     {
         logger_debug(DBG_TUNTAP,
             "%s: Dropping forwarded %s packet of %u bytes: the send queue is full",
