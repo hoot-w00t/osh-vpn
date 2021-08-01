@@ -148,7 +148,7 @@ void netaddr_mask_from_cidr(netaddr_t *mask, cidr_t cidr)
 
     memset(mask->data, 0, 16);
     for (cidr_t i = 0; i < cidr; ++i)
-        mask->data[(i / 8)] |= (1 << (cidr % 8));
+        mask->data[(i / 8)] |= (1 << (7 - (i % 8)));
 }
 
 // Returns the CIDR from a network mask
@@ -156,7 +156,7 @@ cidr_t netaddr_cidr_from_mask(const netaddr_t *mask)
 {
     cidr_t cidr = 0;
 
-    while (mask->data[(cidr / 8)] & (1 << (cidr % 8)))
+    while (mask->data[(cidr / 8)] & (1 << (7 - (cidr % 8))))
         ++cidr;
     return cidr;
 }
