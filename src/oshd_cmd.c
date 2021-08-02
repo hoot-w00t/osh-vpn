@@ -6,6 +6,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 typedef struct command {
     char *name;    // Command name (not case sensitive)
@@ -65,6 +66,34 @@ void oshd_cmd_unset_all(void)
     }
 }
 
+#if defined(_WIN32) || defined(__CYGWIN__)
+#define shell_filename "cmd.exe"
+#define shell_fullpath "C:\\Windows\\System32\\" shell_filename
+
+static int oshd_system(const char *command)
+{
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        return -1;
+    } else if (pid > 0) {
+        int status = -1;
+
+        if (waitpid(pid, &status, 0) != pid) {
+            logger(LOG_CRIT, "oshd_system: waitpid(%i): %s", pid, strerror(errno));
+            return -1;
+        }
+        return status;
+    } else {
+        execl(shell_fullpath, shell_filename, "/q", "/c", command, NULL);
+        logger(LOG_CRIT, "oshd_system: execl: %s", strerror(errno));
+        abort();
+    }
+}
+#else
+#define oshd_system(command) system(command)
+#endif
+
 // Execute command associated to *name
 // Returns true on success, false on error
 bool oshd_cmd_execute(const char *name)
@@ -78,7 +107,7 @@ bool oshd_cmd_execute(const char *name)
     if (!cmd->cmdline) return true;
 
     logger(LOG_INFO, "Executing %s command: '%s'", cmd->name, cmd->cmdline);
-    if ((status = system(cmd->cmdline)) < 0) {
+    if ((status = oshd_system(cmd->cmdline)) < 0) {
         logger(LOG_ERR, "Failed to execute %s command: %s", cmd->name,
             strerror(errno));
         return false;
