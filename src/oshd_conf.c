@@ -178,22 +178,6 @@ static bool oshd_param_excludedevice(ecp_t *ecp)
     return true;
 }
 
-// DevUp
-static bool oshd_param_devup(ecp_t *ecp)
-{
-    oshd_cmd_set("DevUp", ecp_value(ecp));
-    logger_debug(DBG_CONF, "Set DevUp to %s", ecp_value(ecp));
-    return true;
-}
-
-// DevDown
-static bool oshd_param_devdown(ecp_t *ecp)
-{
-    oshd_cmd_set("DevDown", ecp_value(ecp));
-    logger_debug(DBG_CONF, "Set DevDown to %s", ecp_value(ecp));
-    return true;
-}
-
 // Remote
 static bool oshd_param_remote(ecp_t *ecp)
 {
@@ -349,14 +333,6 @@ static bool oshd_param_resolverfile(ecp_t *ecp)
     return true;
 }
 
-// OnResolverUpdate
-static bool oshd_param_onresolverupdate(ecp_t *ecp)
-{
-    oshd_cmd_set("OnResolverUpdate", ecp_value(ecp));
-    logger_debug(DBG_CONF, "Set OnResolverUpdate to '%s'", ecp_value(ecp));
-    return true;
-}
-
 // LogLevel
 static bool oshd_param_loglevel(ecp_t *ecp)
 {
@@ -367,6 +343,14 @@ static bool oshd_param_loglevel(ecp_t *ecp)
     }
     logger_debug(DBG_CONF, "Set LogLevel to %s",
         logger_get_level_name(logger_get_level()));
+    return true;
+}
+
+// Parameters that set commands (the command name is the same as the parameter)
+static bool oshd_param_command(ecp_t *ecp)
+{
+    oshd_cmd_set(ecp_name(ecp), ecp_value(ecp));
+    logger_debug(DBG_CONF, "Set %s to '%s'", ecp_name(ecp), ecp_value(ecp));
     return true;
 }
 
@@ -384,8 +368,8 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "Mode", .type = VALUE_REQUIRED, &oshd_param_mode },
     { .name = "Device", .type = VALUE_REQUIRED, &oshd_param_device },
     { .name = "ExcludeDevice", .type = VALUE_REQUIRED, &oshd_param_excludedevice },
-    { .name = "DevUp", .type = VALUE_REQUIRED, &oshd_param_devup },
-    { .name = "DevDown", .type = VALUE_REQUIRED, &oshd_param_devdown },
+    { .name = "DevUp", .type = VALUE_REQUIRED, &oshd_param_command },
+    { .name = "DevDown", .type = VALUE_REQUIRED, &oshd_param_command },
     { .name = "Remote", .type = VALUE_REQUIRED, &oshd_param_remote },
     { .name = "ReconnectDelayMin", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymin },
     { .name = "ReconnectDelayMax", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymax },
@@ -394,7 +378,7 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "Resolver", .type = VALUE_REQUIRED, &oshd_param_resolver },
     { .name = "ResolverTLD", .type = VALUE_REQUIRED, &oshd_param_resolvertld },
     { .name = "ResolverFile", .type = VALUE_REQUIRED, &oshd_param_resolverfile },
-    { .name = "OnResolverUpdate", .type = VALUE_REQUIRED, &oshd_param_onresolverupdate },
+    { .name = "OnResolverUpdate", .type = VALUE_REQUIRED, &oshd_param_command },
     { .name = "LogLevel", .type = VALUE_REQUIRED, &oshd_param_loglevel },
     { NULL, 0, NULL }
 };
