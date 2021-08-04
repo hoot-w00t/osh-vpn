@@ -552,7 +552,7 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                 logger(LOG_ERR, "%s: %s: Incompatible device modes (local: %s, remote: %s)",
                     node->addrw, node->id->name, device_mode_name(oshd.device_mode),
                     device_mode_name(remote->devmode));
-                return false;
+                return node_queue_goodbye(node);
             }
 
             return true;
