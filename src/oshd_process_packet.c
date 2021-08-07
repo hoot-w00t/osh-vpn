@@ -570,13 +570,21 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
             return false;
 
         case PING: return node_queue_pong(node);
-        case PONG:
+        case PONG: {
+            if (!node->rtt_await) {
+                logger(LOG_WARN, "%s: %s: Received unexpected PONG",
+                    node->addrw, node->id->name);
+                return true;
+            }
+
             gettimeofday(&node->rtt_pong, NULL);
-            node->rtt = (node->rtt_pong.tv_usec - node->rtt_ping.tv_usec) / 1000;
-            logger_debug(DBG_SOCKETS, "%s: %s: RTT %ims", node->addrw,
-                node->id->name, node->rtt);
+            timersub(&node->rtt_pong, &node->rtt_ping, &node->rtt_delta);
+            node->rtt = (node->rtt_delta.tv_sec * 1000) + (node->rtt_delta.tv_usec / 1000);
+            node->rtt_await = false;
+            logger_debug(DBG_SOCKETS, "%s: %s: RTT %ims", node->addrw, node->id->name, node->rtt);
 
             return true;
+        }
 
         case PUBKEY: {
             if (   pkt->payload_size == 0

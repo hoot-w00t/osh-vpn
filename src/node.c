@@ -1241,7 +1241,14 @@ bool node_queue_ping(node_t *node)
 {
     uint8_t buf = 0;
 
+    if (node->rtt_await) {
+        logger_debug(DBG_SOCKETS, "%s: %s: Dropping PING request, another was not answered yet",
+            node->addrw, node->id->name);
+        return true;
+    }
+
     gettimeofday(&node->rtt_ping, NULL);
+    node->rtt_await = true;
     return node_queue_packet(node, node->id->name, PING, &buf, 1);
 }
 

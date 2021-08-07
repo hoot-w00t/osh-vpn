@@ -209,9 +209,11 @@ struct node {
     time_t reconnect_delay;
     bool reconnect_success;
 
-    int32_t rtt;             // RTT latency in milliseconds
-    struct timeval rtt_ping; // Timestamp of the last sent PING request
-    struct timeval rtt_pong; // Timestamp of the last received PONG request
+    int32_t rtt;              // RTT latency in milliseconds
+    bool rtt_await;           // true while a PONG is expected to be received
+    struct timeval rtt_ping;  // Timestamp of the last sent PING request
+    struct timeval rtt_pong;  // Timestamp of the last received PONG request
+    struct timeval rtt_delta; // Difference between rtt_ping and rtt_pong
 };
 
 node_id_t *node_id_find(const char *name);
