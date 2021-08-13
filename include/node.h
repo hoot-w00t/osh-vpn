@@ -12,8 +12,8 @@
 #include <poll.h>
 
 #ifndef NODE_SENDQ_MIN_SIZE
-// Allocate 2 MiB of buffer to the send queue at minimum
-#define NODE_SENDQ_MIN_SIZE (1024 * 1024 * 2)
+// Allocate 256 KiB of buffer to the send queue at minimum
+#define NODE_SENDQ_MIN_SIZE (1024 * 256)
 #endif
 
 #ifndef NODE_SENDQ_ALIGNMENT
@@ -22,8 +22,8 @@
 #endif
 
 #ifndef NODE_RECVBUF_SIZE
-// Size of the receive buffer, 1 MiB
-#define NODE_RECVBUF_SIZE (1024 * 1024 * 1)
+// Size of the receive buffer, 256 KiB
+#define NODE_RECVBUF_SIZE (1024 * 256)
 #endif
 
 #if (NODE_RECVBUF_SIZE < OSHPACKET_MAXSIZE)
@@ -34,7 +34,8 @@
 // Send queue size limit for queuing DATA packets
 // If the send queue already has this much data or more, DATA packets will all
 // be dropped
-#define NODE_SENDQ_DATA_SIZE_MAX NODE_SENDQ_MIN_SIZE
+// 192 KiB
+#define NODE_SENDQ_DATA_SIZE_MAX (1024 * 192)
 #endif
 
 #ifndef NODE_SENDQ_DATA_SIZE_MIN
