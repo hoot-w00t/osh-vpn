@@ -501,3 +501,22 @@ void event_queue_automatic_connections(void)
     event_queue(event_create(automatic_connections_handler, NULL, NULL,
         &trigger, oshd.automatic_connections_interval));
 }
+
+
+// Periodically expire routes that have not been advertised for too long
+static void expire_routes_event_handler(__attribute__((unused)) void *data)
+{
+    if (oshd_route_del_expired(oshd.routes))
+        oshd_discover_local_routes();
+}
+
+// This function should only be called once outside of the event handler
+void event_queue_expire_routes_refresh(void)
+{
+    const time_t check_delay = ROUTE_LOCAL_EXPIRY / 2;
+    struct timeval trigger;
+
+    tv_delay(&trigger, check_delay);
+    event_queue(event_create(expire_routes_event_handler, NULL,
+        NULL, &trigger, check_delay));
+}

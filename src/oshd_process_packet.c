@@ -475,11 +475,11 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
             logger_debug(DBG_ROUTING, "%s: %s: Add route: %s -> %s", node->addrw,
                 node->id->name, addr_str, id->name);
         }
-        oshd_route_add(&addr, id);
+        oshd_route_add(oshd.routes, &addr, id, true);
     }
 
     if (logger_is_debugged(DBG_ROUTING))
-        oshd_route_dump();
+        oshd_route_dump(oshd.routes);
     return true;
 }
 

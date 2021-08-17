@@ -140,7 +140,6 @@ void node_id_free(node_id_t *nid)
     pkey_free(nid->pubkey);
     free(nid->pubkey_raw);
     free(nid->edges);
-    free(nid->resolver_routes);
     endpoint_group_free(nid->endpoints);
     free(nid);
 }
@@ -216,45 +215,6 @@ bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
     nid->pubkey_raw_size = pubkey_size;
     nid->pubkey_local = false;
     return true;
-}
-
-// Append internal IP to a node
-void node_id_add_resolver_route(node_id_t *nid, const netaddr_t *addr)
-{
-    // MAC addresses cannot be resolved
-    if (addr->type == MAC)
-        return;
-
-    // Make sure that the route doesn't exist already
-    for (size_t i = 0; i < nid->resolver_routes_count; ++i) {
-        if (netaddr_eq(&nid->resolver_routes[i], addr))
-            return;
-    }
-
-    if (logger_is_debugged(DBG_RESOLVER)) {
-        char addrp[INET6_ADDRSTRLEN];
-
-        netaddr_ntop(addrp, sizeof(addrp), addr);
-        logger_debug(DBG_RESOLVER, "Adding %s to %s", addrp, nid->name);
-    }
-
-    nid->resolver_routes = xreallocarray(nid->resolver_routes,
-        nid->resolver_routes_count + 1, sizeof(netaddr_t));
-    netaddr_cpy(&nid->resolver_routes[nid->resolver_routes_count], addr);
-    nid->resolver_routes_count += 1;
-    oshd_resolver_append(addr, nid->name);
-}
-
-// Clear all internal IPs from a node
-void node_id_clear_resolver_routes(node_id_t *nid)
-{
-    if (nid->resolver_routes) {
-        logger_debug(DBG_RESOLVER, "Clearing routes from %s", nid->name);
-        free(nid->resolver_routes);
-        nid->resolver_routes = NULL;
-        nid->resolver_routes_count = 0;
-        oshd_resolver_update();
-    }
 }
 
 // Clear remote endpoints from a node
@@ -410,18 +370,10 @@ static void node_tree_dump_digraph_to(FILE *out)
             oshd.node_tree[i]->name, oshd.node_tree[i]->name, route, color, style);
     }
 
-    // We define and label our local routes
-    for (size_t i = 0; i < oshd.local_routes_count; ++i) {
-        netaddr_ntop(addr, sizeof(addr), &oshd.local_routes[i]);
-        fprintf(out, "    \"%s\" [label=\"%s\", color=grey, style=solid];\n",
-            addr, addr);
-    }
-
-    // We define and label the remote routes
-    for (size_t i = 0; i < oshd.routes_count; ++i) {
-        netaddr_ntop(addr, sizeof(addr), &oshd.routes[i]->addr);
-        fprintf(out, "    \"%s\" [label=\"%s\", color=grey, style=solid];\n",
-            addr, addr);
+    // We define and label all routes
+    foreach_oshd_route(route, oshd.routes) {
+        netaddr_ntop(addr, sizeof(addr), &route->addr);
+        fprintf(out, "    \"%s\" [label=\"%s\", color=grey, style=solid];\n", addr, addr);
     }
 
     // We defined all nodes on the graph, now we just need to connect them all
@@ -436,16 +388,10 @@ static void node_tree_dump_digraph_to(FILE *out)
         }
     }
 
-    // We connect our local node to its routes
-    for (size_t i = 0; i < oshd.local_routes_count; ++i) {
-        netaddr_ntop(addr, sizeof(addr), &oshd.local_routes[i]);
-        fprintf(out, "    \"%s\" -> \"%s\";\n", oshd.name, addr);
-    }
-
-    // We connect the remote routes to their destination nodes
-    for (size_t i = 0; i < oshd.routes_count; ++i) {
-        netaddr_ntop(addr, sizeof(addr), &oshd.routes[i]->addr);
-        fprintf(out, "    \"%s\" -> \"%s\";\n", oshd.routes[i]->dest_node->name, addr);
+    // We connect all nodes to their routes
+    foreach_oshd_route(route, oshd.routes) {
+        netaddr_ntop(addr, sizeof(addr), &route->addr);
+        fprintf(out, "    \"%s\" -> \"%s\";\n", route->dest_node->name, addr);
     }
 
     fprintf(out, "}\n");
@@ -609,7 +555,10 @@ void node_tree_update(void)
     node_tree_calc_hops_count();
 
     // We also need to delete all routes to orphan nodes
-    oshd_route_del_orphan_routes();
+    if (oshd_route_del_orphan(oshd.routes)) {
+        if (logger_is_debugged(DBG_ROUTING))
+            oshd_route_dump(oshd.routes);
+    }
 
     if (logger_is_debugged(DBG_NODETREE))
         node_tree_dump();
@@ -1549,44 +1498,20 @@ bool node_queue_route_add_local(node_t *exclude, const netaddr_t *addrs,
 // Queue ROUTE_ADD request with all our known routes
 bool node_queue_route_exg(node_t *node)
 {
-    size_t count = oshd.local_routes_count + oshd.routes_count;
-
-    if (count == 0)
+    if (oshd.routes->total_count == 0)
         return true;
 
-    size_t buf_size = sizeof(oshpacket_route_t) * count;
+    size_t buf_size = sizeof(oshpacket_route_t) * oshd.routes->total_count;
     oshpacket_route_t *buf = xalloc(buf_size);
 
-    // Format the addresses's type and data into buf
+    // Format all routes' addresses into buf
     size_t i = 0;
 
-    // Copy our local routes first
-    for (size_t j = 0; j < oshd.local_routes_count; ++j, ++i) {
-        memcpy(buf[i].node_name, oshd.name, NODE_NAME_SIZE);
-        buf[i].addr_type = oshd.local_routes[j].type;
-        memcpy(buf[i].addr_data, oshd.local_routes[j].data, 16);
-    }
-
-    // Copy all other routes
-    for (size_t j = 0; j < oshd.routes_count; ++j, ++i) {
-        memcpy(buf[i].node_name, oshd.routes[j]->dest_node->name, NODE_NAME_SIZE);
-        buf[i].addr_type = oshd.routes[j]->addr.type;
-        memcpy(buf[i].addr_data, oshd.routes[j]->addr.data, 16);
-    }
-
-    // If we our device is in TAP mode we should also exchange IPv4/6 routes for
-    // the resolver
-    // This will append all the resolver routes to the packet
-    if (oshd.tuntap && oshd.tuntap->is_tap) {
-        for (size_t j = 0; j < oshd.node_tree_count; ++j) {
-            for (size_t k = 0; k < oshd.node_tree[j]->resolver_routes_count; ++k, ++i) {
-                buf_size += sizeof(oshpacket_route_t);
-                buf = xrealloc(buf, buf_size);
-                memcpy(buf[i].node_name, oshd.node_tree[j]->name, NODE_NAME_SIZE);
-                buf[i].addr_type = oshd.node_tree[j]->resolver_routes[k].type;
-                memcpy(buf[i].addr_data, oshd.node_tree[j]->resolver_routes[k].data, 16);
-            }
-        }
+    foreach_oshd_route(route, oshd.routes) {
+        memcpy(buf[i].node_name, route->dest_node->name, NODE_NAME_SIZE);
+        buf[i].addr_type = route->addr.type;
+        memcpy(buf[i].addr_data, route->addr.data, 16);
+        ++i;
     }
 
     bool success = node_queue_packet_fragmented(node, ROUTE_ADD, buf, buf_size,

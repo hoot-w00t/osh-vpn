@@ -5,28 +5,42 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Dump the remote routes
-void oshd_route_dump(void)
+// Allocate an empty oshd_route_group
+oshd_route_group_t *oshd_route_group_create(void)
 {
-    char addr[INET6_ADDRSTRLEN];
+    oshd_route_group_t *group = xzalloc(sizeof(oshd_route_group_t));
 
-    printf("Dumping routes:\n");
-    for (size_t i = 0; i < oshd.routes_count; ++i) {
-        netaddr_ntop(addr, sizeof(addr), &oshd.routes[i]->addr);
-        printf("    %s -> %s\n", addr, oshd.routes[i]->dest_node->name);
-    }
+    return group;
 }
 
-// Dump the local routes
-void oshd_route_dump_local(void)
+// Free route group and all allocated resources
+void oshd_route_group_free(oshd_route_group_t *group)
 {
-    char addr[INET6_ADDRSTRLEN];
+    oshd_route_clear(group);
+    free(group);
+}
 
-    printf("Dumping local routes:\n");
-    for (size_t i = 0; i < oshd.local_routes_count; ++i) {
-        netaddr_ntop(addr, sizeof(addr), oshd.local_routes + i);
-        printf("    %s\n", addr);
+// Returns a pointer to the oshd_route_t which has the same addr
+// Returns NULL if no route matches addr
+// Searches through all routes
+oshd_route_t *oshd_route_find(oshd_route_group_t *group, const netaddr_t *addr)
+{
+    foreach_oshd_route(route, group) {
+        if (netaddr_eq(&route->addr, addr))
+            return route;
     }
+    return NULL;
+}
+
+// Same as oshd_route_find but searches through a given list for faster results
+oshd_route_t *oshd_route_find_in(oshd_route_t **list, size_t list_size,
+    const netaddr_t *addr)
+{
+    for (size_t i = 0; i < list_size; ++i) {
+        if (netaddr_eq(&list[i]->addr, addr))
+            return list[i];
+    }
+    return NULL;
 }
 
 // Returns true if the address type is compatible with the device type
@@ -44,124 +58,276 @@ static bool oshd_route_compatible(const netaddr_t *addr)
     }
 }
 
-// Find *addr in the routing table
-// Returns NULL if the route doesn't exist
-oshd_route_t *oshd_route_find(const netaddr_t *addr)
+// Append route to *list and update *list_count
+static void oshd_route_add_to(oshd_route_t ***list, size_t *list_count,
+    oshd_route_t *route)
 {
-    for (size_t i = 0; i < oshd.routes_count; ++i) {
-        if (netaddr_eq(addr, &oshd.routes[i]->addr))
-            return oshd.routes[i];
-    }
-    return NULL;
+    *list = xreallocarray(*list, *list_count + 1, sizeof(oshd_route_t *));
+    (*list)[*list_count] = route;
+    *list_count += 1;
 }
 
-// Add a new route to the routing table
-// If it already exists nothing is changed
-oshd_route_t *oshd_route_add(const netaddr_t *addr, node_id_t *dest_node)
+// Adds a new route to the group, if refresh is true the route's last_refresh
+// timestamp will be updated to the current time
+// If the address already exists nothing will be changed, the timestamp will
+// only be refreshed if dest_node is also the same as the route's dest_node
+// Returns a pointer to the oshd_route_t from the group
+// Adds the address in the relevant lists for faster searches
+oshd_route_t *oshd_route_add(oshd_route_group_t *group, const netaddr_t *addr,
+    node_id_t *dest_node, bool refresh)
 {
-    oshd_route_t *route;
+    oshd_route_t *route = oshd_route_find(group, addr);
 
-    node_id_add_resolver_route(dest_node, addr);
-    if (!oshd_route_compatible(addr))
-        return NULL;
-
-    if (!(route = oshd_route_find(addr))) {
+    // If the route doesn't exist already, allocate it
+    if (!route) {
         // Allocate the new route
-        route = xalloc(sizeof(oshd_route_t));
-        oshd.routes = xreallocarray(oshd.routes, oshd.routes_count + 1,
-            sizeof(oshd_route_t *));
-        oshd.routes[oshd.routes_count] = route;
-        oshd.routes_count += 1;
+        oshd_route_t **i = &group->head;
 
+        while (*i) i = &(*i)->next;
+        *i = xzalloc(sizeof(oshd_route_t));
+        route = *i;
+        group->total_count += 1;
+
+        // Initialize it
         netaddr_cpy(&route->addr, addr);
         route->dest_node = dest_node;
 
-        if (logger_is_debugged(DBG_ROUTING)) {
-            char addrp[INET6_ADDRSTRLEN];
+        // If the route is compatible with the TUN/TAP device, add it to the
+        // routing table
+        if (oshd_route_compatible(addr)) {
+            // If the destination is our local node it belongs in the local
+            // routes, otherwise it should be added to the remote routes
+            if (dest_node->local_node) {
+                oshd_route_add_to(&group->local, &group->local_count, route);
+            } else {
+                oshd_route_add_to(&group->remote, &group->remote_count, route);
+            }
+        }
 
-            netaddr_ntop(addrp, sizeof(addrp), addr);
-            logger_debug(DBG_ROUTING, "Added route %s to %s", addrp, dest_node->name);
+        // If the route is an IPv4 or IPv6 it belongs in the resolver list
+        if (addr->type == IP4 || addr->type == IP6)
+            oshd_route_add_to(&group->resolver, &group->resolver_count, route);
+
+        if (logger_is_debugged(DBG_ROUTING)) {
+            char addrw[INET6_ADDRSTRLEN];
+
+            netaddr_ntop(addrw, sizeof(addrw), addr);
+            logger_debug(DBG_ROUTING, "Added route %s owned by %s",
+                addrw, dest_node->name);
+        }
+        oshd_resolver_update();
+    }
+
+    if (refresh && route->dest_node == dest_node) {
+        gettimeofday(&route->last_refresh, NULL);
+
+        if (logger_is_debugged(DBG_ROUTING)) {
+            char addrw[INET6_ADDRSTRLEN];
+
+            netaddr_ntop(addrw, sizeof(addrw), addr);
+            logger_debug(DBG_ROUTING, "Refreshed route %s owned by %s",
+                addrw, dest_node->name);
         }
     }
+
     return route;
 }
 
-// Free *route and its allocated resources
-void oshd_route_free(oshd_route_t *route)
+// Delete route from *list and update *list_count
+static void oshd_route_del_from(oshd_route_t ***list, size_t *list_count,
+    oshd_route_t *route)
 {
-    // A function for just one free is useless but if one day there are more
-    // resources to free in the structure it'll be easy to add here
-    free(route);
-}
-
-// Delete all routes that don't have a dest_node->next_hop
-void oshd_route_del_orphan_routes(void)
-{
-    bool changed = false;
-    size_t i = 0;
-
-    logger_debug(DBG_ROUTING, "Deleting orphan routes");
-    while (i < oshd.routes_count) {
-        if (!oshd.routes[i]->dest_node->next_hop) {
-            changed = true;
-
-            node_id_clear_resolver_routes(oshd.routes[i]->dest_node);
-            if (logger_is_debugged(DBG_ROUTING)) {
-                char addrp[INET6_ADDRSTRLEN];
-
-                netaddr_ntop(addrp, sizeof(addrp), &oshd.routes[i]->addr);
-                logger_debug(DBG_ROUTING, "Deleting route %s from %s", addrp,
-                    oshd.routes[i]->dest_node->name);
+    for (size_t i = 0; i < *list_count; ++i) {
+        if ((*list)[i] == route) {
+            if ((i + 1) < *list_count) {
+                memmove(&(*list)[i], &(*list)[i + 1],
+                    sizeof(oshd_route_t *) * (*list_count - i - 1));
             }
-            oshd_route_free(oshd.routes[i]);
-
-            if (i + 1 < oshd.routes_count) {
-                // Shift the remaining route pointers, overwriting the orphan
-                // route, if there are more routes after this one
-                memmove(&oshd.routes[i], &oshd.routes[i + 1],
-                    sizeof(oshd_route_t *) * (oshd.routes_count - i - 1));
-            }
-            oshd.routes_count -= 1;
-            oshd.routes = xreallocarray(oshd.routes, oshd.routes_count,
-                sizeof(oshd_route_t *));
-        } else {
-            // We only increment our iterator if the route wasn't removed,
-            // because if we removed one the next will be shifted at the same
-            // position
-            ++i;
+            *list_count -= 1;
+            *list = xreallocarray(*list, *list_count, sizeof(oshd_route_t *));
+            break;
         }
     }
-    if (changed) {
-        if (logger_is_debugged(DBG_ROUTING))
-            oshd_route_dump();
+}
+
+// Delete route from group and all lists
+static bool oshd_route_del(oshd_route_group_t *group, oshd_route_t *route)
+{
+    oshd_route_t **i = &group->head;
+
+    while (*i) {
+        if (*i == route) {
+            *i = (*i)->next;
+            oshd_route_del_from(&group->remote, &group->remote_count, route);
+            oshd_route_del_from(&group->local, &group->local_count, route);
+            oshd_route_del_from(&group->resolver, &group->resolver_count, route);
+            group->total_count -= 1;
+
+            if (logger_is_debugged(DBG_ROUTING)) {
+                char addrw[INET6_ADDRSTRLEN];
+
+                netaddr_ntop(addrw, sizeof(addrw), &route->addr);
+                logger_debug(DBG_ROUTING, "Deleted route %s owned by %s",
+                    addrw, route->dest_node->name);
+            }
+
+            free(route);
+            return true;
+        }
+        i = &(*i)->next;
+    }
+    return false;
+}
+
+// TODO: Optimize these loops, we could perform the removal here instead of
+//       calling oshd_route_del which re-iterates through the linked list at
+//       every deletion
+
+// Delete route that matches addr from the group
+void oshd_route_del_addr(oshd_route_group_t *group, const netaddr_t *addr)
+{
+    oshd_route_t *route = oshd_route_find(group, addr);
+
+    if (route) {
+        oshd_route_del(group, route);
+        oshd_resolver_update();
     }
 }
 
-// Add a new local route
-// Returns true if the route was added to the local routes
-// Returns false if it already exists
-bool oshd_route_add_local(const netaddr_t *addr)
+// Delete route that matche dest_node from the group
+void oshd_route_del_dest(oshd_route_group_t *group, node_id_t *dest_node)
 {
-    for (size_t i = 0; i < oshd.local_routes_count; ++i) {
-        if (netaddr_eq(&oshd.local_routes[i], addr))
-            return false;
+    oshd_route_t *route = group->head;
+    oshd_route_t *next;
+    bool deleted = false;
+
+    while (route) {
+        next = route->next;
+        if (route->dest_node == dest_node) {
+            if (oshd_route_del(group, route))
+                deleted = true;
+        }
+        route = next;
+    }
+    if (deleted)
+        oshd_resolver_update();
+}
+
+// Delete expired routes
+bool oshd_route_del_expired(oshd_route_group_t *group)
+{
+    struct timeval now;
+    struct timeval delta;
+    oshd_route_t *route = group->head;
+    oshd_route_t *next;
+    bool deleted = false;
+
+    gettimeofday(&now, NULL);
+    while (route) {
+        bool expired = false;
+
+        next = route->next;
+
+        timersub(&now, &route->last_refresh, &delta);
+        if (route->dest_node->local_node) {
+            expired = delta.tv_sec >= ROUTE_LOCAL_EXPIRY;
+        } else {
+            expired = delta.tv_sec >= ROUTE_REMOTE_EXPIRY;
+        }
+        if (expired) {
+            if (oshd_route_del(group, route))
+                deleted = true;
+        }
+
+        route = next;
+    }
+    if (deleted)
+        oshd_resolver_update();
+    return deleted;
+}
+
+// Deletes all routes owned by orphan nodes
+// This excludes our local node
+bool oshd_route_del_orphan(oshd_route_group_t *group)
+{
+    bool deleted = false;
+
+    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
+        if (   !oshd.node_tree[i]->next_hop
+            && !oshd.node_tree[i]->local_node)
+        {
+            oshd_route_del_dest(group, oshd.node_tree[i]);
+            deleted = true;
+        }
+    }
+    return deleted;
+}
+
+// Deletes all routes
+void oshd_route_clear(oshd_route_group_t *group)
+{
+    oshd_route_t *next;
+
+    while (group->head) {
+        next = group->head->next;
+        free(group->head);
+        group->head = next;
+    }
+    group->total_count = 0;
+
+    free(group->remote);
+    group->remote = NULL;
+    group->remote_count = 0;
+
+    free(group->local);
+    group->local = NULL;
+    group->local_count = 0;
+
+    free(group->resolver);
+    group->resolver = NULL;
+    group->resolver_count = 0;
+
+    logger_debug(DBG_ROUTING, "Cleared all routes");
+    oshd_resolver_update();
+}
+
+// Dump list to outfile
+static void oshd_route_dump_list_to(oshd_route_t **list, size_t list_count,
+    FILE *outfile)
+{
+    char addrw[INET6_ADDRSTRLEN];
+
+    for (size_t i = 0; i < list_count; ++i) {
+        netaddr_ntop(addrw, sizeof(addrw), &list[i]->addr);
+        fprintf(outfile, "    %s owned by %s\n", addrw, list[i]->dest_node->name);
+    }
+}
+
+// Dump all routes to outfile
+void oshd_route_dump_to(oshd_route_group_t *group, FILE *outfile)
+{
+    char addrw[INET6_ADDRSTRLEN];
+
+    fprintf(outfile, "Routes dump (%zu):\n", group->total_count);
+    foreach_oshd_route(route, group) {
+        netaddr_ntop(addrw, sizeof(addrw), &route->addr);
+        fprintf(outfile, "    %s owned by %s\n", addrw, route->dest_node->name);
     }
 
-    node_id_add_resolver_route(node_id_find_local(), addr);
-    if (!oshd_route_compatible(addr))
-        return false;
+    fprintf(outfile, "\nLocal routes (%zu):\n", group->local_count);
+    oshd_route_dump_list_to(group->local, group->local_count, outfile);
 
-    oshd.local_routes = xreallocarray(oshd.local_routes,
-        oshd.local_routes_count + 1, sizeof(netaddr_t));
-    netaddr_cpy(&oshd.local_routes[oshd.local_routes_count], addr);
-    oshd.local_routes_count += 1;
+    fprintf(outfile, "\nRemote routes (%zu):\n", group->remote_count);
+    oshd_route_dump_list_to(group->remote, group->remote_count, outfile);
 
-    if (logger_is_debugged(DBG_ROUTING)) {
-        char addrp[INET6_ADDRSTRLEN];
+    fprintf(outfile, "\nResolver routes (%zu):\n", group->resolver_count);
+    oshd_route_dump_list_to(group->resolver, group->resolver_count, outfile);
 
-        netaddr_ntop(addrp, sizeof(addrp), addr);
-        logger_debug(DBG_ROUTING, "Added local route %s", addrp);
-        oshd_route_dump_local();
-    }
-    return true;
+    fflush(outfile);
+}
+
+// Dump all routes to stdout
+void oshd_route_dump(oshd_route_group_t *group)
+{
+    oshd_route_dump_to(group, stdout);
 }

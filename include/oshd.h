@@ -63,14 +63,8 @@ typedef struct oshd {
     // Node ID tree sorted by hops_count (highest to lowest)
     node_id_t **node_tree_ordered_hops;
 
-    // Array of the network routes of the local node
-    netaddr_t *local_routes;
-    size_t local_routes_count;
-
-    // Array of the network routes of remote nodes on the network
-    // This is our routing table
-    oshd_route_t **routes;
-    size_t routes_count;
+    // Array of all network routes
+    oshd_route_group_t *routes;
 
     // Array of network device names/IDs which should be excluded from the
     // endpoint discovery

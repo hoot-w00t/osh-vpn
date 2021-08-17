@@ -11,7 +11,7 @@ typedef enum resolver_type {
 
 const char *oshd_resolver_name(resolver_type_t resolver);
 bool oshd_resolver_check(void);
-void oshd_resolver_append(const netaddr_t *addr, const char *name);
+void oshd_resolver_check_tld(void);
 void oshd_resolver_update(void);
 
 #endif

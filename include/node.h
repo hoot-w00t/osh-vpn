@@ -111,10 +111,6 @@ struct node_id {
     char edges_hash_hex[(EVP_MAX_MD_SIZE * 2) + 1];
     unsigned int edges_hash_size;
 
-    // The node's routes, these are the VPN addresses
-    netaddr_t *resolver_routes;
-    size_t resolver_routes_count;
-
     // The node's endpoints, these are real endpoints to which Osh can try to
     // connect to
     // endpoints_local is set to true when this node ID authenticates on a
@@ -224,8 +220,6 @@ void node_id_add_edge(node_id_t *src, node_id_t *dest);
 void node_id_del_edge(node_id_t *src, node_id_t *dest);
 bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
     size_t pubkey_size);
-void node_id_add_resolver_route(node_id_t *nid, const netaddr_t *addr);
-void node_id_clear_resolver_routes(node_id_t *nid);
 void node_id_expire_endpoints(node_id_t *nid);
 
 void node_tree_dump_digraph(void);

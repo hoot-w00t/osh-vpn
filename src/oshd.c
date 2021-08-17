@@ -255,6 +255,9 @@ void oshd_free(void)
     free(oshd.nodes);
     free(pfd);
 
+    // Free all routes (local, remote and resolver)
+    oshd_route_group_free(oshd.routes);
+
     // We have to reset those in case the event queue tries to remove nodes
     // This is to safely cancel these events
     oshd.nodes_count = 0;
@@ -270,11 +273,6 @@ void oshd_free(void)
         node_id_free(oshd.node_tree[i]);
     free(oshd.node_tree);
     free(oshd.node_tree_ordered_hops);
-
-    free(oshd.local_routes);
-    for (size_t i = 0; i < oshd.routes_count; ++i)
-        oshd_route_free(oshd.routes[i]);
-    free(oshd.routes);
 
     free(oshd.resolver_tld);
     free(oshd.resolver_file);
@@ -295,6 +293,7 @@ void oshd_loop(void)
     int events;
 
     // Update the resolver with its initial state
+    oshd_resolver_check_tld();
     oshd_resolver_update();
 
     // Discover network devices' addresses
@@ -311,6 +310,7 @@ void oshd_loop(void)
     // Osh actually starts
     event_queue_periodic_ping();
     event_queue_endpoints_refresh();
+    event_queue_expire_routes_refresh();
     if (oshd.automatic_connections)
         event_queue_automatic_connections();
 
