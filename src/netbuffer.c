@@ -60,6 +60,7 @@ void netbuffer_shrink(netbuffer_t *nbuf)
 
 // Reserve data_size bytes at the end of the netbuffer
 // Dynamically allocates memory if needed
+_netbuffer_ptr_attr
 uint8_t *netbuffer_reserve(netbuffer_t *nbuf, size_t data_size)
 {
     uint8_t *dataptr;
