@@ -1,41 +1,39 @@
-UNAME		=	$(shell uname)
-CC		=	cc
-PKG_CONFIG	=	pkg-config
+UNAME		:=	$(shell uname)
+CC		:=	cc
+PKG_CONFIG	:=	pkg-config
 
-EASYCONF_ROOT	=	./easyconf
-EASYCONF_INC	=	$(EASYCONF_ROOT)/include
-EASYCONF_STATIC	=	$(EASYCONF_ROOT)/libeasyconf.a
+EASYCONF_ROOT	:=	./easyconf
+EASYCONF_INC	:=	$(EASYCONF_ROOT)/include
+EASYCONF_STATIC	:=	$(EASYCONF_ROOT)/libeasyconf.a
 
-ifndef OTHER_CFLAGS
-	OTHER_CFLAGS	=
-endif
+OTHER_CFLAGS	?=
 
-CFLAGS		=	-Wall -Wextra -Wshadow $(OTHER_CFLAGS) -O2 -g -pipe
+CFLAGS		:=	-Wall -Wextra -Wshadow $(OTHER_CFLAGS) -O2 -g -pipe
 CFLAGS		+=	-Iinclude -I$(EASYCONF_INC)
 CFLAGS		+=	$(strip $(shell $(PKG_CONFIG) --cflags openssl))
-LDFLAGS		=	$(EASYCONF_STATIC)
+LDFLAGS		:=	$(EASYCONF_STATIC)
 LDFLAGS		+=	$(strip $(shell $(PKG_CONFIG) --libs openssl))
 
-VERSION_GIT_H	=	include/version_git.h
+VERSION_GIT_H	:=	include/version_git.h
 VERSION_GIT	=	$(strip $(shell cat $(VERSION_GIT_H) 2>/dev/null))
 HEAD_COMMIT	=	$(strip $(shell git describe --always --tags --abbrev=10))
 
 ifeq ($(UNAME), Linux)
-BIN		=	oshd
-TEST_BIN	=	oshd_tests
+BIN		:=	oshd
+TEST_BIN	:=	oshd_tests
 else
-BIN		=	oshd.exe
-TEST_BIN	=	oshd_tests.exe
+BIN		:=	oshd.exe
+TEST_BIN	:=	oshd_tests.exe
 endif
 
-INSTALL_PREFIX	=	/usr/local
-INSTALL_PRE_BIN	=	$(INSTALL_PREFIX)/bin
-INSTALL_PRE_ETC	=	$(INSTALL_PREFIX)/etc
+INSTALL_PREFIX	:=	/usr/local
+INSTALL_PRE_BIN	:=	$(INSTALL_PREFIX)/bin
+INSTALL_PRE_ETC	:=	$(INSTALL_PREFIX)/etc
 
-INSTALL_BIN	=	$(INSTALL_PRE_BIN)/$(BIN)
-INSTALL_ETC	=	$(INSTALL_PRE_ETC)/oshd
+INSTALL_BIN	:=	$(INSTALL_PRE_BIN)/$(BIN)
+INSTALL_ETC	:=	$(INSTALL_PRE_ETC)/oshd
 
-SRC		=	src/crypto/cipher.c		\
+SRC		:=	src/crypto/cipher.c		\
 			src/crypto/hash.c		\
 			src/crypto/pkey.c		\
 			src/endpoints.c			\
@@ -61,17 +59,18 @@ SRC		=	src/crypto/cipher.c		\
 			src/tuntap.c			\
 			src/xalloc.c
 
-TEST_SRC	=	src/logger.c				\
+TEST_SRC	:=	src/logger.c				\
 			src/xalloc.c				\
 			src/netaddr.c				\
 			src/netbuffer.c				\
 			tests/netaddr_tests.c			\
 			tests/netbuffer_tests.c
 
-OBJ		=	$(SRC:%.c=obj/%.o)
-TEST_OBJ	=	$(TEST_SRC:%.c=obj/%.o)
-DEP		=	$(OBJ:.o=.d)
-TEST_DEP	=	$(TEST_OBJ:.o=.d)
+OBJ_ROOT	:=	obj
+OBJ		:=	$(SRC:%.c=$(OBJ_ROOT)/%.o)
+TEST_OBJ	:=	$(TEST_SRC:%.c=$(OBJ_ROOT)/%.o)
+DEP		:=	$(OBJ:.o=.d)
+TEST_DEP	:=	$(TEST_OBJ:.o=.d)
 
 all:	update_version_git	$(BIN)
 
@@ -97,11 +96,14 @@ uninstall:
 	rm -ri "$(INSTALL_ETC)"
 
 clean:
-	rm -rf obj *.gcda *.gcno
+	rm -rf $(OBJ_ROOT)
 
-obj/%.o:	%.c
+clean_all:	clean
+	@$(MAKE) -C $(EASYCONF_ROOT) clean
+
+$(OBJ_ROOT)/%.o:	%.c
 	@mkdir -p "$(shell dirname $@)"
-	$(CC) -MMD $(CFLAGS) -c $<	-o $@
+	$(CC) -MD $(CFLAGS) -c $<	-o $@
 
 $(BIN):	$(EASYCONF_STATIC)	$(OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS)
@@ -114,4 +116,4 @@ $(EASYCONF_STATIC):	make_easyconf
 -include $(DEP)
 -include $(TEST_DEP)
 
-.PHONY:	all	update_version_git	make_easyconf	test	install	uninstall	clean
+.PHONY:	all	update_version_git	make_easyconf	test	install	uninstall	clean	clean_all
