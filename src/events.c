@@ -201,8 +201,13 @@ void event_queue_connect(endpoint_group_t *endpoints, time_t delay,
     // If there is a delay for this connection then it is a reconnection
     endpoint = endpoint_group_selected(data->endpoints);
     if (event_delay > 0 && endpoint) {
-        logger(LOG_INFO, "Retrying to connect to %s at %s:%u in %li seconds",
-            data->endpoints->owner_name, endpoint->hostname, endpoint->port, delay);
+        if (data->endpoints->has_owner) {
+            logger(LOG_INFO, "Retrying to connect to %s at %s:%u in %li seconds",
+                data->endpoints->owner_name, endpoint->hostname, endpoint->port, delay);
+        } else {
+            logger(LOG_INFO, "Retrying to connect to %s:%u in %li seconds",
+                endpoint->hostname, endpoint->port, delay);
+        }
     }
 
     // Prevent duplicate connections to the same endpoints
