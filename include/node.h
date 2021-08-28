@@ -114,14 +114,7 @@ struct node_id {
 
     // The node's endpoints, these are real endpoints to which Osh can try to
     // connect to
-    // endpoints_local is set to true when this node ID authenticates on a
-    // connection from a local endpoint group (in the configuration)
-    // last_update is a timestamp of the last addition to the group, endpoints
-    // received from the network will regularly timeout and get cleared. It is
-    // then up to the nodes to broadcast their endpoints to the network again
     endpoint_group_t *endpoints;
-    endpoint_group_t *endpoints_local;
-    struct timeval endpoints_last_update;
     struct timeval endpoints_next_retry;
 
     // true if the node ID is our ID (name == oshd.name)
@@ -200,11 +193,8 @@ struct node {
     // to try to reconnect to when this socket disconnects
     // Reconnections will loop through all endpoints, if none works after a full
     // loop the delay will increase
-    // reconnect_success is used internally to know when a connection succeeded
-    // to reset the delay and select the first endpoint in the group
     endpoint_group_t *reconnect_endpoints;
     time_t reconnect_delay;
-    bool reconnect_success;
 
     int32_t rtt;              // RTT latency in milliseconds
     bool rtt_await;           // true while a PONG is expected to be received
@@ -221,7 +211,6 @@ void node_id_add_edge(node_id_t *src, node_id_t *dest);
 void node_id_del_edge(node_id_t *src, node_id_t *dest);
 bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
     size_t pubkey_size);
-void node_id_expire_endpoints(node_id_t *nid);
 
 void node_tree_dump_digraph(void);
 void node_tree_dump(void);
@@ -237,7 +226,6 @@ void node_reconnect_delay(node_t *node, time_t delay);
 void node_reconnect_to(node_t *node, endpoint_group_t *reconnect_endpoints,
     time_t delay);
 void node_reconnect_disable(node_t *node);
-void node_reconnect_endpoints(endpoint_group_t *reconnect_endpoints, time_t delay);
 void node_reconnect_endpoints_next(endpoint_group_t *reconnect_endpoints, time_t delay);
 void node_reconnect(node_t *node);
 
@@ -259,7 +247,8 @@ bool node_queue_ping(node_t *node);
 bool node_queue_pong(node_t *node);
 bool node_queue_pubkey_broadcast(node_t *exclude, node_id_t *id);
 bool node_queue_pubkey_exg(node_t *node);
-bool node_queue_local_endpoint_broadcast(node_t *exclude);
+bool node_queue_endpoint_broadcast(node_t *exclude, const endpoint_t *endpoint,
+    const endpoint_group_t *group);
 bool node_queue_endpoint_exg(node_t *node);
 bool node_queue_edge(node_t *node, oshpacket_type_t type,
     const char *src, const char *dest);

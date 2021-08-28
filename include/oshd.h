@@ -23,8 +23,12 @@ typedef struct oshd {
     // local keys will be used
     bool remote_auth;
 
-    // true if local endpoints should be shared with the network
-    bool shareendpoints;
+    // true if the remotes loaded from the configuration file should be shared
+    // with other nodes on the network
+    bool shareremotes;
+
+    // true if local endpoints should be discovered
+    bool discoverendpoints;
 
     // Automatic connections
     bool automatic_connections;

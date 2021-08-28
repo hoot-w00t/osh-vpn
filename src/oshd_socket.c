@@ -113,7 +113,7 @@ bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay)
     netaddr_t naddr;
     struct sockaddr_in6 d_sin;
     socklen_t d_sin_len = sizeof(struct sockaddr_in6);
-    endpoint_t *endpoint = endpoint_group_selected_ep(endpoints);
+    endpoint_t *endpoint = endpoint_group_selected(endpoints);
 
     // Initialize and create a socket to connect to address:port
     memset(d_addr, 0, sizeof(d_addr));
@@ -147,7 +147,12 @@ bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay)
 
     event_queue_node_add(node);
 
-    logger(LOG_INFO, "Trying to connect to %s...", node->addrw);
+    if (endpoints->has_owner) {
+        logger(LOG_INFO, "Trying to connect to %s at %s...",
+            endpoints->owner_name, node->addrw);
+    } else {
+        logger(LOG_INFO, "Trying to connect to %s...", node->addrw);
+    }
     return oshd_connect_async(node);
 }
 

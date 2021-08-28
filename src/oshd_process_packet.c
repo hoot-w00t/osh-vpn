@@ -246,7 +246,6 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
                 node->hello_id->node_socket->addrw);
             endpoint_group_add_group(node->hello_id->endpoints,
                 node->reconnect_endpoints);
-            gettimeofday(&node->hello_id->endpoints_last_update, NULL);
 
             // Disable reconnection for this node
             node_reconnect_disable(node);
@@ -280,22 +279,22 @@ static bool oshd_process_hello_end(node_t *node, oshpacket_hdr_t *pkt,
     node->id->node_socket = node;
 
     // After successful authentication we can consider that the reconnection
-    // succeeded, reset the reconnection delay and set reconnect_success
+    // succeeded, reset the reconnection delay
     node_reconnect_delay(node, oshd.reconnect_delay_min);
-    node->reconnect_success = true;
 
-    // If we have a reconnect_endpoints but without userdata, this connection
-    // is "local", it comes from the configuration
-    // So we copy the endpoints to the node ID it is authenticated as
-    if (node->reconnect_endpoints && !node->reconnect_endpoints->userdata) {
+    // Merge endpoints if the node's group is not the same as the node ID's
+    if (   node->reconnect_endpoints
+        && node->reconnect_endpoints != node->id->endpoints)
+    {
         endpoint_group_add_group(node->id->endpoints, node->reconnect_endpoints);
-        node->id->endpoints_local = node->reconnect_endpoints;
-        gettimeofday(&node->hello_id->endpoints_last_update, NULL);
     }
 
     // Always attach this socket's reconnection addresses to its node ID's
     // endpoints
     node_reconnect_to(node, node->id->endpoints, oshd.reconnect_delay_min);
+
+    // We are no longer actively trying to connect to these endpoints
+    endpoint_group_set_is_connecting(node->id->endpoints, false);
 
     if (node->hello_id->next_hop) {
         logger_debug(DBG_STATEEXG, "%s: %s: Previously accessible through %s (%s)",
@@ -639,39 +638,6 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
             return true;
         }
 
-        case ENDPOINT_EXPIRE: {
-            if (pkt->payload_size != sizeof(oshpacket_endpoint_expire_t)) {
-                logger(LOG_ERR, "%s: %s: Invalid ENDPOINT_EXPIRE size: %u bytes",
-                    node->addrw, node->id->name, pkt->payload_size);
-                return false;
-            }
-
-            oshpacket_endpoint_expire_t *expire = (oshpacket_endpoint_expire_t *) payload;
-            char node_name[NODE_NAME_SIZE + 1];
-
-            memset(node_name, 0, sizeof(node_name));
-            memcpy(node_name, expire->node_name, 16);
-
-            if (!node_valid_name(node_name)) {
-                logger(LOG_ERR, "%s: %s: Endpoint expire: Invalid name",
-                        node->addrw, node->id->name);
-                return false;
-            }
-
-            node_id_t *id = node_id_find(node_name);
-
-            if (!id) {
-                logger(LOG_ERR, "%s: %s: Endpoint expire: Unknown node: %s",
-                        node->addrw, node->id->name, node_name);
-                    return false;
-            }
-
-            logger_debug(DBG_ENDPOINTS, "%s: %s: %s requested to expire %s",
-                node->addrw, node->id->name, src_node->name, id->name);
-            node_id_expire_endpoints(id);
-            return true;
-        }
-
         case ENDPOINT: {
             if (   pkt->payload_size == 0
                 || pkt->payload_size % sizeof(oshpacket_endpoint_t) != 0)
@@ -713,14 +679,11 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                 netaddr_ntop(hostname, sizeof(hostname), &addr);
                 area = netaddr_area(&addr);
 
-                if (endpoint_group_add(id->endpoints, hostname,
-                        ntohs(endpoints[i].port), area))
-                {
-                    logger_debug(DBG_ENDPOINTS, "%s: %s: Adding %s endpoint %s:%u to %s",
-                        node->addrw, node->id->name, netarea_name(area),
-                        hostname, ntohs(endpoints[i].port), id->name);
-                    gettimeofday(&id->endpoints_last_update, NULL);
-                }
+                logger_debug(DBG_ENDPOINTS, "%s: %s: Adding %s endpoint %s:%u to %s",
+                    node->addrw, node->id->name, netarea_name(area),
+                    hostname, ntohs(endpoints[i].port), id->name);
+                endpoint_group_add(id->endpoints, hostname,
+                    ntohs(endpoints[i].port), area, true);
             }
 
             return true;

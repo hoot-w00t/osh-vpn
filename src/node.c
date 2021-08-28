@@ -125,9 +125,7 @@ node_id_t *node_id_add(const char *name)
         oshd.node_tree_count = new_count;
 
         strncpy(id->name, name, NODE_NAME_SIZE);
-        id->endpoints = endpoint_group_create(id);
-        gettimeofday(&id->endpoints_last_update, NULL);
-        gettimeofday(&id->endpoints_next_retry, NULL);
+        id->endpoints = endpoint_group_create(id->name);
 
         node_id_update_edges_hash(id);
     }
@@ -215,17 +213,6 @@ bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
     nid->pubkey_raw_size = pubkey_size;
     nid->pubkey_local = false;
     return true;
-}
-
-// Clear remote endpoints from a node
-void node_id_expire_endpoints(node_id_t *nid)
-{
-    logger_debug(DBG_ENDPOINTS, "%s: Expiring remote endpoints",
-        nid->name);
-    endpoint_group_clear(nid->endpoints);
-    if (nid->endpoints_local)
-        endpoint_group_add_group(nid->endpoints, nid->endpoints_local);
-    gettimeofday(&nid->endpoints_last_update, NULL);
 }
 
 // Dynamically resize array and add *n to the end, then increment the count
@@ -719,34 +706,28 @@ void node_reconnect_endpoints(endpoint_group_t *reconnect_endpoints, time_t dela
 {
     time_t event_delay = node_reconnect_delay_limit(delay);
 
-    if (endpoint_group_selected_ep(reconnect_endpoints)) {
+    if (endpoint_group_selected(reconnect_endpoints)) {
         // We still have an endpoint, queue a reconnection to it
         event_queue_connect(reconnect_endpoints, event_delay, event_delay);
     } else {
         // We don't have an endpoint, this means that we reached the end of the
         // list
-
-        if (endpoint_group_select_start(reconnect_endpoints) > 0) {
+        if (endpoint_group_select_first(reconnect_endpoints)) {
             // There are endpoints in the group, maybe try to reconnect
-
-            // If this endpoint group doesn't have userdata it is a local endpoint
-            // group, we will always retry to connect
-            // If it has a userdata (node_id_t *) and its endpoints_local is true,
-            // it also means that this is a local endpoint group
-            // However if there is userdata and its endpoints_local is false, we
-            // will give up trying to connect after several tries
-
-            node_id_t *id = (node_id_t *) reconnect_endpoints->userdata;
-
-            if (id && !id->endpoints_local) {
-                logger(LOG_INFO, "Giving up trying to reconnect to %s", id->name);
-            } else {
+            if (reconnect_endpoints->always_retry) {
                 // Increment the delay and go back to the start of the list
                 event_delay = node_reconnect_delay_limit(delay * 2);
                 event_queue_connect(reconnect_endpoints, event_delay, event_delay);
+            } else {
+                logger(LOG_INFO, "Giving up trying to reconnect to %s",
+                    reconnect_endpoints->owner_name);
+                endpoint_group_set_is_connecting(reconnect_endpoints, false);
             }
         } else {
             // The group is empty, there is nothing to do
+            logger(LOG_INFO, "Giving up trying to reconnect to %s (no endpoints)",
+                reconnect_endpoints->owner_name);
+            endpoint_group_set_is_connecting(reconnect_endpoints, false);
         }
     }
 }
@@ -764,29 +745,11 @@ void node_reconnect_endpoints_next(endpoint_group_t *reconnect_endpoints, time_t
 void node_reconnect(node_t *node)
 {
     if (node->reconnect_endpoints) {
-        if (node->reconnect_success) {
-            node->reconnect_success = false;
-            endpoint_group_select_start(node->reconnect_endpoints);
-            node_reconnect_endpoints(node->reconnect_endpoints, node->reconnect_delay);
-
-            // If this node's reconnect endpoints is linked to a node ID and it
-            // only has endpoints exchanged on the network, set the next retry
-            // timestamp to prevent the endpoints event from queuing the same
-            // group again
-            node_id_t *id = (node_id_t *) node->reconnect_endpoints->userdata;
-
-            if (id && !id->endpoints_local) {
-                // The delay before retrying to connect is the maximum time one
-                // endpoint can take to connect multiplied by the number of
-                // endpoints in the group
-                time_t delay_per_endpoint = node->reconnect_delay + NODE_AUTH_TIMEOUT;
-                time_t group_delay = delay_per_endpoint * node->reconnect_endpoints->endpoints_count;
-
-                gettimeofday(&id->endpoints_next_retry, NULL);
-                id->endpoints_next_retry.tv_sec += group_delay;
-            }
-        } else {
+        if (endpoint_group_is_connecting(node->reconnect_endpoints)) {
             node_reconnect_endpoints_next(node->reconnect_endpoints, node->reconnect_delay);
+        } else {
+            endpoint_group_select_first(node->reconnect_endpoints);
+            node_reconnect_endpoints(node->reconnect_endpoints, node->reconnect_delay);
         }
     }
 }
@@ -1261,87 +1224,89 @@ bool node_queue_pubkey_exg(node_t *node)
     return success;
 }
 
-// Broadcast local endpoints
-bool node_queue_local_endpoint_broadcast(node_t *exclude)
+// Broadcast an endpoint owned by group->owner_name
+bool node_queue_endpoint_broadcast(node_t *exclude, const endpoint_t *endpoint,
+    const endpoint_group_t *group)
 {
-    node_id_t *local_id = node_id_find_local();
-    oshpacket_endpoint_t *endpoints;
-    size_t count = local_id->endpoints->endpoints_count;
-    bool expire_success, broadcast_success;
+    oshpacket_endpoint_t pkt;
+    netaddr_t addr;
 
-    if (count == 0)
-        return true;
-
-    endpoints = xalloc(count * sizeof(oshpacket_endpoint_t));
-    for (size_t i = 0; i < count; ++i) {
-        netaddr_t addr;
-
-        if (!netaddr_lookup(&addr, local_id->endpoints->endpoints[i].hostname)) {
-            logger(LOG_WARN,
-                "Skipping local endpoint %s:%u in endpoint broadcast (lookup failed)",
-                local_id->endpoints->endpoints[i].hostname,
-                local_id->endpoints->endpoints[i].port);
-            continue;
-        }
-
-        memcpy(endpoints[i].node_name, local_id->name, NODE_NAME_SIZE);
-        endpoints[i].addr_type = addr.type;
-        memcpy(endpoints[i].addr_data, addr.data, 16);
-        endpoints[i].port = htons(local_id->endpoints->endpoints[i].port);
+    if (!group->has_owner) {
+        logger(LOG_ERR, "Failed to broadcast endpoint %s:%u: No owner (%s)",
+            endpoint->hostname, endpoint->port, group->owner_name);
+        return false;
+    }
+    if (!netaddr_lookup(&addr, endpoint->hostname)) {
+        logger(LOG_WARN,
+            "Failed to broadcast endpoint %s:%u owned by %s (lookup failed)",
+            endpoint->hostname, endpoint->port, group->owner_name);
+        return false;
     }
 
-    oshpacket_endpoint_expire_t expire;
+    memset(&pkt, 0, sizeof(pkt));
+    for (size_t i = 0; (group->owner_name[i] != 0) && (i < NODE_NAME_SIZE); ++i)
+        pkt.node_name[i] = group->owner_name[i];
+    pkt.addr_type = addr.type;
+    memcpy(pkt.addr_data, addr.data, 16);
+    pkt.port = htons(endpoint->port);
 
-    memcpy(expire.node_name, local_id->name, NODE_NAME_SIZE);
-
-    expire_success = node_queue_packet_broadcast(exclude, ENDPOINT_EXPIRE,
-        (uint8_t *) &expire, sizeof(expire));
-    broadcast_success = node_queue_packet_fragmented(exclude, ENDPOINT, endpoints,
-        sizeof(oshpacket_endpoint_t) * count, sizeof(oshpacket_endpoint_t), true);
-
-    free(endpoints);
-    return expire_success && broadcast_success;
+    logger_debug(DBG_ENDPOINTS, "Broadcasting endpoint %s:%u owned by %s",
+        endpoint->hostname, endpoint->port, group->owner_name);
+    return node_queue_packet_broadcast(exclude, ENDPOINT, (uint8_t *) &pkt,
+        sizeof(pkt));
 }
 
-// Queue ENDPOINT exchange packet
-bool node_queue_endpoint_exg(node_t *node)
+// Send an endpoint owned by group->owner_name to node
+static bool node_queue_endpoint(node_t *node, const endpoint_t *endpoint,
+    const endpoint_group_t *group)
 {
-    oshpacket_endpoint_t *endpoints = NULL;
-    size_t count = 0;
-    bool success;
+    oshpacket_endpoint_t pkt;
+    netaddr_t addr;
 
-    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
-        // If we don't share our endpoints, skip our local node
-        if (oshd.node_tree[i]->local_node && !oshd.shareendpoints)
-            continue;
-
-        for (size_t j = 0; j < oshd.node_tree[i]->endpoints->endpoints_count; ++j) {
-            netaddr_t addr;
-
-            if (!netaddr_lookup(&addr, oshd.node_tree[i]->endpoints->endpoints[j].hostname)) {
-                logger(LOG_WARN,
-                    "%s: %s: Skipping endpoint %s:%u in endpoint exchange (lookup failed)",
-                    node->addrw,
-                    node->id->name,
-                    oshd.node_tree[i]->endpoints->endpoints[j].hostname,
-                    oshd.node_tree[i]->endpoints->endpoints[j].port);
-                continue;
-            }
-
-            endpoints = xreallocarray(endpoints, count + 1, sizeof(oshpacket_endpoint_t));
-
-            memcpy(endpoints[count].node_name, oshd.node_tree[i]->name, NODE_NAME_SIZE);
-            endpoints[count].addr_type = addr.type;
-            memcpy(endpoints[count].addr_data, addr.data, 16);
-            endpoints[count].port = htons(oshd.node_tree[i]->endpoints->endpoints[j].port);
-            count += 1;
-        }
+    if (!group->has_owner) {
+        logger(LOG_ERR, "%s: Failed to queue endpoint %s:%u: No owner (%s)",
+            node->addrw, endpoint->hostname, endpoint->port, group->owner_name);
+        return false;
+    }
+    if (!netaddr_lookup(&addr, endpoint->hostname)) {
+        logger(LOG_WARN,
+            "%s: Failed to queue endpoint %s:%u owned by %s (lookup failed)",
+            node->addrw, endpoint->hostname, endpoint->port, group->owner_name);
+        return false;
     }
 
-    success = node_queue_packet_fragmented(node, ENDPOINT, endpoints,
-        sizeof(oshpacket_endpoint_t) * count, sizeof(oshpacket_endpoint_t), false);
-    free(endpoints);
-    return success;
+    memset(&pkt, 0, sizeof(pkt));
+    for (size_t i = 0; (group->owner_name[i] != 0) && (i < NODE_NAME_SIZE); ++i)
+        pkt.node_name[i] = group->owner_name[i];
+    pkt.addr_type = addr.type;
+    memcpy(pkt.addr_data, addr.data, 16);
+    pkt.port = htons(endpoint->port);
+
+    logger_debug(DBG_ENDPOINTS, "%s: Queuing endpoint %s:%u owned by %s",
+        node->addrw, endpoint->hostname, endpoint->port, group->owner_name);
+    return node_queue_packet(node, node->id->name, ENDPOINT, (uint8_t *) &pkt, sizeof(pkt));
+}
+
+// Queue ENDPOINT exchange packets
+// Exchanges all endpoints with another node
+// Endpoints from the configuration file will be skipped if ShareRemotes is
+// not enabled
+bool node_queue_endpoint_exg(node_t *node)
+{
+    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
+        endpoint_group_t *group = oshd.node_tree[i]->endpoints;
+
+        foreach_endpoint(endpoint, group) {
+            // If ShareRemotes was not set in the configuration file,
+            // endpoints that don't expire will not be shared
+            if (!endpoint->can_expire && !oshd.shareremotes)
+                continue;
+
+            if (!node_queue_endpoint(node, endpoint, group))
+                return false;
+        }
+    }
+    return true;
 }
 
 // Queue EDGE_ADD or EDGE_DEL request

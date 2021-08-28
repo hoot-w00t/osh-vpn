@@ -82,11 +82,19 @@ static bool oshd_param_keystrust(ecp_t *ecp)
     return true;
 }
 
-// ShareEndpoints
-static bool oshd_param_shareendpoints(__attribute__((unused)) ecp_t *ecp)
+// ShareRemotes
+static bool oshd_param_shareremotes(__attribute__((unused)) ecp_t *ecp)
 {
-    oshd.shareendpoints = true;
-    logger_debug(DBG_CONF, "Enabled ShareEndpoints");
+    oshd.shareremotes = true;
+    logger_debug(DBG_CONF, "Enabled ShareRemotes");
+    return true;
+}
+
+// DiscoverEndpoints
+static bool oshd_param_discoverendpoints(__attribute__((unused)) ecp_t *ecp)
+{
+    oshd.discoverendpoints = true;
+    logger_debug(DBG_CONF, "Enabled DiscoverEndpoints");
     return true;
 }
 
@@ -233,7 +241,7 @@ static bool oshd_param_remote(ecp_t *ecp)
             area = netaddr_area(&naddr);
         }
         if (endpoint_group_add(oshd.remote_endpoints[oshd.remote_count],
-                addr, port_nb, area))
+                addr, port_nb, area, false))
         {
             logger_debug(DBG_CONF, "Remote: %s:%u (%s) added",
                 addr, port_nb, netarea_name(area));
@@ -360,7 +368,8 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "Name", .type = VALUE_REQUIRED, &oshd_param_name },
     { .name = "KeysDir", .type = VALUE_REQUIRED, &oshd_param_keysdir },
     { .name = "KeysTrust", .type = VALUE_REQUIRED, &oshd_param_keystrust },
-    { .name = "ShareEndpoints", .type = VALUE_NONE, &oshd_param_shareendpoints },
+    { .name = "ShareRemotes", .type = VALUE_NONE, &oshd_param_shareremotes },
+    { .name = "DiscoverEndpoints", .type = VALUE_NONE, &oshd_param_discoverendpoints },
     { .name = "AutomaticConnections", .type = VALUE_NONE, &oshd_param_automaticconnections },
     { .name = "AutomaticConnectionsInterval", .type = VALUE_REQUIRED, &oshd_param_automaticconnectionsinterval },
     { .name = "AutomaticConnectionsPercent", .type = VALUE_REQUIRED, &oshd_param_automaticconnectionspercent },

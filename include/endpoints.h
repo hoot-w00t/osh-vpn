@@ -5,81 +5,68 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/time.h>
 
-typedef struct endpoint {
+// Endpoints expire after 60 minutes
+#define ENDPOINT_EXPIRY (3600)
+
+typedef struct endpoint endpoint_t;
+typedef struct endpoint_group endpoint_group_t;
+
+struct endpoint {
     char *hostname;
     uint16_t port;
     netarea_t area;
-} endpoint_t;
 
-void endpoint_set(endpoint_t *endpoint, const char *hostname, uint16_t port,
-    netarea_t area);
-#define endpoint_set_ep(ep1, ep2) \
-    endpoint_set(ep1, (ep2)->hostname, (ep2)->port, (ep2)->area)
-void endpoint_free(endpoint_t *endpoint);
-bool endpoint_eq(const endpoint_t *endpoint, const char *hostname,
-    uint16_t port);
-#define endpoint_eq_ep(ep1, ep2) \
-    endpoint_eq(ep1, (ep2)->hostname, (ep2)->port)
+    bool can_expire;
+    struct timeval last_refresh;
 
+    endpoint_t *next;
+};
 
-typedef struct endpoint_group {
-    endpoint_t *endpoints;
-    size_t endpoints_count;
-    size_t selected;
-    void *userdata;
-} endpoint_group_t;
+struct endpoint_group {
+    endpoint_t *head;
+    size_t count;
+    endpoint_t *selected;
 
-endpoint_group_t *endpoint_group_create(void *userdata);
-endpoint_group_t *endpoint_group_dup(const endpoint_group_t *group);
+    // true if we should never give up trying to connect to those endpoints
+    bool always_retry;
+
+    // true while Osh is trying to connect to any endpoint in this group
+    bool is_connecting;
+
+    // Name of the node which owns this group
+    // If NULL is passed as an owner name, has_owner is false and the owner name
+    // is set to the group's pointer
+    char *owner_name;
+    bool has_owner;
+};
+
+endpoint_group_t *endpoint_group_create(const char *owner_name);
 void endpoint_group_free(endpoint_group_t *group);
-
-const endpoint_t *endpoint_group_find(const endpoint_group_t *group,
-    const char *hostname, uint16_t port);
-#define endpoint_group_find_ep(group, endpoint) \
-    endpoint_group_find(group, (endpoint)->hostname, (endpoint)->port)
-
-bool endpoint_group_add(endpoint_group_t *group, const char *hostname,
-    uint16_t port, netarea_t area);
-#define endpoint_group_add_ep(group, endpoint) \
-    endpoint_group_add(group, (endpoint)->hostname, (endpoint)->port, (endpoint)->area)
-size_t endpoint_group_add_group(endpoint_group_t *dest,
-    const endpoint_group_t *src);
-
 void endpoint_group_clear(endpoint_group_t *group);
 
-// Returns the currently selected endpoint in the group
-// Returns NULL if no endpoint is selected
-static inline endpoint_t *endpoint_group_selected_ep(const endpoint_group_t *group)
-{
-    if (group->selected < group->endpoints_count)
-        return &group->endpoints[group->selected];
-    return NULL;
-}
+endpoint_t *endpoint_group_find(endpoint_group_t *group, const char *hostname,
+    uint16_t port);
 
-// Returns the number of endpoints left in the list (after the selected endpoint)
-static inline size_t endpoint_group_remaining(const endpoint_group_t *group)
-{
-    if (group->selected >= group->endpoints_count)
-        return 0;
-    return group->endpoints_count - group->selected;
-}
+endpoint_t *endpoint_group_add(endpoint_group_t *group, const char *hostname,
+    uint16_t port, netarea_t area, bool can_expire);
+void endpoint_group_add_ep(endpoint_group_t *group, const endpoint_t *endpoint);
+void endpoint_group_add_group(endpoint_group_t *dest,
+    const endpoint_group_t *src);
 
-// Select the next endpoint in the group
-// Returns the remaining number of endpoints in the group
-static inline bool endpoint_group_select_next(endpoint_group_t *group)
-{
-    if (group->selected < group->endpoints_count)
-        group->selected += 1;
-    return endpoint_group_remaining(group);
-}
+void endpoint_group_del(endpoint_group_t *group, endpoint_t *endpoint);
+bool endpoint_group_del_expired(endpoint_group_t *group);
 
-// Select the first endpoint in the group
-// Returns the number of endpoints in the group
-static inline size_t endpoint_group_select_start(endpoint_group_t *group)
-{
-    group->selected = 0;
-    return endpoint_group_remaining(group);
-}
+endpoint_t *endpoint_group_selected(endpoint_group_t *group);
+endpoint_t *endpoint_group_select_next(endpoint_group_t *group);
+endpoint_t *endpoint_group_select_first(endpoint_group_t *group);
+#define endpoint_group_is_empty(group) ((group)->head == NULL)
+
+#define endpoint_group_is_connecting(group) ((group)->is_connecting)
+void endpoint_group_set_is_connecting(endpoint_group_t *group, bool is_connecting);
+
+#define foreach_endpoint(endpoint, group) \
+    for (endpoint_t *endpoint = (group)->head; endpoint; endpoint = endpoint->next)
 
 #endif

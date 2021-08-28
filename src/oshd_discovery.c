@@ -83,8 +83,6 @@ void oshd_discover_local_endpoints(void)
     netarea_t area;
     node_id_t *local_id = node_id_find_local();
 
-    endpoint_group_clear(local_id->endpoints);
-
     if (getifaddrs(&ifaces) < 0) {
         logger(LOG_ERR, "getifaddrs: %s", strerror(errno));
         return;
@@ -141,7 +139,7 @@ void oshd_discover_local_endpoints(void)
             continue;
         area = netaddr_area(&addr);
 
-        // TODO: Add a parameter allow which interfaces can be discovered
+        // TODO: Add a parameter to allow which interfaces can be discovered
         //       instead of excluding those that shouldn't be
 
         // Check if this device is excluded
@@ -167,10 +165,12 @@ void oshd_discover_local_endpoints(void)
         // Finally discover the local endpoint
         logger_debug(DBG_ENDPOINTS, "Discovered %s endpoint: %s (%s)",
             netarea_name(area), addrw, ifa->ifa_name);
-        endpoint_group_add(local_id->endpoints,
-            addrw, oshd.server_port, area);
-    }
 
-    gettimeofday(&local_id->endpoints_last_update, NULL);
+        endpoint_t *endpoint = endpoint_group_add(local_id->endpoints, addrw,
+            oshd.server_port, area, true);
+
+        if (endpoint)
+            node_queue_endpoint_broadcast(NULL, endpoint, local_id->endpoints);
+    }
     freeifaddrs(ifaces);
 }

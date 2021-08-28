@@ -199,11 +199,14 @@ void event_queue_connect(endpoint_group_t *endpoints, time_t delay,
     data->delay = delay;
 
     // If there is a delay for this connection then it is a reconnection
-    endpoint = endpoint_group_selected_ep(data->endpoints);
+    endpoint = endpoint_group_selected(data->endpoints);
     if (event_delay > 0 && endpoint) {
-        logger(LOG_INFO, "Retrying to connect to %s:%u in %li seconds",
-            endpoint->hostname, endpoint->port, delay);
+        logger(LOG_INFO, "Retrying to connect to %s at %s:%u in %li seconds",
+            data->endpoints->owner_name, endpoint->hostname, endpoint->port, delay);
     }
+
+    // Prevent duplicate connections to the same endpoints
+    endpoint_group_set_is_connecting(data->endpoints, true);
 
     event_queue(event_create(connect_event_handler, connect_event_freedata,
         data, &trigger, EVENT_TRIGGER_ONCE));
@@ -348,51 +351,38 @@ void event_queue_node_auth_timeout(node_t *node, time_t timeout_delay)
 }
 
 
-// Periodically refresh endpoints from the node tree
-// Clear endpoints that timed out and
-static void endpoints_refresh_event_handler(__attribute__((unused)) void *data)
+// Periodically delete expired endpoints
+static void expire_endpoints_event_handler(__attribute__((unused)) void *data)
 {
-    const time_t expiry_delay = 3600; // 60 minutes
-    struct timeval now;
-    time_t delta;
-    node_id_t *id;
+    bool deleted = false;
 
-    logger_debug(DBG_ENDPOINTS, "Refreshing expired endpoints");
-    gettimeofday(&now, NULL);
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
-        id = oshd.node_tree[i];
-
-        delta = now.tv_sec - id->endpoints_last_update.tv_sec;
-        if (delta < expiry_delay)
-            continue;
-
-        if (id->local_node) {
-            if (oshd.shareendpoints) {
-                logger_debug(DBG_ENDPOINTS, "Refreshing local endpoints");
-                oshd_discover_local_endpoints();
-                node_queue_local_endpoint_broadcast(NULL);
-            }
-        } else {
-            node_id_expire_endpoints(id);
-        }
+        if (endpoint_group_del_expired(oshd.node_tree[i]->endpoints))
+            deleted = true;
     }
+
+    if (deleted && oshd.discoverendpoints)
+        oshd_discover_local_endpoints();
 }
 
 // This function should only be called once outside of the event handler
-void event_queue_endpoints_refresh(void)
+void event_queue_expire_endpoints(void)
 {
-    const time_t endpoints_delay = 600; // 10 minutes
+    const time_t event_delay = ENDPOINT_EXPIRY / 4; // 15 minutes
     struct timeval trigger;
 
-    tv_delay(&trigger, endpoints_delay);
-    event_queue(event_create(endpoints_refresh_event_handler, NULL,
-        NULL, &trigger, endpoints_delay));
+    tv_delay(&trigger, event_delay);
+    event_queue(event_create(expire_endpoints_event_handler, NULL,
+        NULL, &trigger, event_delay));
 }
+
 
 // Regularly try to establish connections to nodes to which we don't have a
 // direct connection
 // If ConnectionsLimit is set, automatic connections will always leave enough
 // slots for the remotes in the configuration
+
+// TODO: Work more on this
 
 // Calculates the maximum connections to queue at most in one iteration
 static size_t automatic_connections_remaining(size_t max_tries)
@@ -435,7 +425,7 @@ static time_t automatic_connections_next_retry_delay(void)
 
     // Sum the maximum delay for all endpoints in the tree
     for (size_t i = 0; i < tree_count; ++i)
-        delay += max_ep_delay * oshd.node_tree[i]->endpoints->endpoints_count;
+        delay += max_ep_delay * oshd.node_tree[i]->endpoints->count;
 
     // Add an approximation of the automatic connections interval after trying
     // to connect to all nodes on the tree
@@ -460,9 +450,10 @@ static void automatic_connections_handler(__attribute__((unused)) void *data)
     const time_t next_retry_delay = automatic_connections_next_retry_delay();
     size_t remaining_tries = automatic_connections_remaining(5);
     struct timeval now;
+    struct timeval delta;
 
-    logger_debug(DBG_ENDPOINTS, "Automatic connections (%zu at most)",
-        remaining_tries);
+    logger_debug(DBG_ENDPOINTS, "Automatic connections (%zu at most, retry delay: %li seconds)",
+        remaining_tries, next_retry_delay);
     gettimeofday(&now, NULL);
     for (size_t i = 0; i < oshd.node_tree_count && remaining_tries > 0; ++i) {
         node_id_t *id = oshd.node_tree_ordered_hops[i];
@@ -471,16 +462,22 @@ static void automatic_connections_handler(__attribute__((unused)) void *data)
         if (id->local_node)
             continue;
 
-        // If the node has no direct connection but at least one endpoint and is
-        // not a local endpoint group, then this is the only way to initiate a
-        // connection
+        // If the node has no direct connection but has at least one endpoint
+        // and does not always retries to connect, then this is the only way to
+        // try to initiate a direct connection to it
+        // We set a delay before retrying to automatically initiate a connection
+        // to it
 
-        if (   !id->endpoints_local
+        // The delta will be positive when enough time has elapsed
+        timersub(&now, &id->endpoints_next_retry, &delta);
+
+        if (   !id->endpoints->always_retry
             && !id->node_socket
-            &&  id->endpoints->endpoints_count > 0
-            &&  now.tv_sec >= id->endpoints_next_retry.tv_sec)
+            && !endpoint_group_is_connecting(id->endpoints)
+            && !endpoint_group_is_empty(id->endpoints)
+            &&  delta.tv_sec >= 0)
         {
-            logger_debug(DBG_ENDPOINTS, "Automatically connecting to %s", id->name);
+            logger(LOG_INFO, "Automatically connecting to %s", id->name);
 
             // Set the delay before trying to automatically connect to this node
             // again

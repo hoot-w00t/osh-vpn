@@ -299,7 +299,7 @@ void oshd_loop(void)
     // Discover network devices' addresses
     if (oshd.tuntap)
         oshd_discover_local_routes();
-    if (oshd.shareendpoints)
+    if (oshd.discoverendpoints)
         oshd_discover_local_endpoints();
 
     // Queue the connections to our remotes
@@ -309,7 +309,7 @@ void oshd_loop(void)
 
     // Osh actually starts
     event_queue_periodic_ping();
-    event_queue_endpoints_refresh();
+    event_queue_expire_endpoints();
     event_queue_expire_routes_refresh();
     if (oshd.automatic_connections)
         event_queue_automatic_connections();

@@ -14,7 +14,6 @@ const char *oshpacket_type_name(oshpacket_type_t type)
         case PONG           : return "PONG";
         case DATA           : return "DATA";
         case PUBKEY         : return "PUBKEY";
-        case ENDPOINT_EXPIRE: return "ENDPOINT_EXPIRE";
         case ENDPOINT       : return "ENDPOINT";
         case EDGE_ADD       : return "EDGE_ADD";
         case EDGE_DEL       : return "EDGE_DEL";
