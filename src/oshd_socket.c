@@ -115,6 +115,19 @@ bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay)
     socklen_t d_sin_len = sizeof(struct sockaddr_in6);
     endpoint_t *endpoint = endpoint_group_selected(endpoints);
 
+    if (endpoints->has_owner) {
+        node_id_t *id = node_id_find(endpoints->owner_name);
+
+        if (id && id->node_socket) {
+            logger(LOG_INFO,
+                "Giving up trying to reconnect to %s (already connected)",
+                id->name);
+            endpoint_group_select_first(endpoints);
+            endpoint_group_set_is_connecting(endpoints, false);
+            return false;
+        }
+    }
+
     // Initialize and create a socket to connect to address:port
     memset(d_addr, 0, sizeof(d_addr));
     memset(&d_sin, 0, d_sin_len);
