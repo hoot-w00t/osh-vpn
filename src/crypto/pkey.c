@@ -144,17 +144,21 @@ bool pkey_verify(EVP_PKEY *pubkey, const uint8_t *data, size_t data_size,
 {
     EVP_MD_CTX *mctx = EVP_MD_CTX_new();
     EVP_PKEY_CTX *pctx = NULL;
+    int err = 0;
 
     if (!mctx) {
         logger(LOG_ERR, "pkey_verify: EVP_MD_CTX_new: %s", osh_openssl_strerror);
         goto error;
     }
-    if (!EVP_DigestVerifyInit(mctx, &pctx, NULL, NULL, pubkey)) {
+    if (EVP_DigestVerifyInit(mctx, &pctx, NULL, NULL, pubkey) != 1) {
         logger(LOG_ERR, "pkey_verify: EVP_DigestVerifyInit: %s", osh_openssl_strerror);
         goto error;
     }
-    if (!EVP_DigestVerify(mctx, sig, sig_size, data, data_size)) {
-        logger(LOG_ERR, "pkey_verify: EVP_DigestVerify: %s", osh_openssl_strerror);
+    if ((err = EVP_DigestVerify(mctx, sig, sig_size, data, data_size)) != 1) {
+        if (err != 0) {
+            logger(LOG_ERR, "pkey_verify: EVP_DigestVerify: %s",
+                osh_openssl_strerror);
+        }
         goto error;
     }
     EVP_MD_CTX_free(mctx);
