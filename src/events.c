@@ -480,6 +480,8 @@ static void automatic_connections_handler(__attribute__((unused)) void *data)
             && !id->node_socket
             && !endpoint_group_is_connecting(id->endpoints)
             && !endpoint_group_is_empty(id->endpoints)
+            &&  id->pubkey
+            &&  (oshd.remote_auth || id->pubkey_local)
             &&  delta.tv_sec >= 0)
         {
             logger(LOG_INFO, "Automatically connecting to %s", id->name);
