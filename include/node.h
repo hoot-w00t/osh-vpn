@@ -130,7 +130,6 @@ struct node {
     struct node_io io;       // send/recv data buffers
     aio_event_t *aio_event;  // Node's async I/O event
 
-    bool remove_queued; // true if the node_remove is queued
     bool initiator;     // true if it is an outgoing connection
     bool connected;     // true if the socket is connected (used for the async
                         // connect() calls)
