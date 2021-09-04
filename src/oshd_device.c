@@ -1,7 +1,6 @@
 #include "oshd.h"
 #include "oshd_route.h"
 #include "oshd_device_mode.h"
-#include "node.h"
 #include "netpacket.h"
 #include "logger.h"
 #include <string.h>
@@ -31,9 +30,29 @@ bool device_mode_is_tap(device_mode_t devmode)
     }
 }
 
-// Read network packets from the TUN/TAP device and send them to its destinations
-void oshd_read_tuntap_pkt(void)
+// Error callback for the TUN/TAP device
+// Stops the daemon on any error
+static void device_aio_error(aio_event_t *event, aio_poll_event_t revents)
 {
+    logger(LOG_CRIT, "TUN/TAP device error (fd: %i, revents: %i)",
+        event->fd, revents);
+    aio_event_del(event);
+    oshd_stop();
+}
+
+// Read callback the TUN/TAP device
+// Read available packets from the device and route them on the network
+// TODO: Refactor this to use the TUN/TAP device from userdata instead of the
+//       global one
+//       Not sure why Osh would ever need to manage multiple TUN/TAP devices but
+//       it would be cleaner anyways
+// TODO: Maybe only read one packet at a time instead of looping
+static void device_aio_read(__attribute__((unused)) aio_event_t *event)
+{
+    // Only process packets from the TUN/TAP device if the daemon is running
+    if (!oshd.run)
+        return;
+
     size_t pkt_size;
     uint8_t pkt[OSHPACKET_PAYLOAD_MAXSIZE];
     netpacket_t pkt_hdr;
@@ -89,4 +108,18 @@ read_again:
     // This is the same as having a while(1) loop on the whole function, in the
     // current case I find using goto cleaner than while
     goto read_again;
+}
+
+// Add an aio event for the TUN/TAP device
+void oshd_device_add(tuntap_t *tuntap)
+{
+    aio_event_add_inl(oshd.aio,
+        tuntap_pollfd(tuntap),
+        AIO_READ,
+        NULL,
+        NULL,
+        NULL,
+        device_aio_read,
+        NULL,
+        device_aio_error);
 }

@@ -553,11 +553,11 @@ void node_tree_update(void)
 
 // Gracefully disconnect a node, sets the finish_and_disconnect flag to
 // disconnect the node automatically after the send queue is emptied
-// Unsets the POLLIN from the node's pfd events to drop all incoming packets
+// Disables AIO_READ from the node's poll_events to drop all incoming packets
 void node_graceful_disconnect(node_t *node)
 {
     node->finish_and_disconnect = true;
-    node_pollin_unset(node);
+    aio_disable_poll_events(node->aio_event, AIO_READ);
 }
 
 // Disconnect node
@@ -879,11 +879,11 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
 
         if (type == GOODBYE) {
             if (netbuffer_data_size(node->io.sendq) == 0)
-                event_queue_node_remove(node);
+                aio_event_del(node->aio_event);
         }
         return false;
     }
-    node_pollout_set(node);
+    aio_enable_poll_events(node->aio_event, AIO_WRITE);
     return true;
 }
 
@@ -959,7 +959,7 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
         netbuffer_cancel(node->io.sendq, packet_size);
         return false;
     }
-    node_pollout_set(node);
+    aio_enable_poll_events(node->aio_event, AIO_WRITE);
     return true;
 }
 

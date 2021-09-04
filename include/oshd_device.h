@@ -1,8 +1,8 @@
 #ifndef _OSH_OSHD_DEVICE_H
 #define _OSH_OSHD_DEVICE_H
 
-#include "node.h"
+#include "tuntap.h"
 
-void oshd_read_tuntap_pkt(void);
+void oshd_device_add(tuntap_t *tuntap);
 
 #endif

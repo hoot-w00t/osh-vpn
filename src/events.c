@@ -239,88 +239,6 @@ void event_queue_periodic_ping(void)
 }
 
 
-// Queue node add event
-static void node_add_event_freedata(void *data, bool handled)
-{
-    if (!handled) {
-        // If the node wasn't added to the list, we have to destroy it
-        // Otherwise it will be lost in memory
-        node_destroy((node_t *) data);
-    }
-}
-
-static void node_add_event_handler(void *data)
-{
-    node_t *node = (node_t *) data;
-
-    if (oshd_nodes_limited()) {
-        logger(LOG_WARN, "Simultaneous connections limited to %zu, disconnecting %s",
-            oshd.nodes_count_max, node->addrw);
-        node_destroy(node);
-    } else {
-        oshd.nodes = xreallocarray(oshd.nodes, oshd.nodes_count + 1, sizeof(node_t *));
-        oshd.nodes[oshd.nodes_count] = node;
-        oshd.nodes_count += 1;
-        oshd.nodes_updated = true;
-    }
-}
-
-void event_queue_node_add(node_t *node)
-{
-    struct timeval trigger;
-
-    // Always trigger when processing the event queue
-    memset(&trigger, 0, sizeof(trigger));
-    event_queue(event_create(node_add_event_handler, node_add_event_freedata,
-        node, &trigger, EVENT_TRIGGER_ONCE));
-}
-
-
-// Queue node remove event
-static void node_remove_event_handler(void *data)
-{
-    node_t *node = (node_t *) data;
-    size_t i;
-
-    for (i = 0; i < oshd.nodes_count && oshd.nodes[i] != node; ++i);
-
-    // If the node doesn't exist in the list, stop here
-    // It was probably already freed elsewhere
-    if (i >= oshd.nodes_count)
-        return;
-
-    node_destroy(node);
-    for (; i + 1 < oshd.nodes_count; ++i)
-        oshd.nodes[i] = oshd.nodes[i + 1];
-    oshd.nodes_count -= 1;
-    oshd.nodes = xreallocarray(oshd.nodes, oshd.nodes_count, sizeof(node_t *));
-    oshd.nodes_updated = true;
-}
-
-static void node_remove_event_freedata(void *data, bool handled)
-{
-    if (!handled) {
-        node_add_event_handler(data);
-    }
-}
-
-void event_queue_node_remove(node_t *node)
-{
-    struct timeval trigger;
-
-    if (node->remove_queued) {
-        logger(LOG_WARN, "node_remove event for %p is already queued", node);
-        return;
-    }
-    node->remove_queued = true;
-
-    // Always trigger when processing the event queue
-    memset(&trigger, 0, sizeof(trigger));
-    event_queue(event_create(node_remove_event_handler,
-        node_remove_event_freedata, node, &trigger, EVENT_TRIGGER_ONCE));
-}
-
-
 // Queue node authentication timeout event
 static void node_auth_timeout_event_handler(void *data)
 {
@@ -333,7 +251,7 @@ static void node_auth_timeout_event_handler(void *data)
             logger(LOG_WARN, "%s: Timed out", node->addrw);
         }
         node->auth_timeout_event = NULL;
-        event_queue_node_remove(node);
+        aio_event_del(node->aio_event);
     }
 }
 

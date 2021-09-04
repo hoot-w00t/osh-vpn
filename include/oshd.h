@@ -1,6 +1,7 @@
 #ifndef _OSH_OSHD_H
 #define _OSH_OSHD_H
 
+#include "aio.h"
 #include "node.h"
 #include "tuntap.h"
 #include "oshd_route.h"
@@ -56,7 +57,6 @@ typedef struct oshd {
     node_t **nodes;
     size_t nodes_count;
     size_t nodes_count_max;
-    bool nodes_updated;
 
     // Array of all nodes on the network (ID)
     node_id_t **node_tree;
@@ -89,6 +89,9 @@ typedef struct oshd {
 
     // When set to false the daemon will stop
     bool run;
+
+    // Async I/O events
+    aio_t *aio;
 } oshd_t;
 
 // true if the maximum number of nodes is reached

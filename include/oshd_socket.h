@@ -3,10 +3,7 @@
 
 #include "node.h"
 
-bool oshd_accept(int server_fd);
 bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay);
-bool oshd_connect_async(node_t *node);
-bool node_send_queued(node_t *node);
-bool node_recv_queued(node_t *node);
+void oshd_server_add(int server_fd);
 
 #endif

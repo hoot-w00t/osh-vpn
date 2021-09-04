@@ -24,10 +24,6 @@
 // Global variable
 oshd_t oshd;
 
-static struct pollfd *pfd = NULL;
-static size_t pfd_off = 0;
-static size_t pfd_count = 0;
-
 // Load a private or a public key from the keys directory
 // name should be a node's name
 // Returns NULL on error
@@ -107,27 +103,6 @@ int set_nonblocking(int fd)
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
-// Realloc pfd to hold all file descriptors
-static void pfd_resize(void)
-{
-    pfd_count = pfd_off + oshd.nodes_count;
-    pfd = xreallocarray(pfd, pfd_count, sizeof(struct pollfd));
-    for (size_t i = 0; i < oshd.nodes_count; ++i) {
-        oshd.nodes[i]->pfd = &pfd[i + pfd_off];
-        pfd[i + pfd_off].fd = oshd.nodes[i]->fd;
-        pfd[i + pfd_off].events = 0;
-
-        if (!oshd.nodes[i]->finish_and_disconnect)
-            pfd[i + pfd_off].events |= POLLIN;
-
-        if (   netbuffer_data_size(oshd.nodes[i]->io.sendq)
-            || !oshd.nodes[i]->connected)
-        {
-            pfd[i + pfd_off].events |= POLLOUT;
-        }
-    }
-}
-
 // The first time we get a signal, set oshd_run to false
 // If oshd_run is already false, call exit()
 static void oshd_signal_exit(int sig)
@@ -160,7 +135,7 @@ void oshd_stop(void)
         if (oshd.nodes[i]->connected) {
             node_queue_goodbye(oshd.nodes[i]);
         } else {
-            event_queue_node_remove(oshd.nodes[i]);
+            aio_event_del(oshd.nodes[i]->aio_event);
         }
     }
 }
@@ -168,7 +143,7 @@ void oshd_stop(void)
 // Initialize oshd
 bool oshd_init(void)
 {
-    int offset = 0;
+    oshd.aio = aio_create();
 
     if (oshd.device_mode != MODE_NODEVICE) {
         oshd.tuntap = tuntap_open(oshd.tuntap_devname,
@@ -180,7 +155,8 @@ bool oshd_init(void)
         setenv("OSHD_DEVICE", oshd.tuntap->dev_name, 1);
         if (!oshd_cmd_execute("DevUp"))
             return false;
-        pfd_off += 1;
+
+        oshd_device_add(oshd.tuntap);
     }
 
     if (oshd.server_enabled) {
@@ -191,29 +167,11 @@ bool oshd_init(void)
         if (oshd.server_fd < 0 && oshd.server_fd6 < 0)
             return false;
 
-        if (oshd.server_fd > 0)
-            pfd_off += 1;
-        if (oshd.server_fd6 > 0)
-            pfd_off += 1;
-    }
+        if (oshd.server_fd >= 0)
+            oshd_server_add(oshd.server_fd);
 
-    pfd_resize();
-    if (oshd.tuntap) {
-        pfd[offset].fd = tuntap_pollfd(oshd.tuntap);
-        pfd[offset].events = POLLIN;
-        offset += 1;
-    }
-    if (oshd.server_enabled) {
-        if (oshd.server_fd > 0) {
-            pfd[offset].fd = oshd.server_fd;
-            pfd[offset].events = POLLIN;
-            offset += 1;
-        }
-        if (oshd.server_fd6 > 0) {
-            pfd[offset].fd = oshd.server_fd6;
-            pfd[offset].events = POLLIN;
-            offset += 1;
-        }
+        if (oshd.server_fd6 >= 0)
+            oshd_server_add(oshd.server_fd6);
     }
 
     // Create our local node's ID in the tree
@@ -240,20 +198,15 @@ bool oshd_init(void)
 void oshd_free(void)
 {
     oshd.run = false;
+    aio_free(oshd.aio);
     free(oshd.tuntap_devname);
     if (oshd.tuntap) {
         oshd_cmd_execute("DevDown");
         tuntap_close(oshd.tuntap);
     }
-    if (oshd.server_fd > 0)
-        close(oshd.server_fd);
-    if (oshd.server_fd6 > 0)
-        close(oshd.server_fd6);
-
     for (size_t i = 0; i < oshd.nodes_count; ++i)
         node_destroy(oshd.nodes[i]);
     free(oshd.nodes);
-    free(pfd);
 
     // Free all routes (local, remote and resolver)
     oshd_route_group_free(oshd.routes);
@@ -290,7 +243,7 @@ void oshd_free(void)
 
 void oshd_loop(void)
 {
-    int events;
+    ssize_t events;
 
     // Update the resolver with its initial state
     oshd_resolver_check_tld();
@@ -322,68 +275,15 @@ void oshd_loop(void)
     while (oshd.run || oshd.nodes_count) {
         // Process queued events
         event_process_queued();
-        if (oshd.nodes_updated) {
-            logger_debug(DBG_OSHD, "Nodes updated, resizing pfd");
-            oshd.nodes_updated = false;
-            pfd_resize();
-        }
 
         // Poll for events on all sockets and the TUN/TAP device
-        events = poll(pfd, pfd_count, 500);
+        events = aio_poll(oshd.aio, 500);
         if (events < 0) {
-            // Polling errors can occur when receiving signals, in this case the
-            // error isn't actually from the polling so we can ignore it
-            if (errno == EINTR)
-                continue;
-
-            logger(LOG_CRIT, "poll: %s", strerror(errno));
             oshd_stop();
             return;
         }
 
-        logger_debug(DBG_OSHD, "Polled %i/%zu events", events, pfd_count);
-
-        // We then iterate over all our file descriptors to handle the events
-        for (size_t i = 0; events > 0 && i < pfd_count; ++i) {
-            if (!pfd[i].revents)
-                continue;
-
-            --events;
-
-            if (oshd.tuntap && pfd[i].fd == tuntap_pollfd(oshd.tuntap)) {
-                if ((pfd[i].revents & POLLIN) && oshd.run) {
-                    // Data is available on the TUN/TAP device
-                    oshd_read_tuntap_pkt();
-                }
-            } else if (pfd[i].fd == oshd.server_fd || pfd[i].fd == oshd.server_fd6) {
-                if ((pfd[i].revents & POLLIN) && oshd.run) {
-                    // The server is ready to accept an incoming connection
-                    oshd_accept(pfd[i].fd);
-                }
-            } else {
-                if (pfd[i].revents & (POLLERR | POLLHUP)) {
-                    logger(LOG_ERR, "%s: %s", oshd.nodes[i - pfd_off]->addrw,
-                        (pfd[i].revents & POLLHUP) ? "socket closed"
-                                                   : "socket error");
-
-                    event_queue_node_remove(oshd.nodes[i - pfd_off]);
-                } else {
-                    if (pfd[i].revents & POLLIN) {
-                        // A node is ready to receive data
-                        node_recv_queued(oshd.nodes[i - pfd_off]);
-                    }
-                    if (pfd[i].revents & POLLOUT) {
-                        if (!oshd.nodes[i - pfd_off]->connected) {
-                            // If a node is not connected yet, we check it to see if the
-                            // socket has finished connecting
-                            oshd_connect_async(oshd.nodes[i - pfd_off]);
-                        } else {
-                            // A node is ready to send queued data
-                            node_send_queued(oshd.nodes[i - pfd_off]);
-                        }
-                    }
-                }
-            }
-        }
+        logger_debug(DBG_OSHD, "Polled %zi/%zu events",
+            events, aio_events_count(oshd.aio));
     }
 }
