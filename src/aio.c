@@ -225,7 +225,7 @@ aio_event_t *aio_event_add(aio_t *aio, const aio_event_t *event)
     return e;
 }
 
-// Same as aio_event_add but initiliazes an aio_event_t structure from passed
+// Same as aio_event_add but initializes an aio_event_t structure from passed
 // arguments
 aio_event_t *aio_event_add_inl(aio_t *aio,
     int fd,
