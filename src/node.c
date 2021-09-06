@@ -882,6 +882,13 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
                 aio_event_del(node->aio_event);
         }
         return false;
+    } else {
+        // Unencrypted packets should only occur with the initial handshake,
+        // in this case both the src_node and dest_node fields will be ignored
+        // so we can zero them out to prevent leaking the nodes' names in plain
+        // text
+        memset(hdr->src_node, 0, sizeof(hdr->src_node));
+        memset(hdr->dest_node, 0, sizeof(hdr->dest_node));
     }
     aio_enable_poll_events(node->aio_event, AIO_WRITE);
     return true;
