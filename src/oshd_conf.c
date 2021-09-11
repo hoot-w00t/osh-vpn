@@ -470,7 +470,7 @@ bool oshd_load_conf(const char *filename)
         return false;
     }
     if (oshd.reconnect_delay_max < oshd.reconnect_delay_min) {
-        logger(LOG_ERR, "ReconnectDelayMax (%lus) cannot be smaller than ReconnectDelayMin (%lus)",
+        logger(LOG_ERR, "ReconnectDelayMax (%lis) cannot be smaller than ReconnectDelayMin (%lis)",
             oshd.reconnect_delay_max, oshd.reconnect_delay_min);
         return false;
     }

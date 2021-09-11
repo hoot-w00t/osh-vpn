@@ -778,7 +778,7 @@ static bool data_packet_should_drop(node_t *node)
         if ((node->io.drop_counter += 1) >= drop_counter_max) {
             node->io.drop_counter = 0;
             logger_debug(DBG_TUNTAP,
-                "%s: Data packet should drop: queue at %zu/%u bytes (%zu%%, drop counter: %zu)",
+                "%s: Data packet should drop: queue at %zu/%i bytes (%zu%%, drop counter: %zu)",
                 node->addrw,
                 size_excess,
                 NODE_SENDQ_DATA_SIZE,

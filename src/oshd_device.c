@@ -96,11 +96,11 @@ read_again:
         netaddr_ntop(pkt_dest, sizeof(pkt_dest), &pkt_hdr.dest);
 
         if (route) {
-            logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zi bytes, to %s)",
+            logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zu bytes, to %s)",
                 oshd.tuntap->dev_name, oshd.name, pkt_src, pkt_dest, pkt_size,
                 route->dest_node->name);
         } else {
-            logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zi bytes, broadcast)",
+            logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zu bytes, broadcast)",
                 oshd.tuntap->dev_name, oshd.name, pkt_src, pkt_dest, pkt_size);
         }
     }
