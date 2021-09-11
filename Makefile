@@ -8,10 +8,21 @@ EASYCONF_STATIC	:=	$(EASYCONF_ROOT)/libeasyconf.a
 
 OTHER_CFLAGS	?=
 
-CFLAGS		:=	-Wall -Wextra -Wshadow $(OTHER_CFLAGS) -O2 -g -pipe
+CFLAGS		:=	$(OTHER_CFLAGS)
+CFLAGS		+=	-Wall -Wextra -Wshadow -Wformat-security -Wformat-signedness
+CLFAGS		+=	-pipe
+CFLAGS		+=	-fstack-protector-strong -D_FORTIFY_SOURCE=2
+CFLAGS		+=	-O2 -g
 CFLAGS		+=	-Iinclude -I$(EASYCONF_INC)
 CFLAGS		+=	$(strip $(shell $(PKG_CONFIG) --cflags openssl))
-LDFLAGS		:=	$(EASYCONF_STATIC)
+
+LDFLAGS		:=
+
+ifeq ($(UNAME), Linux)
+LDFLAGS		:=	-Wl,-z,relro,-z,now
+endif
+
+LDFLAGS		+=	$(EASYCONF_STATIC)
 LDFLAGS		+=	$(strip $(shell $(PKG_CONFIG) --libs openssl))
 
 VERSION_GIT_H	:=	include/version_git.h
