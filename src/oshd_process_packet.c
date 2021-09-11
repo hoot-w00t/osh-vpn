@@ -672,18 +672,20 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                 node_id_t *id = node_id_add(node_name);
                 netaddr_t addr;
                 netarea_t area;
+                uint16_t hport;
                 char hostname[INET6_ADDRSTRLEN];
 
                 addr.type = endpoints[i].addr_type;
                 memcpy(addr.data, endpoints[i].addr_data, 16);
                 netaddr_ntop(hostname, sizeof(hostname), &addr);
                 area = netaddr_area(&addr);
+                hport = ntohs(endpoints[i].port);
 
                 logger_debug(DBG_ENDPOINTS, "%s: %s: Adding %s endpoint %s:%u to %s",
                     node->addrw, node->id->name, netarea_name(area),
-                    hostname, ntohs(endpoints[i].port), id->name);
+                    hostname, hport, id->name);
                 endpoint_group_add(id->endpoints, hostname,
-                    ntohs(endpoints[i].port), area, true);
+                    hport, area, true);
             }
 
             return true;
