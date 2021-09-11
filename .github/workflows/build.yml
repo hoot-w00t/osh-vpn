@@ -19,7 +19,7 @@ jobs:
         with:
           submodules: true
       - name: Build project
-        run: make OTHER_CFLAGS="-Werror"
+        run: make -j$(nproc) OTHER_CFLAGS="-Werror"
 
   cygwin_build:
     runs-on: windows-latest
@@ -39,7 +39,7 @@ jobs:
         with:
           submodules: true
       - name: Build project
-        run: make -C "$GITHUB_WORKSPACE" OTHER_CFLAGS="-Werror"
+        run: make -j$(nproc) -C "$GITHUB_WORKSPACE" OTHER_CFLAGS="-Werror"
 
       - name: Clone mpreisler/mingw-bundledlls repository
         uses: actions/checkout@v2

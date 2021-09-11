@@ -25,7 +25,7 @@ jobs:
           mkdir build
           cd build
           cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release ..
-          make
+          make -j$(nproc)
           sudo make install
 
       - name: Clone main repository
@@ -33,4 +33,4 @@ jobs:
         with:
           submodules: true
       - name: Build and run unit tests
-        run: make test OTHER_CFLAGS="-Werror"
+        run: make test -j$(nproc) OTHER_CFLAGS="-Werror"
