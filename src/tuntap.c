@@ -203,7 +203,7 @@ retry_write:
     tuntap->pollfd_read = -1;
     tuntap->pollfd_write = -1;
 
-    logger(LOG_CRIT, "tuntap_pollfd_thread exitting");
+    logger(LOG_CRIT, "tuntap_pollfd_thread exiting");
     pthread_exit(NULL);
 }
 
