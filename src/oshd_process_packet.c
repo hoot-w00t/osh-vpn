@@ -576,9 +576,9 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                 return true;
             }
 
-            gettimeofday(&node->rtt_pong, NULL);
-            timersub(&node->rtt_pong, &node->rtt_ping, &node->rtt_delta);
-            node->rtt = (node->rtt_delta.tv_sec * 1000) + (node->rtt_delta.tv_usec / 1000);
+            oshd_gettime(&node->rtt_pong);
+            timespecsub(&node->rtt_pong, &node->rtt_ping, &node->rtt_delta);
+            node->rtt = (node->rtt_delta.tv_sec * 1000) + (node->rtt_delta.tv_nsec / 1000000);
             node->rtt_await = false;
             logger_debug(DBG_SOCKETS, "%s: %s: RTT %ims", node->addrw, node->id->name, node->rtt);
 

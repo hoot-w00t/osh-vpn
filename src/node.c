@@ -1166,7 +1166,7 @@ bool node_queue_ping(node_t *node)
         return true;
     }
 
-    gettimeofday(&node->rtt_ping, NULL);
+    oshd_gettime(&node->rtt_ping);
     node->rtt_await = true;
     return node_queue_packet(node, node->id->name, PING, &buf, 1);
 }

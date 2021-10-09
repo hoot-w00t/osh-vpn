@@ -6,9 +6,9 @@
 #include "netaddr.h"
 #include "netbuffer.h"
 #include "oshpacket.h"
+#include "oshd_clock.h"
 #include "crypto/cipher.h"
 #include "crypto/pkey.h"
-#include <sys/time.h>
 #include <netinet/in.h>
 
 #ifndef NODE_SENDQ_MIN_SIZE
@@ -194,11 +194,11 @@ struct node {
     endpoint_group_t *reconnect_endpoints;
     time_t reconnect_delay;
 
-    int32_t rtt;              // RTT latency in milliseconds
-    bool rtt_await;           // true while a PONG is expected to be received
-    struct timeval rtt_ping;  // Timestamp of the last sent PING request
-    struct timeval rtt_pong;  // Timestamp of the last received PONG request
-    struct timeval rtt_delta; // Difference between rtt_ping and rtt_pong
+    int32_t rtt;               // RTT latency in milliseconds
+    bool rtt_await;            // true while a PONG is expected to be received
+    struct timespec rtt_ping;  // Timestamp of the last sent PING request
+    struct timespec rtt_pong;  // Timestamp of the last received PONG request
+    struct timespec rtt_delta; // Difference between rtt_ping and rtt_pong
 };
 
 node_id_t *node_id_find(const char *name);
