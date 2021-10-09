@@ -24,6 +24,10 @@
 // Global variable
 oshd_t oshd;
 
+// Timeout for aio_poll
+// Never times out by default (-1)
+static ssize_t poll_timeout = -1;
+
 // Load a private or a public key from the keys directory
 // name should be a node's name
 // Returns NULL on error
@@ -130,6 +134,7 @@ void oshd_stop(void)
 {
     logger_debug(DBG_OSHD, "Gracefully stopping");
     oshd.run = false;
+    poll_timeout = 1000;
     for (size_t i = 0; i < oshd.nodes_count; ++i) {
         node_reconnect_disable(oshd.nodes[i]);
         if (oshd.nodes[i]->connected) {
@@ -144,6 +149,9 @@ void oshd_stop(void)
 bool oshd_init(void)
 {
     oshd.aio = aio_create();
+
+    if (!event_init())
+        return false;
 
     if (oshd.device_mode != MODE_NODEVICE) {
         oshd.tuntap = tuntap_open(oshd.tuntap_devname,
@@ -273,17 +281,15 @@ void oshd_loop(void)
     // nodes_count should get to 0 before the program can finally exit
     logger_debug(DBG_OSHD, "Entering main loop");
     while (oshd.run || oshd.nodes_count) {
-        // Process queued events
-        event_process_queued();
-
         // Poll for events on all sockets and the TUN/TAP device
-        events = aio_poll(oshd.aio, 500);
+        events = aio_poll(oshd.aio, poll_timeout);
         if (events < 0) {
             oshd_stop();
-            return;
+            break;
         }
 
         logger_debug(DBG_OSHD, "Polled %zi/%zu events",
             events, aio_events_count(oshd.aio));
     }
+    logger_debug(DBG_OSHD, "Exiting main loop");
 }

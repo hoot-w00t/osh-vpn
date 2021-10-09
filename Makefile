@@ -25,6 +25,11 @@ endif
 LDFLAGS		+=	$(EASYCONF_STATIC)
 LDFLAGS		+=	$(strip $(shell $(PKG_CONFIG) --libs openssl))
 
+ifneq ($(findstring CYGWIN, $(UNAME)),)
+# Define _GNU_SOURCE for Cygwin
+CFLAGS		+=	-D_GNU_SOURCE
+endif
+
 VERSION_GIT_H	:=	include/version_git.h
 VERSION_GIT	=	$(strip $(shell cat $(VERSION_GIT_H) 2>/dev/null))
 HEAD_COMMIT	=	$(strip $(shell git describe --always --tags --abbrev=10))
@@ -44,31 +49,38 @@ INSTALL_PRE_ETC	:=	$(INSTALL_PREFIX)/etc
 INSTALL_BIN	:=	$(INSTALL_PRE_BIN)/$(BIN)
 INSTALL_ETC	:=	$(INSTALL_PRE_ETC)/oshd
 
-SRC		:=	src/crypto/cipher.c		\
-			src/crypto/hash.c		\
-			src/crypto/pkey.c		\
-			src/aio.c			\
-			src/endpoints.c			\
-			src/events.c			\
-			src/logger.c			\
-			src/main.c			\
-			src/netaddr.c			\
-			src/netbuffer.c			\
-			src/netpacket.c			\
-			src/node.c			\
-			src/oshd_cmd.c			\
-			src/oshd_conf.c			\
-			src/oshd_device.c		\
-			src/oshd_discovery.c		\
-			src/oshd_process_packet.c	\
-			src/oshd_resolver.c		\
-			src/oshd_route.c		\
-			src/oshd_socket.c		\
-			src/oshd.c			\
-			src/oshpacket.c			\
-			src/random.c			\
-			src/tcp.c			\
-			src/tuntap.c			\
+SRC		:=	src/crypto/cipher.c			\
+			src/crypto/hash.c			\
+			src/crypto/pkey.c			\
+			src/events/automatic_connections.c	\
+			src/events/connect.c			\
+			src/events/expire_endpoints.c		\
+			src/events/expire_routes_refresh.c	\
+			src/events/node_auth_timeout.c		\
+			src/events/periodic_ping.c		\
+			src/aio.c				\
+			src/endpoints.c				\
+			src/events.c				\
+			src/logger.c				\
+			src/main.c				\
+			src/netaddr.c				\
+			src/netbuffer.c				\
+			src/netpacket.c				\
+			src/node.c				\
+			src/oshd_clock.c			\
+			src/oshd_cmd.c				\
+			src/oshd_conf.c				\
+			src/oshd_device.c			\
+			src/oshd_discovery.c			\
+			src/oshd_process_packet.c		\
+			src/oshd_resolver.c			\
+			src/oshd_route.c			\
+			src/oshd_socket.c			\
+			src/oshd.c				\
+			src/oshpacket.c				\
+			src/random.c				\
+			src/tcp.c				\
+			src/tuntap.c				\
 			src/xalloc.c
 
 TEST_SRC	:=	src/logger.c				\

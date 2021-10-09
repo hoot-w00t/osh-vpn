@@ -211,6 +211,9 @@ ssize_t aio_poll(aio_t *aio, ssize_t timeout)
         }
     }
 
+    // Process any queued events from callbacks
+    aio_process_queue(aio);
+
     return n;
 }
 
@@ -294,7 +297,7 @@ void aio_disable_poll_events(aio_event_t *event, aio_poll_event_t poll_events)
     *pe &= ~(poll_events);
 }
 
-// Generic delete callback that closes the event's file descriptor if it not
+// Generic delete callback that closes the event's file descriptor if it is not
 // a negative value
 void aio_cb_delete_close_fd(aio_event_t *event)
 {
