@@ -115,7 +115,7 @@ struct node_id {
     // The node's endpoints, these are real endpoints to which Osh can try to
     // connect to
     endpoint_group_t *endpoints;
-    struct timeval endpoints_next_retry;
+    struct timespec endpoints_next_retry;
 
     // true if the node ID is our ID (name == oshd.name)
     bool local_node;

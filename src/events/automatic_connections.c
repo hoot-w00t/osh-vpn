@@ -74,12 +74,12 @@ static time_t automatic_connections_handler(__attribute__((unused)) void *data)
 {
     const time_t next_retry_delay = automatic_connections_next_retry_delay();
     size_t remaining_tries = automatic_connections_remaining(5);
-    struct timeval now;
-    struct timeval delta;
+    struct timespec now;
+    struct timespec delta;
 
     logger_debug(DBG_ENDPOINTS, "Automatic connections (%zu at most, retry delay: %li seconds)",
         remaining_tries, next_retry_delay);
-    gettimeofday(&now, NULL);
+    oshd_gettime(&now);
     for (size_t i = 0; i < oshd.node_tree_count && remaining_tries > 0; ++i) {
         node_id_t *id = oshd.node_tree_ordered_hops[i];
 
@@ -94,7 +94,7 @@ static time_t automatic_connections_handler(__attribute__((unused)) void *data)
         // to it
 
         // The delta will be positive when enough time has elapsed
-        timersub(&now, &id->endpoints_next_retry, &delta);
+        timespecsub(&now, &id->endpoints_next_retry, &delta);
 
         if (   !id->endpoints->always_retry
             && !id->node_socket
@@ -108,7 +108,7 @@ static time_t automatic_connections_handler(__attribute__((unused)) void *data)
 
             // Set the delay before trying to automatically connect to this node
             // again
-            gettimeofday(&id->endpoints_next_retry, NULL);
+            oshd_gettime(&id->endpoints_next_retry);
             id->endpoints_next_retry.tv_sec += next_retry_delay;
             event_queue_connect(id->endpoints, oshd.reconnect_delay_min, 0);
             remaining_tries -= 1;
