@@ -37,7 +37,7 @@ void *_xzalloc(_xalloc_args_proto, size_t size)
 // Re-size *ptr to size bytes
 // If size is 0, frees *ptr and returns NULL
 // abort() if allocation fails
-_xalloc_attr
+_xrealloc_attr
 void *_xrealloc(_xalloc_args_proto, void *ptr, size_t size)
 {
     void *newptr;
@@ -57,7 +57,7 @@ void *_xrealloc(_xalloc_args_proto, void *ptr, size_t size)
 // Re-size ptr to (nmemb * size) bytes
 // If size is 0, frees ptr and returns NULL
 // abort() if the allocation fails or if the multiplication overflows
-_xalloc_attr
+_xrealloc_attr
 void *_xreallocarray(_xalloc_args_proto, void *ptr, size_t nmemb, size_t size)
 {
     const size_t newsize = nmemb * size;

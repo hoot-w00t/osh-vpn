@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 #define _xalloc_attr __attribute__((__malloc__, returns_nonnull, warn_unused_result))
+#define _xrealloc_attr __attribute__((__malloc__, warn_unused_result))
 
 // These are common definitions used in each xalloc function
 // This is to help identify which allocation fails if it does, currently it
@@ -21,11 +22,11 @@ _xalloc_attr
 void *_xzalloc(_xalloc_args_proto, size_t size);
 #define xzalloc(size) _xzalloc(_xalloc_args, size)
 
-_xalloc_attr
+_xrealloc_attr
 void *_xrealloc(_xalloc_args_proto, void *ptr, size_t size);
 #define xrealloc(ptr, size) _xrealloc(_xalloc_args, ptr, size)
 
-_xalloc_attr
+_xrealloc_attr
 void *_xreallocarray(_xalloc_args_proto, void *ptr, size_t nmemb, size_t size);
 #define xreallocarray(ptr, nmemb, size) _xreallocarray(_xalloc_args, ptr, nmemb, size)
 
