@@ -2,10 +2,10 @@
 #define _OSH_ENDPOINTS_H
 
 #include "netarea.h"
+#include "oshd_clock.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <sys/time.h>
 
 // Endpoints expire after 60 minutes
 #define ENDPOINT_EXPIRY (3600)
@@ -19,7 +19,7 @@ struct endpoint {
     netarea_t area;
 
     bool can_expire;
-    struct timeval last_refresh;
+    struct timespec last_refresh;
 
     endpoint_t *next;
 };

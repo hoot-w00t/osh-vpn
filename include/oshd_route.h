@@ -1,6 +1,7 @@
 #ifndef _OSH_OSHD_ROUTE_H
 #define _OSH_OSHD_ROUTE_H
 
+#include "oshd_clock.h"
 #include "node.h"
 
 // Local routes expire sooner than remote routes so that Osh can advertise them
@@ -21,7 +22,7 @@ struct oshd_route {
     node_id_t *dest_node;
 
     // Timestamp of the last time this route was advertised
-    struct timeval last_refresh;
+    struct timespec last_refresh;
 
     oshd_route_t *next;
 };

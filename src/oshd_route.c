@@ -119,7 +119,7 @@ oshd_route_t *oshd_route_add(oshd_route_group_t *group, const netaddr_t *addr,
     }
 
     if (refresh && route->dest_node == dest_node) {
-        gettimeofday(&route->last_refresh, NULL);
+        oshd_gettime(&route->last_refresh);
 
         if (logger_is_debugged(DBG_ROUTING)) {
             char addrw[INET6_ADDRSTRLEN];
@@ -216,19 +216,19 @@ void oshd_route_del_dest(oshd_route_group_t *group, node_id_t *dest_node)
 // Delete expired routes
 bool oshd_route_del_expired(oshd_route_group_t *group)
 {
-    struct timeval now;
-    struct timeval delta;
+    struct timespec now;
+    struct timespec delta;
     oshd_route_t *route = group->head;
     oshd_route_t *next;
     bool deleted = false;
 
-    gettimeofday(&now, NULL);
+    oshd_gettime(&now);
     while (route) {
         bool expired = false;
 
         next = route->next;
 
-        timersub(&now, &route->last_refresh, &delta);
+        timespecsub(&now, &route->last_refresh, &delta);
         if (route->dest_node->local_node) {
             expired = delta.tv_sec >= ROUTE_LOCAL_EXPIRY;
         } else {

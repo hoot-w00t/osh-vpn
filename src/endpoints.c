@@ -102,7 +102,7 @@ endpoint_t *endpoint_group_find(endpoint_group_t *group, const char *hostname,
 static void endpoint_refresh(const endpoint_group_t *group, endpoint_t *endpoint)
 {
     // Update last_refresh timestamp
-    gettimeofday(&endpoint->last_refresh, NULL);
+    oshd_gettime(&endpoint->last_refresh);
     logger_debug(DBG_ENDPOINTS, "Refreshed endpoint %s:%u from group %p (%s)",
         endpoint->hostname, endpoint->port, group, group->owner_name);
 }
@@ -206,17 +206,17 @@ void endpoint_group_del(endpoint_group_t *group, endpoint_t *endpoint)
 // Returns true if endpoints were deleted
 bool endpoint_group_del_expired(endpoint_group_t *group)
 {
-    struct timeval now;
-    struct timeval delta;
+    struct timespec now;
+    struct timespec delta;
     bool deleted = false;
     endpoint_t *endpoint = group->head;
     endpoint_t *next;
 
-    gettimeofday(&now, NULL);
+    oshd_gettime(&now);
     while (endpoint) {
         next = endpoint->next;
 
-        timersub(&now, &endpoint->last_refresh, &delta);
+        timespecsub(&now, &endpoint->last_refresh, &delta);
         if (delta.tv_sec >= ENDPOINT_EXPIRY) {
             if (endpoint->can_expire) {
                 endpoint_group_del(group, endpoint);
