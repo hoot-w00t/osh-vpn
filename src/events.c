@@ -120,7 +120,11 @@ static void event_aio_process(aio_event_t *event)
     uint64_t expirations = 0;
 
     // Disarm the timerfd
-    read(event->fd, &expirations, sizeof(expirations));
+    if (read(event->fd, &expirations, sizeof(expirations)) < 0) {
+        logger(LOG_CRIT, "Events timerfd: read: %s", strerror(errno));
+        return;
+    }
+
     logger_debug(DBG_EVENTS, "Events timerfd expired %lu times (fd=%i)",
         expirations, event->fd);
 
