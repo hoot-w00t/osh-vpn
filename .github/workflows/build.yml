@@ -12,14 +12,16 @@ jobs:
       - name: Install requirements
         run: |
           sudo apt-get update
-          sudo apt-get install -yq build-essential git libssl-dev
+          sudo apt-get install -yq make git gcc pkg-config libssl-dev cmake
 
       - name: Clone main repository
         uses: actions/checkout@v2
         with:
           submodules: true
       - name: Build project
-        run: make -j$(nproc) OTHER_CFLAGS="-Werror"
+        run: |
+          cmake -B build -G "Unix Makefiles" -DCMAKE_C_FLAGS="-Werror" -DCMAKE_BUILD_TYPE=Hardened .
+          make -C build
 
   cygwin_build:
     runs-on: windows-latest
@@ -32,14 +34,17 @@ jobs:
         uses: egor-tensin/setup-cygwin@v3
         with:
           platform: x64
-          packages: make gcc-core pkgconf libssl-devel python3
+          packages: make gcc-core pkgconf libssl-devel cmake python3
 
       - name: Clone main repository
         uses: actions/checkout@v2
         with:
           submodules: true
       - name: Build project
-        run: make -j$(nproc) -C "$GITHUB_WORKSPACE" OTHER_CFLAGS="-Werror"
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          cmake -B build -G "Unix Makefiles" -DCMAKE_C_FLAGS="-Werror" -DCMAKE_BUILD_TYPE=Hardened .
+          make -C build
 
       - name: Clone mpreisler/mingw-bundledlls repository
         uses: actions/checkout@v2
@@ -49,13 +54,13 @@ jobs:
 
       - name: Copy the required DLLs
         run: |
-          cd "$GITHUB_WORKSPACE"
-          ./mingw-bundledlls/mingw-bundledlls --copy oshd.exe
+          cd "$GITHUB_WORKSPACE/build"
+          "$GITHUB_WORKSPACE/mingw-bundledlls/mingw-bundledlls" --copy oshd.exe
 
       - name: Upload binaries and DLLs artifact
         uses: actions/upload-artifact@v2
         with:
           name: osh-vpn-cygwin
           path: |
-            ${{ github.workspace }}/*.exe
-            ${{ github.workspace }}/*.dll
+            ${{ github.workspace }}/build/*.exe
+            ${{ github.workspace }}/build/*.dll

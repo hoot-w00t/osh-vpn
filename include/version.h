@@ -1,12 +1,10 @@
 #ifndef _OSH_VERSION_H
 #define _OSH_VERSION_H
 
-#ifndef OSH_COMMIT_HASH
-#include "version_git.h"
-#endif
-
 #ifndef OSH_VERSION_STR
-#define OSH_VERSION_STR "git-" OSH_COMMIT_HASH
+#include "version_git.h"
+
+#define OSH_VERSION_STR "git-" GIT_BRANCH "." GIT_REV_COUNT "." GIT_COMMIT_HASH
 #endif
 
 #define OSH_VERSION_MAJOR (0)
