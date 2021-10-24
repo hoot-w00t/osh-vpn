@@ -46,7 +46,6 @@ static void device_aio_error(aio_event_t *event, aio_poll_event_t revents)
 //       global one
 //       Not sure why Osh would ever need to manage multiple TUN/TAP devices but
 //       it would be cleaner anyways
-// TODO: Maybe only read one packet at a time instead of looping
 static void device_aio_read(__attribute__((unused)) aio_event_t *event)
 {
     // Only process packets from the TUN/TAP device if the daemon is running
@@ -58,7 +57,6 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
     netpacket_t pkt_hdr;
     oshd_route_t *route;
 
-read_again:
     if (!tuntap_read(oshd.tuntap, pkt, sizeof(pkt), &pkt_size)) {
         oshd_stop();
         return;
@@ -104,10 +102,6 @@ read_again:
                 oshd.tuntap->dev_name, oshd.name, pkt_src, pkt_dest, pkt_size);
         }
     }
-
-    // This is the same as having a while(1) loop on the whole function, in the
-    // current case I find using goto cleaner than while
-    goto read_again;
 }
 
 // Add an aio event for the TUN/TAP device
