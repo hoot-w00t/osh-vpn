@@ -771,19 +771,19 @@ bool node_valid_name(const char *name)
 static bool data_packet_should_drop(node_t *node)
 {
     if (netbuffer_data_size(node->io.sendq) >= NODE_SENDQ_DATA_SIZE_MIN) {
-        const size_t size_excess = netbuffer_data_size(node->io.sendq) - NODE_SENDQ_DATA_SIZE_MIN;
-        const size_t fill_percent = (size_excess * 100) / NODE_SENDQ_DATA_SIZE;
-        const size_t drop_counter_max = (100 / (fill_percent + 1)) + 1;
+        const size_t random_drop_above = rand() % NODE_SENDQ_DATA_SIZE_MAX;
 
-        if ((node->io.drop_counter += 1) >= drop_counter_max) {
-            node->io.drop_counter = 0;
+        // Randomly drop packets with an increasing chance as the queue size
+        // gets closer to the maximum.
+        // When the queue size is at or above the maximum we drop every packet
+        if (netbuffer_data_size(node->io.sendq) >= random_drop_above) {
             logger_debug(DBG_TUNTAP,
-                "%s: Data packet should drop: queue at %zu/%i bytes (%zu%%, drop counter: %zu)",
+                "%s: Data packet should drop: queue at %zu/%i bytes (%zu%%, drop above: %zu)",
                 node->addrw,
-                size_excess,
-                NODE_SENDQ_DATA_SIZE,
-                fill_percent,
-                drop_counter_max);
+                netbuffer_data_size(node->io.sendq),
+                NODE_SENDQ_DATA_SIZE_MAX,
+                (netbuffer_data_size(node->io.sendq) * 100 / NODE_SENDQ_DATA_SIZE_MAX),
+                random_drop_above);
             return true;
         }
     }

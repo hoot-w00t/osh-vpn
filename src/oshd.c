@@ -199,6 +199,9 @@ bool oshd_init(void)
     signal(SIGINT, oshd_signal_exit);
     signal(SIGTERM, oshd_signal_exit);
     signal(SIGUSR1, oshd_signal_digraph);
+
+    srand(time(NULL));
+
     return true;
 }
 

@@ -71,7 +71,6 @@ struct node_io {
     size_t recv_pkt_size; // Size of the next packet to receive
 
     netbuffer_t *sendq;   // Network buffer for queuing packets
-    size_t drop_counter;  // Counter for pseudo-random packet drops
 };
 
 struct node_id {
