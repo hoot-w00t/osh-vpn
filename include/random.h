@@ -5,6 +5,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-bool read_random_bytes(uint8_t *buf, size_t buf_size);
+bool random_bytes(uint8_t *buf, size_t buf_size);
 
 #endif
