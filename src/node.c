@@ -600,22 +600,28 @@ void node_disconnect(node_t *node)
     node_reconnect(node);
 }
 
-// Free the send/recv keys and ciphers and reset their values to NULL
+// Free all send/recv keys and ciphers and reset their values to NULL
 static void node_reset_ciphers(node_t *node)
 {
     pkey_free(node->send_key);
     cipher_free(node->send_cipher);
     pkey_free(node->recv_key);
     cipher_free(node->recv_cipher);
+    cipher_free(node->recv_cipher_next);
     node->send_key = NULL;
     node->send_cipher = NULL;
     node->recv_key = NULL;
     node->recv_cipher = NULL;
+    node->recv_cipher_next = NULL;
 }
 
 // Free a node and all its resources
 void node_destroy(node_t *node)
 {
+    if (node->handshake_renew_event)
+        event_cancel(node->handshake_renew_event);
+    if (node->handshake_timeout_event)
+        event_cancel(node->handshake_timeout_event);
     if (node->auth_timeout_event)
         event_cancel(node->auth_timeout_event);
 
@@ -1046,15 +1052,21 @@ static bool node_queue_packet_fragmented(node_t *node, oshpacket_type_t type,
 }
 
 // Queue HANDSHAKE request
-bool node_queue_handshake(node_t *node, bool initiator)
+bool node_queue_handshake(node_t *node)
 {
     oshpacket_handshake_t packet;
 
-    node->handshake_initiator = initiator;
     logger_debug(DBG_HANDSHAKE, "Creating HANDSHAKE packet for %s", node->addrw);
+    if (node->handshake_in_progress) {
+        logger(LOG_ERR,
+            "%s: Failed to create HANDSHAKE: Another one is in progress",
+            node->addrw);
+        return false;
+    }
 
-    // Make sure that there are no memory leaks
-    node_reset_ciphers(node);
+    // We are now currently shaking hands
+    // After completion node->send_key/recv_key will be freed and NULLed
+    node->handshake_in_progress = true;
 
     // Generate random keys
     logger_debug(DBG_HANDSHAKE, "%s: Generating send_key", node->addrw);
@@ -1092,7 +1104,22 @@ bool node_queue_handshake(node_t *node, bool initiator)
     memcpy(packet.recv_pubkey, pubkey, pubkey_size);
     free(pubkey);
 
-    return node_queue_packet(node, NULL, HANDSHAKE, (uint8_t *) &packet, sizeof(packet));
+    // If we are authenticateed we need to handle handshake timeouts
+    // When unauthenticated the authentication timeout event takes care of this
+    if (node->authenticated)
+        event_queue_handshake_timeout(node, HANDSHAKE_TIMEOUT);
+
+    return node_queue_packet(node, node->id ? node->id->name : NULL,
+        HANDSHAKE, (uint8_t *) &packet, sizeof(packet));
+}
+
+// Queue HANDSHAKE_END packet
+bool node_queue_handshake_end(node_t *node)
+{
+    uint8_t buf = 0;
+
+    return node_queue_packet(node, node->id ? node->id->name : NULL,
+        HANDSHAKE_END, &buf, sizeof(buf));
 }
 
 // Queue HELLO_CHALLENGE request

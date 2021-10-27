@@ -4,6 +4,7 @@ const char *oshpacket_type_name(oshpacket_type_t type)
 {
     switch (type) {
         case HANDSHAKE      : return "HANDSHAKE";
+        case HANDSHAKE_END  : return "HANDSHAKE_END";
         case HELLO_CHALLENGE: return "HELLO_CHALLENGE";
         case HELLO_RESPONSE : return "HELLO_RESPONSE";
         case HELLO_END      : return "HELLO_END";

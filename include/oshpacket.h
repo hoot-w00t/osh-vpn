@@ -36,6 +36,7 @@
 
 typedef enum oshpacket_type {
     HANDSHAKE = 0,
+    HANDSHAKE_END,
     HELLO_CHALLENGE,
     HELLO_RESPONSE,
     HELLO_END,

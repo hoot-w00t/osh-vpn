@@ -42,6 +42,8 @@ set(OSHD_SOURCES
     src/events/connect.c
     src/events/expire_endpoints.c
     src/events/expire_routes_refresh.c
+    src/events/handshake_renew.c
+    src/events/handshake_timeout.c
     src/events/node_auth_timeout.c
     src/events/periodic_ping.c
     src/aio.c

@@ -1,4 +1,5 @@
 #include "node.h"
+#include "events.h"
 #include "oshd_device.h"
 #include "oshd.h"
 #include "crypto/hash.h"
@@ -16,10 +17,21 @@ static bool oshd_process_handshake(node_t *node, oshpacket_hdr_t *pkt,
         return false;
     }
 
-    // If we did not initiate this request then we have to reply with our own
-    // handshake
-    if (!node->handshake_initiator) {
-        if (!node_queue_handshake(node, false))
+    // If we have a recv_cipher_next already, another handshake was already
+    // processed but we are still waiting for the HANDSHAKE_END packet from
+    // the other node
+    if (node->recv_cipher_next) {
+        logger(LOG_ERR,
+            "%s: Received HANDSHAKE but another one is in progress",
+            node->addrw);
+        return false;
+    }
+
+    // If no HANDSHAKE is currently in progress it means the other node
+    // initiated it, we have to initiate it on our side too to be able to
+    // process it
+    if (!node->handshake_in_progress) {
+        if (!node_queue_handshake(node))
             return false;
     }
 
@@ -58,13 +70,18 @@ static bool oshd_process_handshake(node_t *node, oshpacket_hdr_t *pkt,
         secret_success = false;
     }
 
-    // We don't need the remote node's public keys now
+    // We no longer need the public keys now
+    pkey_free(node->send_key);
+    pkey_free(node->recv_key);
+    node->send_key = NULL;
+    node->recv_key = NULL;
     pkey_free(r_send_pubkey);
     pkey_free(r_recv_pubkey);
 
     // All the above if statements are here to prevent memory leaks
     if (!secret_success) {
-        logger(LOG_ERR, "%s: Handshake failed: Failed to compute secrets", node->addrw);
+        logger(LOG_ERR, "%s: Handshake failed: Failed to compute secrets",
+            node->addrw);
         return false;
     }
 
@@ -81,30 +98,116 @@ static bool oshd_process_handshake(node_t *node, oshpacket_hdr_t *pkt,
     {
         free(send_secret);
         free(recv_secret);
-        logger(LOG_ERR, "%s: Handshake failed: Failed to hash secrets", node->addrw);
+        logger(LOG_ERR, "%s: Handshake failed: Failed to hash secrets",
+            node->addrw);
         return false;
     }
     free(send_secret);
     free(recv_secret);
 
-    // We can now create our send/recv ciphers using the two hashes
+    // Create the send/recv ciphers using the two hashes
     logger_debug(DBG_HANDSHAKE, "%s: Creating send_cipher", node->addrw);
-    node->send_cipher = cipher_create_aes_256_ctr(true, send_hash, 32, send_hash + 32, 16);
-    logger_debug(DBG_HANDSHAKE, "%s: Creating recv_cipher", node->addrw);
-    node->recv_cipher = cipher_create_aes_256_ctr(false, recv_hash, 32, recv_hash + 32, 16);
+    cipher_t *new_send_cipher = cipher_create_aes_256_ctr(
+            true, send_hash, 32, send_hash + 32, 16);
 
-    if (!node->send_cipher || !node->recv_cipher) {
-        logger(LOG_ERR, "%s: Handshake failed: Failed to create ciphers", node->addrw);
+    logger_debug(DBG_HANDSHAKE, "%s: Creating recv_cipher", node->addrw);
+    cipher_t *new_recv_cipher = cipher_create_aes_256_ctr(
+            false, recv_hash, 32, recv_hash + 32, 16);
+
+    if (!new_send_cipher || !new_recv_cipher) {
+        logger(LOG_ERR, "%s: Handshake failed: Failed to create ciphers",
+            node->addrw);
+        cipher_free(new_send_cipher);
+        cipher_free(new_recv_cipher);
         return false;
     }
 
-    // Reset the handshake initiator now that the handshake process is done
-    node->handshake_initiator = false;
+    // If we don't have any ciphers yet we will use the ones we just generated
+    // But if we do, we will have to send a HANDSHAKE_END packet to indicate
+    // that all packets we send after this one will use the new send cipher
+    // We will then also have to wait until we receive the HANDSHAKE_END packet
+    // from the other node before using the new recv cipher
+    // This allows us to renew the encryption keys without disrupting
+    // communications
+    if (node->send_cipher && node->recv_cipher) {
+        // Ciphers were in use before
 
-    // We were able to create ciphers to encrypt traffic, so we can
-    // proceed to the authentication part, if the node is not yet authenticated
-    if (!node->authenticated)
+        // Queue the HANDSHAKE_END packet
+        logger_debug(DBG_HANDSHAKE, "%s: Queuing HANDSHAKE_END packet",
+            node->addrw);
+        if (!node_queue_handshake_end(node)) {
+            free(new_send_cipher);
+            free(new_recv_cipher);
+            return false;
+        }
+
+        // Start using the new send cipher immediately
+        logger_debug(DBG_HANDSHAKE, "%s: Replacing old send cipher with the new one",
+            node->addrw);
+        cipher_free(node->send_cipher);
+        node->send_cipher = new_send_cipher;
+
+        // Keep the new recv cipher on the side for now
+        logger_debug(DBG_HANDSHAKE, "%s: Storing new recv cipher", node->addrw);
+        node->recv_cipher_next = new_recv_cipher;
+    } else {
+        // No ciphers were in use before
+        logger_debug(DBG_HANDSHAKE, "%s: Using both ciphers immediately",
+            node->addrw);
+
+        // This is basically a no-op because both ciphers should be NULL, but
+        // just in case one isn't
+        cipher_free(node->send_cipher);
+        cipher_free(node->recv_cipher);
+
+        // We start using our ciphers immediately
+        node->send_cipher = new_send_cipher;
+        node->recv_cipher = new_recv_cipher;
+
+        // The handshake is over
+        node->handshake_in_progress = false;
+    }
+
+    // After the initial handshake we want to renew the encryption keys
+    // regularly
+    // The function will re-queue the event if it already exists
+    event_queue_handshake_renew(node);
+
+    // After the first handshake we should be unauthenticated and will start
+    // the authentication process
+    if (!node->handshake_in_progress && !node->authenticated)
         return node_queue_hello_challenge(node);
+
+    return true;
+}
+
+static bool oshd_process_handshake_end(node_t *node)
+{
+    // If the handshake is not in progress we can't process this
+    if (!node->handshake_in_progress) {
+        logger(LOG_ERR, "%s: Received HANDSHAKE_END but no handshake is in progress",
+            node->addrw);
+        return false;
+    }
+
+    // This shouldn't happen but in the case where there is no
+    // recv_cipher_next, we fail safely
+    if (!node->recv_cipher_next) {
+        logger(LOG_CRIT, "%s: Received HANDSHAKE_END but there is no recv_cipher_next",
+            node->addrw);
+        return false;
+    }
+
+    // We can start using the next recv cipher stored in node->recv_cipher_next
+    logger_debug(DBG_HANDSHAKE, "%s: Replacing old recv cipher with the new one",
+        node->addrw);
+    cipher_free(node->recv_cipher);
+    node->recv_cipher = node->recv_cipher_next;
+    node->recv_cipher_next = NULL;
+
+    // The handshake is now over
+    node->handshake_in_progress = false;
+
     return true;
 }
 
@@ -522,9 +625,11 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
 {
     switch (pkt->type) {
         case HANDSHAKE:
-            logger(LOG_ERR, "%s: %s: Handshake after authentication is not supported",
-                node->addrw, node->id->name);
-            return false;
+            return oshd_process_handshake(node, pkt,
+                (oshpacket_handshake_t *) payload);
+
+        case HANDSHAKE_END:
+            return oshd_process_handshake_end(node);
 
         case HELLO_CHALLENGE:
         case HELLO_RESPONSE:

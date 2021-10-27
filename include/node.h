@@ -56,6 +56,18 @@
 #define NODE_AUTH_TIMEOUT (30)
 #endif
 
+#ifndef HANDSHAKE_TIMEOUT
+// Time in seconds to complete a handshake, if the handshake does not end after
+// this delay the connection is dropped
+#define HANDSHAKE_TIMEOUT (30)
+#endif
+
+#ifndef HANDSHAKE_RENEW_INTERVAL
+// Interval in seconds for renewing encryption keys
+// Renew every hour
+#define HANDSHAKE_RENEW_INTERVAL (3600)
+#endif
+
 typedef struct node_id node_id_t;
 typedef struct node node_t;
 
@@ -141,6 +153,12 @@ struct node {
     // node_auth_timeout event queued in node_init
     event_t *auth_timeout_event;
 
+    // handshake_renew event queued after the initial handshake
+    event_t *handshake_renew_event;
+
+    // handshake_timeout event queued in node_queue_handshake
+    event_t *handshake_timeout_event;
+
     // This is the node ID the remote socket pretends to be, used only during
     // authentication in HELLO packets
     node_id_t *hello_id;
@@ -166,11 +184,12 @@ struct node {
     uint32_t send_counter;
     EVP_PKEY *recv_key;
     cipher_t *recv_cipher;
+    cipher_t *recv_cipher_next;
     uint32_t recv_counter;
 
-    // This is set to true when initiating the handshake
-    // This is to know when to reply to a handshake request
-    bool handshake_initiator;
+    // This is set to true when sending a handshake to the node, it is set to
+    // false after the handshake is done to prevent overlaps
+    bool handshake_in_progress;
 
     // This is set to true after authentication to indicate that all the
     // informations about the other node's network map should also be relayed to
@@ -234,7 +253,8 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt);
 bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
     uint8_t *payload, uint16_t payload_size);
 
-bool node_queue_handshake(node_t *node, bool initiator);
+bool node_queue_handshake(node_t *node);
+bool node_queue_handshake_end(node_t *node);
 bool node_queue_hello_challenge(node_t *node);
 bool node_queue_hello_end(node_t *node);
 bool node_queue_devmode(node_t *node);
@@ -258,6 +278,6 @@ bool node_queue_route_exg(node_t *node);
 
 // This is the function called to send the initial packet when an initiator
 // established a connection
-#define node_queue_initial_packet(node) node_queue_handshake(node, true)
+#define node_queue_initial_packet(node) node_queue_handshake(node)
 
 #endif
