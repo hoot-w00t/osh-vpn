@@ -273,6 +273,8 @@ void event_queue_in(event_t *event, time_t delay)
 // done
 void event_cancel(event_t *event)
 {
+    if (!event) return;
+
     if (event_unqueue(event)) {
         // The event was successfully removed from the queue
         logger_debug(DBG_EVENTS, "Canceling %s event %p",
