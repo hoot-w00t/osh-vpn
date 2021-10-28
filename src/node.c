@@ -811,7 +811,7 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
         && data_packet_should_drop(node))
     {
         logger_debug(DBG_TUNTAP,
-            "%s: Dropping %s packet of %u bytes: the send queue is full",
+            "%s: Dropping %s packet of %u bytes",
             node->addrw,
             oshpacket_type_name(type),
             payload_size);
@@ -917,7 +917,7 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
         && data_packet_should_drop(node))
     {
         logger_debug(DBG_TUNTAP,
-            "%s: Dropping forwarded %s packet of %u bytes: the send queue is full",
+            "%s: Dropping forwarded %s packet of %u bytes",
             node->addrw,
             oshpacket_type_name(pkt->type),
             pkt->payload_size);
