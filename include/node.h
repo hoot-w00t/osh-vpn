@@ -12,8 +12,8 @@
 #include <netinet/in.h>
 
 #ifndef NODE_SENDQ_MIN_SIZE
-// Allocate 256 KiB of buffer to the send queue at minimum
-#define NODE_SENDQ_MIN_SIZE (1024 * 256)
+// Minimum size of the send queue
+#define NODE_SENDQ_MIN_SIZE (OSHPACKET_MAXSIZE * 128)
 #endif
 
 #ifndef NODE_SENDQ_ALIGNMENT
@@ -22,8 +22,8 @@
 #endif
 
 #ifndef NODE_RECVBUF_SIZE
-// Size of the receive buffer, 256 KiB
-#define NODE_RECVBUF_SIZE (1024 * 256)
+// Size of the receive buffer
+#define NODE_RECVBUF_SIZE (OSHPACKET_MAXSIZE * 128)
 #endif
 
 #if (NODE_RECVBUF_SIZE < OSHPACKET_MAXSIZE)
@@ -32,10 +32,7 @@
 
 #ifndef NODE_SENDQ_DATA_SIZE_MAX
 // Send queue size limit for queuing DATA packets
-// If the send queue already has this much data or more, DATA packets will all
-// be dropped
-// 192 KiB
-#define NODE_SENDQ_DATA_SIZE_MAX (1024 * 192)
+#define NODE_SENDQ_DATA_SIZE_MAX (OSHPACKET_MAXSIZE * 64)
 #endif
 
 #ifndef NODE_SENDQ_DATA_SIZE_MIN
