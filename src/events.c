@@ -125,7 +125,7 @@ static void event_aio_process(aio_event_t *event)
         return;
     }
 
-    logger_debug(DBG_EVENTS, "Events timerfd expired %lu times (fd=%i)",
+    logger_debug(DBG_EVENTS, "Events timerfd expired %" PRIu64 " times (fd=%i)",
         expirations, event->fd);
 
     // Process queued events (at least one event should be processed every time
