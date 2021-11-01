@@ -168,8 +168,8 @@ bool oshd_init(void)
     }
 
     if (oshd.server_enabled) {
-        oshd.server_fd = tcp4_bind(NULL, oshd.server_port, 10);
-        oshd.server_fd6 = tcp6_bind(NULL, oshd.server_port, 10);
+        oshd.server_fd = tcp4_bind(NULL, oshd.server_port, OSHD_TCP_SERVER_BACKLOG);
+        oshd.server_fd6 = tcp6_bind(NULL, oshd.server_port, OSHD_TCP_SERVER_BACKLOG);
 
         // If no server was opened, stop here
         if (oshd.server_fd < 0 && oshd.server_fd6 < 0)

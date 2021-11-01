@@ -13,6 +13,10 @@
 
 #define OSHD_DEFAULT_PORT (9270)
 
+#ifndef OSHD_TCP_SERVER_BACKLOG
+#define OSHD_TCP_SERVER_BACKLOG (5)
+#endif
+
 typedef struct oshd {
     // Name of the local node
     char name[NODE_NAME_SIZE + 1];
