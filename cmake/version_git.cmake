@@ -25,7 +25,7 @@ if (GIT_FOUND AND EXISTS "${root_dir}/.git")
 
     # Fetch the current branch
     execute_process(
-        COMMAND "${GIT_EXECUTABLE}" branch --show-current
+        COMMAND "${GIT_EXECUTABLE}" rev-parse --abbrev-ref HEAD
         WORKING_DIRECTORY "${root_dir}"
         OUTPUT_VARIABLE GIT_BRANCH
         OUTPUT_STRIP_TRAILING_WHITESPACE)
