@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.18.0)
+cmake_minimum_required(VERSION 3.3.0)
 project(osh-vpn
     VERSION 0.0.1
     DESCRIPTION "Experimental mesh VPN"
@@ -6,7 +6,7 @@ project(osh-vpn
     LANGUAGES "C")
 
 include(CheckCCompilerFlag)
-include(CheckLinkerFlag)
+include(CheckLinkerFlag OPTIONAL RESULT_VARIABLE CheckLinkerFlagPath)
 include(CTest)
 
 enable_testing()
@@ -133,14 +133,18 @@ if (CYGWIN)
 endif()
 
 # Linker flags
-check_linker_flag(C "-z relro" ld_z_relro)
-if (ld_z_relro)
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -z relro")
-endif()
+if (CheckLinkerFlagPath STREQUAL "NOTFOUND")
+    message(STATUS "Skipping linker flags because CheckLinkerFlag was not found")
+else()
+    check_linker_flag(C "-z relro" ld_z_relro)
+    if (ld_z_relro)
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -z relro")
+    endif()
 
-check_linker_flag(C "-z now" ld_z_now)
-if (ld_z_now)
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -z now")
+    check_linker_flag(C "-z now" ld_z_now)
+    if (ld_z_now)
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -z now")
+    endif()
 endif()
 
 # If no build type was specified we will use the default
