@@ -10,12 +10,6 @@
 
 static char *conf_file = NULL;
 
-void print_version(void)
-{
-    printf("oshd %i.%i.%i (" OSH_VERSION_STR ")\n",
-        OSH_VERSION_MAJOR, OSH_VERSION_MINOR, OSH_VERSION_PATCH);
-}
-
 void print_help(const char *cmd)
 {
     printf("Usage: %s [-h] [-V] [-d what] [-g file] config_file\n\n", cmd);
@@ -80,7 +74,7 @@ void parse_args(int ac, char **av)
                 exit(EXIT_SUCCESS);
 
             case 'V':
-                print_version();
+                printf(OSH_VERSION_FMT "\n", OSH_VERSION_FMT_ARGS);
                 exit(EXIT_SUCCESS);
 
             case 'd':
