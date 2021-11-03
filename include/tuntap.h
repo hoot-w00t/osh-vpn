@@ -1,14 +1,18 @@
 #ifndef _OSH_TUNTAP_H
 #define _OSH_TUNTAP_H
 
+#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
 
-#if defined(_WIN32) || defined(__CYGWIN__)
-#include <pthread.h>
-#endif
+typedef union tuntap_data {
+    void *ptr;
+    int fd;
+    uint32_t u32;
+    uint64_t u64;
+} tuntap_data_t;
 
-struct tuntap {
+typedef struct tuntap {
     // true if the device is running in layer 2
     bool is_tap;
 
@@ -20,25 +24,9 @@ struct tuntap {
     char *dev_id;
     size_t dev_id_size;
 
-#if defined(_WIN32) || defined(__CYGWIN__)
-    void *device_handle;     // Windows file handle for the TUN/TAP device
-    int pollfd_read;         // File descriptor of a pipe for reading from the device
-    int pollfd_write;        // File descriptor of the same pipe for writing on it
-    pthread_t pollfd_thread; // Thread to pipe the adapter's data to pollfd_read
-    pthread_mutex_t pollfd_mtx;      // Mutex to prevent writing and reading at the
-                                     // same time on the pollfd pipe
-    pthread_cond_t pollfd_cond;      // Condition to block the pollfd thread when the
-                                     // pipe is full until tuntap_read is called
-    pthread_mutex_t pollfd_cond_mtx; // Mutex for the condition
-    void *read_ol;  // TUN/TAP overlapped structure for reading
-    void *write_ol; // TUN/TAP overlapped structure for writing
-#else
-    // Device's file descriptor
-    int fd;
-#endif
-};
-
-typedef struct tuntap tuntap_t;
+    // Any data needed by the TUN/TAP interface we are compiling
+    tuntap_data_t data;
+} tuntap_t;
 
 // Open TUN/TAP device
 // If devname is NULL or empty the device name will be determined automatically
@@ -72,5 +60,11 @@ static inline void tuntap_close_at(tuntap_t **tuntap)
     tuntap_close(*tuntap);
     *tuntap = NULL;
 }
+
+// Common functions for all interfaces
+// Defined in src/tuntap/common.c
+bool tuntap_nonblock(int fd);
+tuntap_t *tuntap_empty(bool is_tap);
+void tuntap_free_common(tuntap_t *tuntap);
 
 #endif

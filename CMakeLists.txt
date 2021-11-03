@@ -33,6 +33,14 @@ add_custom_target(easyconf
 # Header directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include ${EASYCONF_INCLUDE})
 
+# TUN/TAP sources
+set(OSH_TUNTAP_SOURCES src/tuntap/common.c)
+if (CYGWIN OR WIN32)
+    set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} src/tuntap/windows.c)
+else()
+    set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} src/tuntap/linux.c)
+endif()
+
 # All sources for oshd
 set(OSHD_SOURCES
     src/crypto/cipher.c
@@ -46,6 +54,7 @@ set(OSHD_SOURCES
     src/events/handshake_timeout.c
     src/events/node_auth_timeout.c
     src/events/periodic_ping.c
+    ${OSH_TUNTAP_SOURCES}
     src/aio.c
     src/endpoints.c
     src/events.c
@@ -68,7 +77,6 @@ set(OSHD_SOURCES
     src/oshpacket.c
     src/random.c
     src/tcp.c
-    src/tuntap.c
     src/xalloc.c
 )
 
