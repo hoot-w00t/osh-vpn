@@ -13,12 +13,15 @@ static const char *av_cmd = NULL;
 #define default_conf_file "oshd.conf"
 static char *conf_file = NULL;
 
-static const char shortopts[] = "hVd:g:";
+static bool stop_after_conf_loaded = false;
+
+static const char shortopts[] = "hVd:g:t";
 static const struct option longopts[] = {
     {"help",                no_argument,        NULL, 'h'},
     {"version",             no_argument,        NULL, 'V'},
     {"debug",               required_argument,  NULL, 'd'},
     {"generate-keypair",    required_argument,  NULL, 'g'},
+    {"test-config",         no_argument,        NULL, 't'},
     {NULL,                  0,                  NULL,  0 }
 };
 
@@ -65,7 +68,12 @@ static void print_help(const char *cmd)
 
     printf(help_argnl,
         "-g, --generate-keypair=FILE",
-        "Generate Ed25519 keys to FILE.key and FILE.pub");
+        "Generate Ed25519 keys to FILE.key and FILE.pub\n");
+
+    printf(help_arg,
+        "-t, --test-config",
+        "Only loads the configuration and exits");
+    printf(help_indent "  Returns 0 on success, 1 on error\n");
 
     printf("\n");
     printf("config_file: Path to the configuration file for the daemon\n");
@@ -90,7 +98,6 @@ static bool generate_keys_to_file(const char *filename)
             printf("Writing public key to '%s'...\n", outfile);
             success = pkey_save_pubkey_pem(pkey, outfile);
         }
-
     }
     free(outfile);
     if (success) printf("Successfully generated Ed25519 keys\n");
@@ -117,6 +124,10 @@ static void parse_opt(int opt)
 
         case 'g':
             exit(generate_keys_to_file(optarg) ? EXIT_SUCCESS : EXIT_FAILURE);
+
+        case 't':
+            stop_after_conf_loaded = true;
+            break;
 
         default: exit(EXIT_FAILURE);
     }
@@ -148,6 +159,11 @@ int main(int ac, char **av)
 
     if (!oshd_load_conf(conf_file))
         return EXIT_FAILURE;
+    if (stop_after_conf_loaded) {
+        logger(LOG_INFO, "%s: Ok", conf_file);
+        return EXIT_SUCCESS;
+    }
+
     if (!oshd_init())
         return EXIT_FAILURE;
 
