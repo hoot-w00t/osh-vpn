@@ -8,33 +8,68 @@
 #include <string.h>
 #include <getopt.h>
 
+static const char *av_cmd = NULL;
+
+#define default_conf_file "oshd.conf"
 static char *conf_file = NULL;
 
-void print_help(const char *cmd)
+static const char shortopts[] = "hVd:g:";
+static const struct option longopts[] = {
+    {"help",                no_argument,        NULL, 'h'},
+    {"version",             no_argument,        NULL, 'V'},
+    {"debug",               required_argument,  NULL, 'd'},
+    {"generate-keypair",    required_argument,  NULL, 'g'},
+    {NULL,                  0,                  NULL,  0 }
+};
+
+// Indentation for descriptions (30 characters)
+#define help_indent "                              "
+
+// Format for argument + description on a single line
+#define help_arg    "  %-27s %s\n"
+
+// Format for argument + description on multiple lines (if argument is too big
+// and overlaps with the description)
+#define help_argnl  "  %s\n" help_indent "%s\n"
+
+static void print_help(const char *cmd)
 {
-    printf("Usage: %s [-h] [-V] [-d what] [-g file] config_file\n\n", cmd);
+    printf("Usage: %s [-h] [options] config_file\n\n", cmd);
     printf("Description:\n");
-    printf("    -h          Display this help and exit\n");
-    printf("    -V          Display the program version and exit\n");
-    printf("    -d what     Debug a part of the daemon, this can be:\n");
-    printf("                  ");
+    printf(help_arg,
+        "-h, --help",
+        "Display this help and exit");
+    printf(help_arg,
+        "-V, --version",
+        "Display the program version and exit");
+
+    // Print all the possible debug options
+    // TODO: Make a better display
+    const int debug_what_columns = 3;
+
+    printf(help_arg,
+        "-d, --debug=WHAT",
+        "Debug a part of the daemon, this can be:");
     for (debug_what_t i = 0; i < debug_what_size; ++i) {
-        printf("%s", logger_get_debug_name(i));
-        if ((i + 1) < debug_what_size) {
-            if ((i + 1) % 6 == 0) {
-                printf(",\n                  ");
-            } else {
-                printf(", ");
-            }
-        } else {
+        if (i % debug_what_columns == 0)
+            printf(help_indent "  ");
+
+        printf("%-16s", logger_get_debug_name(i));
+
+        if ((i + 1) >= debug_what_size) {
             printf("\n\n");
+        } else if ((i + 1) % debug_what_columns == 0) {
+            printf("\n");
         }
     }
-    printf("    -g file     Generate Ed25519 keys to file.key and file.pub\n");
+
+    printf(help_argnl,
+        "-g, --generate-keypair=FILE",
+        "Generate Ed25519 keys to FILE.key and FILE.pub");
 
     printf("\n");
     printf("config_file: Path to the configuration file for the daemon\n");
-    printf("             If omitted the file defaults to \"oshd.conf\"\n");
+    printf("             Defaults to \"" default_conf_file "\"\n");
 }
 
 static bool generate_keys_to_file(const char *filename)
@@ -62,39 +97,45 @@ static bool generate_keys_to_file(const char *filename)
     return success;
 }
 
+static void parse_opt(int opt)
+{
+    switch (opt) {
+        case 'h':
+            print_help(av_cmd);
+            exit(EXIT_SUCCESS);
+
+        case 'V':
+            printf(OSH_VERSION_FMT "\n", OSH_VERSION_FMT_ARGS);
+            exit(EXIT_SUCCESS);
+
+        case 'd':
+            if (!logger_toggle_debug_name(optarg)) {
+                fprintf(stderr, "Invalid debug: %s\n", optarg);
+                exit(EXIT_FAILURE);
+            }
+            break;
+
+        case 'g':
+            exit(generate_keys_to_file(optarg) ? EXIT_SUCCESS : EXIT_FAILURE);
+
+        default: exit(EXIT_FAILURE);
+    }
+}
+
 void parse_args(int ac, char **av)
 {
-    const char shortopts[] = "hVd:g:";
     int opt;
+    int opt_val;
 
-    while ((opt = getopt(ac, av, shortopts)) >= 0) {
-        switch (opt) {
-            case 'h':
-                print_help(av[0]);
-                exit(EXIT_SUCCESS);
+    av_cmd = av[0];
 
-            case 'V':
-                printf(OSH_VERSION_FMT "\n", OSH_VERSION_FMT_ARGS);
-                exit(EXIT_SUCCESS);
-
-            case 'd':
-                if (!logger_toggle_debug_name(optarg)) {
-                    fprintf(stderr, "Invalid debug: %s\n", optarg);
-                    exit(EXIT_FAILURE);
-                }
-                break;
-
-            case 'g':
-                exit(generate_keys_to_file(optarg) ? EXIT_SUCCESS : EXIT_FAILURE);
-
-            default: exit(EXIT_FAILURE);
-        }
-    }
+    while ((opt = getopt_long(ac, av, shortopts, longopts, &opt_val)) > 0)
+        parse_opt(opt);
 
     if (optind < ac) {
         conf_file = av[optind];
     } else {
-        conf_file = "oshd.conf";
+        conf_file = default_conf_file;
     }
 }
 
