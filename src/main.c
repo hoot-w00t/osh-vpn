@@ -51,8 +51,8 @@ static void print_help(const char *cmd)
     const int debug_what_columns = 3;
 
     printf(help_arg,
-        "-d, --debug=WHAT",
-        "Debug a part of the daemon, this can be:");
+        "-d, --debug=OPT1[,OPT2...]",
+        "Log debugging information for parts of the daemon:");
     for (debug_what_t i = 0; i < debug_what_size; ++i) {
         if (i % debug_what_columns == 0)
             printf(help_indent "  ");
@@ -115,12 +115,23 @@ static void parse_opt(int opt)
             printf(OSH_VERSION_FMT "\n", OSH_VERSION_FMT_ARGS);
             exit(EXIT_SUCCESS);
 
-        case 'd':
-            if (!logger_toggle_debug_name(optarg)) {
-                fprintf(stderr, "Invalid debug: %s\n", optarg);
-                exit(EXIT_FAILURE);
+        case 'd': {
+            bool success = true;
+            char *dbg_dup = xstrdup(optarg);
+            char *dbg_tok = strtok(dbg_dup, ",");
+
+            while (dbg_tok) {
+                if (!(success = logger_toggle_debug_name(dbg_tok))) {
+                    fprintf(stderr, "Invalid debug option: '%s'\n", dbg_tok);
+                    break;
+                }
+                dbg_tok = strtok(NULL, ",");
             }
+            free(dbg_dup);
+            if (!success)
+                exit(EXIT_FAILURE);
             break;
+        }
 
         case 'g':
             exit(generate_keys_to_file(optarg) ? EXIT_SUCCESS : EXIT_FAILURE);
