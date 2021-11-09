@@ -43,6 +43,7 @@ You can use different build types with `-DCMAKE_BUILD_TYPE=<build_type>` when ru
 | Release        | Enables compiler optimizations (level 2)                                                     |
 | MinSizeRel     | Enables compiler optimizations for smaller file sizes                                        |
 | RelWithDebInfo | Same as Release but also enables default debug information                                   |
+| NativeRelease  | Same as Release with optimizations specific to the host CPU                                  |
 | Hardened       | Same as RelWithDebInfo but also enables stack protection (https://wiki.debian.org/Hardening) |
 
 ### Unit tests

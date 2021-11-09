@@ -167,6 +167,7 @@ set(CMAKE_C_FLAGS_DEBUG "-O0 -g3")
 set(CMAKE_C_FLAGS_MINSIZEREL "-Os")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g")
 set(CMAKE_C_FLAGS_RELEASE "-O2")
+set(CMAKE_C_FLAGS_NATIVERELEASE "-O2 -march=native")
 set(CMAKE_C_FLAGS_HARDENED "-O2 -g -fstack-protector-strong -D_FORTIFY_SOURCE=2")
 
 # Format and display the compiler and linker flags
