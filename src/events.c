@@ -54,7 +54,7 @@ static bool update_timer_interval(void)
 
     // Arm the timer with the new timeout
     if (timerfd_settime(event_queue_aio->fd, 0, &aio_timer, NULL) < 0) {
-        logger(LOG_CRIT, "Failed to set events timer: %s (fd=%i, %li.%lis)",
+        logger(LOG_CRIT, "Failed to set events timer: %s (fd=%i, %li.%09lis)",
             strerror(errno),
             event_queue_aio->fd,
             aio_timer.it_value.tv_sec,
@@ -62,7 +62,7 @@ static bool update_timer_interval(void)
         return false;
     }
 
-    logger_debug(DBG_EVENTS, "Updated timer timeout to %li.%lis",
+    logger_debug(DBG_EVENTS, "Updated timer timeout to %li.%09lis",
         aio_timer.it_value.tv_sec, aio_timer.it_value.tv_nsec);
     return true;
 }
