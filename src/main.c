@@ -72,7 +72,7 @@ static void print_help(const char *cmd)
 
     printf(help_arg,
         "-t, --test-config",
-        "Only loads the configuration and exits");
+        "Load the configuration and exit");
     printf(help_indent "  Returns 0 on success, 1 on error\n");
 
     printf("\n");
