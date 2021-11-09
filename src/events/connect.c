@@ -40,11 +40,11 @@ void event_queue_connect(endpoint_group_t *endpoints, time_t delay,
     if (event_delay > 0 && endpoint) {
         if (data->endpoints->has_owner) {
             logger(LOG_INFO,
-                "Retrying to connect to %s at %s:%u in %li seconds",
+                "Retrying to connect to %s at %s:%u in %" PRIi64 " seconds",
                 data->endpoints->owner_name, endpoint->hostname, endpoint->port,
                 event_delay);
         } else {
-            logger(LOG_INFO, "Retrying to connect to %s:%u in %li seconds",
+            logger(LOG_INFO, "Retrying to connect to %s:%u in %" PRIi64 " seconds",
                 endpoint->hostname, endpoint->port, event_delay);
         }
     }

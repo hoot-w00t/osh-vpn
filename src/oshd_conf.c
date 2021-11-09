@@ -111,7 +111,8 @@ static bool oshd_param_automaticconnections(__attribute__((unused)) ecp_t *ecp)
 static bool oshd_param_automaticconnectionsinterval(ecp_t *ecp)
 {
     oshd.automatic_connections_interval = (time_t) atoi(ecp_value(ecp));
-    logger_debug(DBG_CONF, "Set AutomaticConnectionsInterval to %li seconds",
+    logger_debug(DBG_CONF,
+        "Set AutomaticConnectionsInterval to %" PRIi64 " seconds",
         oshd.automatic_connections_interval);
     return true;
 }
@@ -268,7 +269,8 @@ static bool oshd_param_reconnectdelaymin(ecp_t *ecp)
             "ReconnectDelayMin cannot be of 0 seconds or less");
         return false;
     }
-    logger_debug(DBG_CONF, "Set ReconnectDelayMin to %li", oshd.reconnect_delay_min);
+    logger_debug(DBG_CONF, "Set ReconnectDelayMin to %" PRIi64,
+        oshd.reconnect_delay_min);
     return true;
 }
 
@@ -281,7 +283,8 @@ static bool oshd_param_reconnectdelaymax(ecp_t *ecp)
             "ReconnectDelayMax cannot be of 0 seconds or less");
         return false;
     }
-    logger_debug(DBG_CONF, "Set ReconnectDelayMax to %li", oshd.reconnect_delay_max);
+    logger_debug(DBG_CONF, "Set ReconnectDelayMax to %" PRIi64,
+        oshd.reconnect_delay_max);
     return true;
 }
 
@@ -470,7 +473,8 @@ bool oshd_load_conf(const char *filename)
         return false;
     }
     if (oshd.reconnect_delay_max < oshd.reconnect_delay_min) {
-        logger(LOG_ERR, "ReconnectDelayMax (%lis) cannot be smaller than ReconnectDelayMin (%lis)",
+        logger(LOG_ERR,
+            "ReconnectDelayMax (%" PRIi64 "s) cannot be smaller than ReconnectDelayMin (%" PRIi64 "s)",
             oshd.reconnect_delay_max, oshd.reconnect_delay_min);
         return false;
     }

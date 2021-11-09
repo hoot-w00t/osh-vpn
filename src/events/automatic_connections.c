@@ -77,7 +77,7 @@ static time_t automatic_connections_handler(__attribute__((unused)) void *data)
     struct timespec now;
     struct timespec delta;
 
-    logger_debug(DBG_ENDPOINTS, "Automatic connections (%zu at most, retry delay: %li seconds)",
+    logger_debug(DBG_ENDPOINTS, "Automatic connections (%zu at most, retry delay: %" PRIi64 " seconds)",
         remaining_tries, next_retry_delay);
     oshd_gettime(&now);
     for (size_t i = 0; i < oshd.node_tree_count && remaining_tries > 0; ++i) {
