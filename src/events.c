@@ -54,8 +54,7 @@ static bool update_timer_interval(void)
 
     // Arm the timer with the new timeout
     if (timerfd_settime(event_queue_aio->fd, 0, &aio_timer, NULL) < 0) {
-        logger(LOG_CRIT,
-            "Failed to set events timer: %s (fd=%i, %" PRIi64 ".%09" PRIi64 "s)",
+        logger(LOG_CRIT, "Failed to set events timer: %s (fd=%i, %li.%lis)",
             strerror(errno),
             event_queue_aio->fd,
             aio_timer.it_value.tv_sec,
@@ -63,7 +62,7 @@ static bool update_timer_interval(void)
         return false;
     }
 
-    logger_debug(DBG_EVENTS, "Updated timer timeout to %" PRIi64 ".%09" PRIi64 "s",
+    logger_debug(DBG_EVENTS, "Updated timer timeout to %li.%lis",
         aio_timer.it_value.tv_sec, aio_timer.it_value.tv_nsec);
     return true;
 }
@@ -244,7 +243,7 @@ void event_queue_in(event_t *event, time_t delay)
     if (event->in_queue)
         event_unqueue(event);
 
-    logger_debug(DBG_EVENTS, "Queuing %s event %p in %" PRIi64 "s",
+    logger_debug(DBG_EVENTS, "Queuing %s event %p in %lis",
         event->name, event, delay);
 
     // Sort the events by their trigger time (ascending)
