@@ -266,6 +266,7 @@ bool oshd_route_del_orphan(oshd_route_group_t *group)
 // Deletes all routes
 void oshd_route_clear(oshd_route_group_t *group)
 {
+    const size_t previous_total_count = group->total_count;
     oshd_route_t *next;
 
     while (group->head) {
@@ -288,7 +289,9 @@ void oshd_route_clear(oshd_route_group_t *group)
     group->resolver_count = 0;
 
     logger_debug(DBG_ROUTING, "Cleared all routes");
-    oshd_resolver_update();
+
+    if (previous_total_count > 0)
+        oshd_resolver_update();
 }
 
 // Dump list to outfile
