@@ -97,6 +97,7 @@ add_dependencies(oshd easyconf)
 target_link_libraries(oshd ${EASYCONF_LIBRARIES} ${OPENSSL_LIBRARIES})
 
 # Criterion unit tests
+option(ENABLE_UNIT_TESTS "Enable unit testing with Criterion" OFF)
 if (ENABLE_UNIT_TESTS)
     message(STATUS "Unit tests enabled")
 

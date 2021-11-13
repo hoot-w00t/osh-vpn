@@ -47,7 +47,7 @@ You can use different build types with `-DCMAKE_BUILD_TYPE=<build_type>` when ru
 | Hardened       | Same as RelWithDebInfo but also enables stack protection (https://wiki.debian.org/Hardening) |
 
 ### Unit tests
-You can also build unit tests by configuring CMake with `-DENABLE_UNIT_TESTS=1`.
+You can also build unit tests by configuring CMake with `-DENABLE_UNIT_TESTS=ON`.
 They are built using [Criterion](https://github.com/Snaipe/Criterion), which you'll have to install in order to compile and execute the tests.
 ```
 cmake .. -DENABLE_UNIT_TESTS=1
