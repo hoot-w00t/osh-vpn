@@ -22,16 +22,21 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "libssl1.1")
 find_package(OpenSSL REQUIRED)
 
 # easyconf (from the submodule)
-set(EASYCONF_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/easyconf")
-set(EASYCONF_INCLUDE "${EASYCONF_ROOT}/include")
-set(EASYCONF_LIBRARIES "${EASYCONF_ROOT}/libeasyconf.a")
+set(EASYCONF_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/easyconf")
+set(EASYCONF_BUILD "easyconf")
+set(EASYCONF_INCLUDEDIR "${EASYCONF_SOURCE}/include")
 
-add_custom_target(easyconf
-    COMMAND make -C ${EASYCONF_ROOT}
-    VERBATIM)
+set(EASYCONF_MSG "Configuring '${CMAKE_CURRENT_BINARY_DIR}/${EASYCONF_BUILD}' from '${EASYCONF_SOURCE}'")
+
+message(STATUS "${EASYCONF_MSG}")
+add_subdirectory("${EASYCONF_SOURCE}" "${EASYCONF_BUILD}")
+message(STATUS "${EASYCONF_MSG} - done")
+
+link_directories(${EASYCONF_BUILD})
+include_directories(${EASYCONF_INCLUDEDIR})
 
 # Header directories
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include ${EASYCONF_INCLUDE})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # TUN/TAP sources
 set(OSH_TUNTAP_SOURCES src/tuntap/common.c)
@@ -93,8 +98,7 @@ set(OSHD_TESTS_SOURCES
 
 # Osh daemon
 add_executable(oshd ${OSHD_SOURCES})
-add_dependencies(oshd easyconf)
-target_link_libraries(oshd ${EASYCONF_LIBRARIES} ${OPENSSL_LIBRARIES})
+target_link_libraries(oshd easyconf ${OPENSSL_LIBRARIES})
 
 # Criterion unit tests
 option(ENABLE_UNIT_TESTS "Enable unit testing with Criterion" OFF)
