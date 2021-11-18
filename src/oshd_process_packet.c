@@ -27,6 +27,13 @@ static bool oshd_process_handshake(node_t *node, oshpacket_hdr_t *pkt,
         return false;
     }
 
+    // Reject additional handshakes before authentication
+    if ((node->recv_cipher || node->send_cipher) && !node->authenticated) {
+        logger(LOG_ERR, "%s: Received another handshake before authentication",
+            node->addrw);
+        return false;
+    }
+
     // If no HANDSHAKE is currently in progress it means the other node
     // initiated it, we have to initiate it on our side too to be able to
     // process it
