@@ -237,7 +237,14 @@ static bool oshd_process_hello_challenge(node_t *node, oshpacket_hdr_t *pkt,
         return node_queue_hello_end(node);
     }
 
-    node_id_t *id = node_id_add(name);
+    node_id_t *id = node_id_find(name);
+
+    if (!id) {
+        // We don't know this node so we can't authenticate it
+        logger(LOG_ERR, "%s: Authentication failed: Unknown node %s",
+            node->addrw, name);
+        return node_queue_hello_end(node);
+    }
 
     if (id->local_node) {
         // Disconnect the current socket if node tries to authenticate
@@ -294,6 +301,13 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
     if (!node->hello_chall) {
         // If we don't have a hello_chall packet, authentication cannot proceed
         logger(LOG_ERR, "%s: Received HELLO_RESPONSE but no HELLO_CHALLENGE was sent",
+            node->addrw);
+        return node_queue_hello_end(node);
+    }
+
+    if (!node->hello_id) {
+        // If there is no hello_id, authentication cannot proceed either
+        logger(LOG_ERR, "%s: Received HELLO_RESPONSE but the node is unknown",
             node->addrw);
         return node_queue_hello_end(node);
     }
