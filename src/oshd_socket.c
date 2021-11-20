@@ -58,22 +58,28 @@ static void node_aio_add(aio_event_t *event)
 }
 
 // Delete callback for nodes
-// Deletes node from the nodes list
+// Frees the node and removes it from the nodes list
 static void node_aio_delete(aio_event_t *event)
 {
     node_t *node = (node_t *) event->userdata;
     size_t i;
 
+    // Free the node
+    node_destroy(node);
+
+    // Search the index of the node in the list
     for (i = 0; i < oshd.nodes_count && oshd.nodes[i] != node; ++i);
 
-    // If the node doesn't exist in the list, stop here
-    // It was probably already freed elsewhere
+    // If the node is not in the list then we are done
     if (i >= oshd.nodes_count)
         return;
 
-    node_destroy(node);
-    for (; i + 1 < oshd.nodes_count; ++i)
-        oshd.nodes[i] = oshd.nodes[i + 1];
+    // Otherwise if the node is not last in the list we have to shift the
+    // ones that come after before resizing the array
+    if ((i + 1) < oshd.nodes_count) {
+        memmove(&oshd.nodes[i], &oshd.nodes[i + 1],
+            sizeof(node_t *) * (oshd.nodes_count - i - 1));
+    }
     oshd.nodes_count -= 1;
     oshd.nodes = xreallocarray(oshd.nodes, oshd.nodes_count, sizeof(node_t *));
 }
