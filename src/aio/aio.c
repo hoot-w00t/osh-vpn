@@ -1,3 +1,5 @@
+#define _OSH_AIO_C
+
 #include "aio.h"
 #include "xalloc.h"
 #include "logger.h"
@@ -5,9 +7,6 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
-
-// TODO: Optimize memory reallocations by allocating more than one element at a
-//       time
 
 // Return a newly allocated copy of src
 // aio, aio_idx, added_to_aio and pending_delete are initialized to zero
@@ -32,6 +31,8 @@ static aio_event_t *aio_event_dup(const aio_event_t *src)
 static void aio_event_free(aio_event_t *event)
 {
     if (event) {
+        _aio_event_free(event);
+
         if (event->cb_delete)
             event->cb_delete(event);
         free(event);
@@ -44,15 +45,12 @@ static void aio_events_add(aio_t *aio, aio_event_t *event)
     const size_t idx = aio->events_count;
     const size_t new_count = aio->events_count + 1;
 
-    // Allocate space for the new event
+    // Allocate space for the new event and add it
     aio->events = xreallocarray(aio->events, new_count, sizeof(aio_event_t *));
-    aio->events_pfd = xreallocarray(aio->events_pfd, new_count, sizeof(struct pollfd));
     aio->events_count = new_count;
-
-    // Update both queues with the new event
     aio->events[idx] = event;
-    aio->events_pfd[idx].fd = event->fd;
-    aio->events_pfd[idx].events = event->poll_events;
+
+    _aio_event_add(aio, event, idx, new_count);
 
     // Initialize the event's internal values
     event->aio_idx = idx;
@@ -74,18 +72,18 @@ static void aio_events_delete(aio_event_t *event)
         // Shift queues
         memmove(&aio->events[idx], &aio->events[idx + 1],
             sizeof(aio_event_t *) * move_size);
-        memmove(&aio->events_pfd[idx], &aio->events_pfd[idx + 1],
-            sizeof(struct pollfd) * move_size);
 
         // Update events' indexes
         for (size_t i = 0; i < move_size; ++i)
             aio->events[idx + i]->aio_idx = idx + i;
     }
 
-    // Re-allocate queues with their new size
+    // Update dynamic arrays' sizes
     aio->events_count -= 1;
-    aio->events = xreallocarray(aio->events, aio->events_count, sizeof(aio_event_t *));
-    aio->events_pfd = xreallocarray(aio->events_pfd, aio->events_count, sizeof(struct pollfd));
+    aio->events = xreallocarray(aio->events, aio->events_count,
+        sizeof(aio_event_t *));
+
+    _aio_event_delete(aio, event, idx, move_size, aio->events_count);
 
     // Free the event
     aio_event_free(event);
@@ -127,10 +125,15 @@ static void aio_process_queue(aio_t *aio)
 }
 
 // Create a new async IO object
+// Returns NULL if the AIO cannot be initialized
 aio_t *aio_create(void)
 {
     aio_t *aio = xzalloc(sizeof(aio_t));
 
+    if (!_aio_create(aio)) {
+        free(aio);
+        return NULL;
+    }
     return aio;
 }
 
@@ -145,9 +148,15 @@ void aio_free(aio_t *aio)
         for (size_t i = 0; i < aio->events_count; ++i)
             aio_event_free(aio->events[i]);
 
-        // Free all lists and the aio structure
+        // Free and reset the list of events
         free(aio->events);
-        free(aio->events_pfd);
+        aio->events = NULL;
+        aio->events_count = 0;
+
+        // Free internal resources
+        _aio_free(aio);
+
+        // Free the aio structure
         free(aio);
     }
 }
@@ -164,54 +173,10 @@ ssize_t aio_poll(aio_t *aio, ssize_t timeout)
     // Process all queued events to properly initialize/update events_pfd
     aio_process_queue(aio);
 
-    // Poll all events
-    n = poll(aio->events_pfd, aio->events_count, timeout);
-    if (n < 0) {
-        // Polling errors can occur when receiving signals, in this case the
-        // error isn't actually from the polling so we can ignore it
-        if (errno == EINTR)
-            return 0;
+    // Call the actual polling function
+    n = _aio_poll(aio, timeout);
 
-        logger(LOG_CRIT, "aio_poll: poll: %s", strerror(errno));
-        return -1;
-    }
-
-    // Process all events
-    ssize_t remaining = n;
-
-    for (size_t i = 0; n > 0 && i < aio->events_count; ++i) {
-        // If there are no revents skip this event
-        if (!aio->events_pfd[i].revents)
-            continue;
-
-        // Decrement the number of remaining events
-        --remaining;
-
-        // If there is an error call the error callback and ignore any other
-        // events
-        if (aio->events_pfd[i].revents & (POLLERR | POLLHUP)) {
-            if (aio->events[i]->cb_error)
-                aio->events[i]->cb_error(aio->events[i], aio->events_pfd[i].revents);
-            continue;
-        }
-
-        // TODO: Maybe add a way to stop processing the current event after
-        //       a read/write callback
-
-        // If data is ready to be read, call the read callback
-        if (aio->events_pfd[i].revents & (POLLIN)) {
-            if (aio->events[i]->cb_read)
-                aio->events[i]->cb_read(aio->events[i]);
-        }
-
-        // If data is ready to be written, call the write callback
-        if (aio->events_pfd[i].revents & (POLLOUT)) {
-            if (aio->events[i]->cb_write)
-                aio->events[i]->cb_write(aio->events[i]);
-        }
-    }
-
-    // Process any queued events from callbacks
+    // Process any event queued by the callbacks
     aio_process_queue(aio);
 
     return n;
@@ -224,6 +189,7 @@ aio_event_t *aio_event_add(aio_t *aio, const aio_event_t *event)
 {
     aio_event_t *e = aio_event_dup(event);
 
+    _aio_event_init(e);
     aio_events_queue(aio, e, true);
     return e;
 }
@@ -272,29 +238,6 @@ void aio_event_del_fd(aio_t *aio, int fd)
             aio_event_del(aio->events[i]);
         }
     }
-}
-
-// Returns a pointer to the poll_events of this event
-static aio_poll_event_t *aio_event_poll_events(aio_event_t *event)
-{
-    return event->added_to_aio ? &event->aio->events_pfd[event->aio_idx].events
-                               : &event->poll_events;
-}
-
-// Enables the given poll events
-void aio_enable_poll_events(aio_event_t *event, aio_poll_event_t poll_events)
-{
-    aio_poll_event_t *pe = aio_event_poll_events(event);
-
-    *pe |= poll_events;
-}
-
-// Disables the given poll events
-void aio_disable_poll_events(aio_event_t *event, aio_poll_event_t poll_events)
-{
-    aio_poll_event_t *pe = aio_event_poll_events(event);
-
-    *pe &= ~(poll_events);
 }
 
 // Generic delete callback that closes the event's file descriptor if it is not

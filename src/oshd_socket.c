@@ -373,7 +373,7 @@ bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay)
 // If a server fails, stop the daemon
 static void server_aio_error(aio_event_t *event, aio_poll_event_t revents)
 {
-    logger(LOG_CRIT, "Server socket error (fd: %i, revents: %i)",
+    logger(LOG_CRIT, "Server socket error (fd: %i, revents: " AIO_PE_FMT ")",
         event->fd, revents);
     aio_event_del(event);
     oshd_stop();

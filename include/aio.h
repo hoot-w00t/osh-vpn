@@ -4,19 +4,34 @@
 #include <sys/types.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <poll.h>
 
 typedef struct aio aio_t;
 typedef struct aio_event aio_event_t;
 typedef struct aio_pending aio_pending_t;
 
-typedef short aio_poll_event_t;
-#define AIO_NOPOLL  (0)
-#define AIO_READ    (POLLIN)
-#define AIO_WRITE   (POLLOUT)
-#define AIO_ERR     (POLLERR)
-#define AIO_HUP     (POLLHUP)
+#define AIO_PE_FMT "%u"
+typedef enum aio_poll_event {
+    AIO_NOPOLL = 0,
+    AIO_READ  = (1 << 0),
+    AIO_WRITE = (1 << 1),
+    AIO_ERR   = (1 << 2),
+    AIO_HUP   = (1 << 3)
+} aio_poll_event_t;
 #define AIO_POLLALL (AIO_READ | AIO_WRITE)
+
+// Safely use an aio_poll_event_t as an index for these values only
+// 0: AIO_NOPOLL
+// 1: AIO_READ
+// 2: AIO_WRITE
+// 3: AIO_POLLALL (AIO_READ | AIO_WRITE)
+#define aio_poll_event_idx(x) ((x) & 3)
+
+// Safely use an aio_poll_event_t as an index for these error values only
+// 0: No error
+// 1: AIO_ERR
+// 2: AIO_HUP
+// 3: AIO_ERR | AIO_HUP
+#define aio_poll_event_err_idx(x) (((x) >> 2) & 3)
 
 typedef void (*aio_cb_t)(aio_event_t *event);
 typedef aio_cb_t aio_cb_add_t;
@@ -24,6 +39,13 @@ typedef aio_cb_t aio_cb_delete_t;
 typedef aio_cb_t aio_cb_read_t;
 typedef aio_cb_t aio_cb_write_t;
 typedef void (*aio_cb_error_t)(aio_event_t *event, aio_poll_event_t revents);
+
+// Generic data types for the aio_t and aio_event_t structures
+typedef union aio_data {
+    void *ptr;
+    int fd;
+} aio_data_t;
+typedef aio_data_t aio_event_data_t;
 
 struct aio_pending {
     aio_event_t *event;
@@ -35,14 +57,14 @@ struct aio {
     // Async I/O events
     aio_event_t **events;
 
-    // pollfd array used and updated when necessary for polling I/O events
-    struct pollfd *events_pfd;
-
-    // Number of entries in events and events_pfd
+    // Number of AIO events
     size_t events_count;
 
     // This holds a list of events to add/delete
     aio_pending_t *queue_head;
+
+    // Generic data
+    aio_data_t data;
 };
 
 struct aio_event {
@@ -66,8 +88,10 @@ struct aio_event {
     aio_cb_write_t cb_write;
     aio_cb_error_t cb_error;
 
-    // Pointer to the aio_t this event is a part of and its pollfd entry
+    // Pointer to the aio_t this event is a part of
     aio_t *aio;
+
+    // Index of this event_t in aio->events
     size_t aio_idx;
 
     // true when this event is queued for addition/deletion (used internally to
@@ -75,6 +99,9 @@ struct aio_event {
     // same event twice, or accessing unallocated memory)
     bool added_to_aio;
     bool pending_delete;
+
+    // Generic data
+    aio_event_data_t data;
 };
 
 aio_t *aio_create(void);
@@ -96,9 +123,55 @@ aio_event_t *aio_event_add_inl(aio_t *aio,
 void aio_event_del(aio_event_t *event);
 void aio_event_del_fd(aio_t *aio, int fd);
 
+void aio_cb_delete_close_fd(aio_event_t *event);
+
+// These functions are implementation specific
 void aio_enable_poll_events(aio_event_t *event, aio_poll_event_t poll_events);
 void aio_disable_poll_events(aio_event_t *event, aio_poll_event_t poll_events);
 
-void aio_cb_delete_close_fd(aio_event_t *event);
+#endif
+
+#ifdef _OSH_AIO_C
+// Implementation specific function prototypes that should not be used outside
+// of the AIO
+
+// This function should free any generic data from the aio_event_t
+void _aio_event_free(aio_event_t *event);
+
+// This function is called after the aio_event_t is allocated but before
+// it is inserted in an aio_t
+void _aio_event_init(aio_event_t *event);
+
+// This function is called when the aio_event_t is inserted in the aio_t
+// idx is the index at which the event is in the aio->events array
+// new_count is the number of elements in the array including this one
+void _aio_event_add(aio_t *aio, aio_event_t *event, size_t idx, size_t new_count);
+
+// This function is called when an event is being deleted from an AIO
+// idx is the index of this event in the aio->events array
+// move_size is the number of elements that will be shifted in the array
+//     memmove(&aio->events[idx], &aio->events[idx + 1],
+//         sizeof(aio->events) * move_size);
+// old_count is the number of elements in the aio->events array including this one
+void _aio_event_delete(aio_t *aio, aio_event_t *event,
+    size_t idx, size_t move_size, size_t old_count);
+
+// This function is called after the aio_t is allocated
+// On success it must return the aio pointer passed to it, on error it should
+// return NULL and free any allocated data
+aio_t *_aio_create(aio_t *aio);
+
+// This function is called after clearing all events from the aio_t
+// It should free any generic data from the aio_t
+void _aio_free(aio_t *aio);
+
+// This function polls for any I/O events on the events added to the AIO
+// It calls the AIO event's callbacks when the requested events are ready
+// timeout is the maximum amount of time (in milliseconds) to wait for I/O
+//   events before returning
+//   A value of 0 does not wait and processes events that are already ready
+//   A negative value waits for I/O events forever
+// It returns the number of events that were ready, or -1 for errors
+ssize_t _aio_poll(aio_t *aio, ssize_t timeout);
 
 #endif

@@ -56,6 +56,10 @@ ctest
 ```
 It's also possible to run the unit tests alone with `./oshd_tests`.
 
+### Other compilation options
+#### Disabling epoll
+`epoll` will be used instead of `poll` when it is available, but you can disable it if you want by configuring the build with `-DDISABLE_EPOLL=ON`.
+
 ## Installing
 It is possible to install Osh with `sudo make install` after compiling.
 

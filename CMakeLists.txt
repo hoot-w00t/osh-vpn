@@ -6,6 +6,7 @@ project(osh-vpn
     LANGUAGES "C")
 
 include(CheckCCompilerFlag)
+include(CheckIncludeFile)
 include(CheckLinkerFlag OPTIONAL RESULT_VARIABLE CheckLinkerFlagPath)
 include(CTest)
 
@@ -46,8 +47,21 @@ else()
     set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} src/tuntap/linux.c)
 endif()
 
+# Async I/O sources
+option(DISABLE_EPOLL "Don't use epoll even if it is available" OFF)
+
+check_include_file("sys/epoll.h" epoll_available)
+
+set(OSH_AIO_SOURCES src/aio/aio.c)
+if (epoll_available AND NOT DISABLE_EPOLL)
+    set(OSH_AIO_SOURCES ${OSH_AIO_SOURCES} src/aio/epoll.c)
+else()
+    set(OSH_AIO_SOURCES ${OSH_AIO_SOURCES} src/aio/poll.c)
+endif()
+
 # All sources for oshd
 set(OSHD_SOURCES
+    ${OSH_AIO_SOURCES}
     src/crypto/cipher.c
     src/crypto/hash.c
     src/crypto/pkey.c
@@ -60,7 +74,6 @@ set(OSHD_SOURCES
     src/events/node_auth_timeout.c
     src/events/periodic_ping.c
     ${OSH_TUNTAP_SOURCES}
-    src/aio.c
     src/endpoints.c
     src/events.c
     src/logger.c
