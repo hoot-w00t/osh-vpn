@@ -98,11 +98,17 @@ typedef struct __attribute__((__packed__)) oshpacket_devmode {
 } oshpacket_devmode_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_handshake {
-    // Public X25519 key to derive for sending packets to the other node
-    uint8_t send_pubkey[HANDSHAKE_KEY_SIZE];
+    // Public X25519 keys to compute a shared secret
+    union {
+        struct __attribute__((__packed__)) {
+            uint8_t send[HANDSHAKE_KEY_SIZE];
+            uint8_t recv[HANDSHAKE_KEY_SIZE];
+        } k;
+        uint8_t both[HANDSHAKE_KEY_SIZE * 2];
+    } keys;
 
-    // Public X25519 key to derive for receiving packets from the other node
-    uint8_t recv_pubkey[HANDSHAKE_KEY_SIZE];
+    // Signature of both public keys
+    uint8_t sig[HELLO_SIG_SIZE];
 } oshpacket_handshake_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_pubkey {

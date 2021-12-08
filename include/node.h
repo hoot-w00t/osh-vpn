@@ -188,6 +188,9 @@ struct node {
     // false after the handshake is done to prevent overlaps
     bool handshake_in_progress;
 
+    // This pointer holds a copy of the first unauthenticated handshake packet
+    oshpacket_handshake_t *unauth_handshake;
+
     // This is set to true after authentication to indicate that all the
     // informations about the other node's network map should also be relayed to
     // our end of the network

@@ -623,6 +623,7 @@ void node_destroy(node_t *node)
     event_cancel(node->auth_timeout_event);
 
     node_disconnect(node);
+    free(node->unauth_handshake);
     free(node->hello_chall);
     free(node->io.recvbuf);
     netbuffer_free(node->io.sendq);
@@ -1080,26 +1081,48 @@ bool node_queue_handshake(node_t *node)
     logger_debug(DBG_HANDSHAKE, "%s: Exporting send_key", node->addrw);
     if (!pkey_save_x25519_pubkey(node->send_key, &pubkey, &pubkey_size))
         return false;
-    if (pubkey_size != sizeof(packet.send_pubkey)) {
+    if (pubkey_size != sizeof(packet.keys.k.send)) {
         free(pubkey);
         logger(LOG_ERR, "%s: send_key size is invalid (%zu, but expected %zu)",
-            node->addrw, pubkey_size, sizeof(packet.send_pubkey));
+            node->addrw, pubkey_size, sizeof(packet.keys.k.send));
         return false;
     }
-    memcpy(packet.send_pubkey, pubkey, pubkey_size);
+    memcpy(packet.keys.k.send, pubkey, pubkey_size);
     free(pubkey);
 
     logger_debug(DBG_HANDSHAKE, "%s: Exporting recv_key", node->addrw);
     if (!pkey_save_x25519_pubkey(node->recv_key, &pubkey, &pubkey_size))
         return false;
-    if (pubkey_size != sizeof(packet.recv_pubkey)) {
+    if (pubkey_size != sizeof(packet.keys.k.recv)) {
         free(pubkey);
         logger(LOG_ERR, "%s: recv_key size is invalid (%zu, but expected %zu)",
-            node->addrw, pubkey_size, sizeof(packet.recv_pubkey));
+            node->addrw, pubkey_size, sizeof(packet.keys.k.recv));
         return false;
     }
-    memcpy(packet.recv_pubkey, pubkey, pubkey_size);
+    memcpy(packet.keys.k.recv, pubkey, pubkey_size);
     free(pubkey);
+
+    // Sign the keys
+    uint8_t *sig;
+    size_t sig_size;
+
+    if (!pkey_sign(oshd.privkey,
+            packet.keys.both, sizeof(packet.keys.both),
+            &sig, &sig_size))
+    {
+        logger(LOG_ERR, "%s: Failed to sign handshake keys", node->addrw);
+        return false;
+    }
+
+    if (sig_size != sizeof(packet.sig)) {
+        free(sig);
+        logger(LOG_ERR, "%s: Invalid handshake signature size (%zu bytes)",
+            node->addrw, sig_size);
+        return false;
+    }
+
+    memcpy(packet.sig, sig, sizeof(packet.sig));
+    free(sig);
 
     // If we are authenticateed we need to handle handshake timeouts
     // When unauthenticated the authentication timeout event takes care of this

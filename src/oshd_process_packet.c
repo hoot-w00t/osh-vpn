@@ -5,6 +5,7 @@
 #include "crypto/hash.h"
 #include "netpacket.h"
 #include "logger.h"
+#include "xalloc.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -42,12 +43,34 @@ static bool oshd_process_handshake(node_t *node, oshpacket_hdr_t *pkt,
             return false;
     }
 
+    // If the remote node is authenticated, we can verify the keys' signature
+    // now, otherwise we copy them to a temporary buffer and the verification
+    // will happen right after authentication
+    // The keys must always be signed to prevent MITM attacks
+    if (node->authenticated) {
+        if (!pkey_verify(node->id->pubkey,
+                payload->keys.both, sizeof(payload->keys.both),
+                payload->sig, sizeof(payload->sig)))
+        {
+            logger(LOG_ERR, "%s: %s: Handshake signature verification failed",
+                    node->addrw, node->id->name);
+            return false;
+        }
+        logger_debug(DBG_HANDSHAKE, "%s: %s: Valid handshake signature",
+            node->addrw, node->id->name);
+    } else {
+        logger_debug(DBG_HANDSHAKE,
+            "%s: Keeping unauthenticated handshake packet for verification",
+            node->addrw);
+        node->unauth_handshake = xmemdup(payload, sizeof(oshpacket_handshake_t));
+    }
+
     // Load the remote node's public keys
     logger_debug(DBG_HANDSHAKE, "%s: Loading the remote node's public keys", node->addrw);
-    EVP_PKEY *r_send_pubkey = pkey_load_x25519_pubkey(payload->send_pubkey,
-        sizeof(payload->send_pubkey));
-    EVP_PKEY *r_recv_pubkey = pkey_load_x25519_pubkey(payload->recv_pubkey,
-        sizeof(payload->recv_pubkey));
+    EVP_PKEY *r_send_pubkey = pkey_load_x25519_pubkey(payload->keys.k.send,
+        sizeof(payload->keys.k.send));
+    EVP_PKEY *r_recv_pubkey = pkey_load_x25519_pubkey(payload->keys.k.recv,
+        sizeof(payload->keys.k.recv));
 
     if (!r_send_pubkey || !r_recv_pubkey) {
         pkey_free(r_send_pubkey);
@@ -349,6 +372,28 @@ static bool oshd_process_hello_response(node_t *node, oshpacket_hdr_t *pkt,
         return node_queue_hello_end(node);
     }
     logger_debug(DBG_AUTHENTICATION, "%s: Valid signature from %s",
+        node->addrw, node->hello_id->name);
+
+    // After authenticating we should always have the initial handshake packet
+    // We must verify the signature to prevent MITM attacks
+    if (node->unauth_handshake) {
+        node->hello_auth = pkey_verify(node->hello_id->pubkey,
+            node->unauth_handshake->keys.both, sizeof(node->unauth_handshake->keys.both),
+            node->unauth_handshake->sig, sizeof(node->unauth_handshake->sig));
+    } else {
+        node->hello_auth = false;
+    }
+
+    free(node->unauth_handshake);
+    node->unauth_handshake = NULL;
+
+    if (!node->hello_auth) {
+        logger(LOG_ERR,
+            "%s: %s: Handshake signature verification failed",
+            node->addrw, node->hello_id->name);
+        return node_queue_hello_end(node);
+    }
+    logger_debug(DBG_HANDSHAKE, "%s: %s: Valid handshake signature",
         node->addrw, node->hello_id->name);
 
     if (node->hello_id->node_socket) {
