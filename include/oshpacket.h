@@ -17,19 +17,31 @@
 #define NODE_NAME_SIZE (16)
 #endif
 
+#ifndef ED25519_SIG_SIZE
+// Ed25519 signatures are 64 bytes in length
+#define ED25519_SIG_SIZE (64)
+#endif
+
+#ifndef ED25519_KEY_SIZE
+// Ed25519 keys are 32 bytes in length
+#define ED25519_KEY_SIZE (32)
+#endif
+
+#ifndef X25519_KEY_SIZE
+// X25519 keys are the same size as Ed25519 keys
+#define X25519_KEY_SIZE ED25519_KEY_SIZE
+#endif
+
 #ifndef HELLO_SIG_SIZE
-// The Ed25519 keys' signature is 64 bytes in length
-#define HELLO_SIG_SIZE (64)
+#define HELLO_SIG_SIZE ED25519_SIG_SIZE
 #endif
 
 #ifndef HANDSHAKE_KEY_SIZE
-// The X25519 public keys' length is 32 bytes
-#define HANDSHAKE_KEY_SIZE (32)
+#define HANDSHAKE_KEY_SIZE X25519_KEY_SIZE
 #endif
 
 #ifndef PUBLIC_KEY_SIZE
-// The Ed25519 public keys' length is 32 bytes
-#define PUBLIC_KEY_SIZE (32)
+#define PUBLIC_KEY_SIZE ED25519_KEY_SIZE
 #endif
 
 #define OSHPACKET_PAYLOAD_MAXSIZE (2048)
