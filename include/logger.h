@@ -8,9 +8,10 @@ typedef enum loglevel {
     LOG_CRIT = 0,
     LOG_ERR,
     LOG_WARN,
-    LOG_INFO
+    LOG_INFO,
+    _last_loglevel_entry // must always be the last entry
 } loglevel_t;
-#define loglevel_size (4)
+#define loglevel_size (_last_loglevel_entry)
 
 typedef enum debug_what {
     DBG_OSHD = 0,
@@ -27,9 +28,10 @@ typedef enum debug_what {
     DBG_HANDSHAKE,
     DBG_STATEEXG,
     DBG_RESOLVER,
-    DBG_ENDPOINTS
+    DBG_ENDPOINTS,
+    _last_debug_what_entry // must always be the last entry
 } debug_what_t;
-#define debug_what_size (15)
+#define debug_what_size (_last_debug_what_entry)
 
 void logger_set_level(loglevel_t level);
 bool logger_set_level_name(const char *name);
