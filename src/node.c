@@ -795,6 +795,8 @@ static bool data_packet_should_drop(node_t *node)
 }
 
 // Queue a packet to the *node socket for *dest node
+// If payload is NULL and payload_size is greater than 0 the payload's bytes
+// will be uninitialized
 bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
     uint8_t *payload, uint16_t payload_size)
 {
@@ -838,7 +840,8 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
     if (dest) memcpy(hdr->dest_node, dest, strlen(dest));
 
     // Copy the packet's payload to the buffer
-    memcpy(slot + OSHPACKET_HDR_SIZE, payload, payload_size);
+    if (payload)
+        memcpy(slot + OSHPACKET_HDR_SIZE, payload, payload_size);
 
     if (node->send_cipher) {
         // The node expects all traffic to be encrypted
@@ -1136,10 +1139,7 @@ bool node_queue_handshake(node_t *node)
 // Queue HANDSHAKE_END packet
 bool node_queue_handshake_end(node_t *node)
 {
-    uint8_t buf = 0;
-
-    return node_queue_packet(node, node->id ? node->id->name : NULL,
-        HANDSHAKE_END, &buf, sizeof(buf));
+    return node_queue_packet_empty(node, node->id ? node->id->name : NULL, HANDSHAKE_END);
 }
 
 // Queue HELLO_CHALLENGE request
@@ -1188,25 +1188,19 @@ bool node_queue_devmode(node_t *node)
 // Queue STATEEXG_END packet
 bool node_queue_stateexg_end(node_t *node)
 {
-    uint8_t buf = 0;
-
-    return node_queue_packet(node, node->id->name, STATEEXG_END, &buf, sizeof(buf));
+    return node_queue_packet_empty(node, node->id->name, STATEEXG_END);
 }
 
 // Queue GOODBYE request
 bool node_queue_goodbye(node_t *node)
 {
-    uint8_t buf = 0;
-
     node_graceful_disconnect(node);
-    return node_queue_packet(node, node->id->name, GOODBYE, &buf, sizeof(buf));
+    return node_queue_packet_empty(node, node->id->name, GOODBYE);
 }
 
 // Queue PING request
 bool node_queue_ping(node_t *node)
 {
-    uint8_t buf = 0;
-
     if (node->rtt_await) {
         logger_debug(DBG_SOCKETS, "%s: %s: Dropping PING request, another was not answered yet",
             node->addrw, node->id->name);
@@ -1215,15 +1209,13 @@ bool node_queue_ping(node_t *node)
 
     oshd_gettime(&node->rtt_ping);
     node->rtt_await = true;
-    return node_queue_packet(node, node->id->name, PING, &buf, 1);
+    return node_queue_packet_empty(node, node->id->name, PING);
 }
 
 // Queue PONG request
 bool node_queue_pong(node_t *node)
 {
-    uint8_t buf = 0;
-
-    return node_queue_packet(node, node->id->name, PONG, &buf, 1);
+    return node_queue_packet_empty(node, node->id->name, PONG);
 }
 
 // Broadcast a node's public key

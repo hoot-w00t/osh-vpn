@@ -249,6 +249,7 @@ bool node_valid_name(const char *name);
 
 bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
     uint8_t *payload, uint16_t payload_size);
+#define node_queue_packet_empty(node, dest, type) node_queue_packet(node, dest, type, NULL, 0)
 bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt);
 bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
     uint8_t *payload, uint16_t payload_size);
