@@ -62,8 +62,10 @@ typedef enum oshpacket_type {
     ENDPOINT,
     EDGE_ADD,
     EDGE_DEL,
-    ROUTE_ADD
+    ROUTE_ADD,
+    _LAST_OSHPACKET_TYPE_ENTRY // must always be the last entry
 } oshpacket_type_t;
+#define OSHPACKET_TYPE_COUNT (_LAST_OSHPACKET_TYPE_ENTRY)
 
 // For a total of 40 bytes
 typedef struct __attribute__((__packed__)) oshpacket_hdr {
@@ -146,6 +148,10 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 #define OSHPACKET_MAXSIZE (OSHPACKET_HDR_SIZE + OSHPACKET_PAYLOAD_MAXSIZE)
 
 const char *oshpacket_type_name(oshpacket_type_t type);
-bool oshpacket_type_valid(oshpacket_type_t type);
+
+static inline bool oshpacket_type_valid(oshpacket_type_t type)
+{
+    return type >= 0 && type < _LAST_OSHPACKET_TYPE_ENTRY;
+}
 
 #endif
