@@ -1,5 +1,6 @@
 #include "oshd.h"
 #include "oshd_cmd.h"
+#include "oshd_conf.h"
 #include "xalloc.h"
 #include "logger.h"
 #include <stdio.h>
@@ -51,17 +52,7 @@ static bool oshd_param_name(ecp_t *ecp)
 // KeysDir
 static bool oshd_param_keysdir(ecp_t *ecp)
 {
-    free(oshd.keys_dir);
-    oshd.keys_dir = xstrdup(ecp_value(ecp));
-
-    // If the path does not end with a /, add one
-    size_t len = strlen(oshd.keys_dir);
-    if (len == 0 || oshd.keys_dir[len - 1] != '/') {
-        oshd.keys_dir = xrealloc(oshd.keys_dir, len + 2);
-        oshd.keys_dir[len] = '/';
-        oshd.keys_dir[len + 1] = '\0';
-    }
-    logger_debug(DBG_CONF, "Set keys dir to '%s'", oshd.keys_dir);
+    oshd_conf_set_keysdir(ecp_value(ecp));
     return true;
 }
 
@@ -483,4 +474,21 @@ on_error:
     logger(LOG_ERR, "%s: %s", filename, oshd_conf_error);
     ec_destroy(conf);
     return false;
+}
+
+// Set oshd.keys_dir to dir
+// Adds a / if necessary
+void oshd_conf_set_keysdir(const char *dir)
+{
+    free(oshd.keys_dir);
+    oshd.keys_dir = xstrdup(dir);
+
+    // If the path does not end with a /, add one
+    size_t len = strlen(oshd.keys_dir);
+    if (len == 0 || oshd.keys_dir[len - 1] != '/') {
+        oshd.keys_dir = xrealloc(oshd.keys_dir, len + 2);
+        oshd.keys_dir[len] = '/';
+        oshd.keys_dir[len + 1] = '\0';
+    }
+    logger_debug(DBG_CONF, "Set keys directory to '%s'", oshd.keys_dir);
 }

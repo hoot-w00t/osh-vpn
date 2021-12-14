@@ -12,6 +12,7 @@ static const char *av_cmd = NULL;
 
 #define default_conf_file "oshd.conf"
 static char *conf_file = NULL;
+static char *keysdir = NULL;
 
 static bool stop_after_conf_loaded = false;
 
@@ -22,6 +23,7 @@ static const struct option longopts[] = {
     {"debug",               required_argument,  NULL, 'd'},
     {"generate-keypair",    required_argument,  NULL, 'g'},
     {"test-config",         no_argument,        NULL, 't'},
+    {"keysdir",             required_argument,  NULL, 256},
     {NULL,                  0,                  NULL,  0 }
 };
 
@@ -74,6 +76,10 @@ static void print_help(const char *cmd)
         "-t, --test-config",
         "Load the configuration and exit");
     printf(help_indent "  Returns 0 on success, 1 on error\n");
+
+    printf("\n");
+    printf(help_arg, "--keysdir=DIR", "Set the keys directory to DIR");
+    printf(help_indent "  Defaults to the working directory\n");
 
     printf("\n");
     printf("config_file: Path to the configuration file for the daemon\n");
@@ -140,6 +146,10 @@ static void parse_opt(int opt)
             stop_after_conf_loaded = true;
             break;
 
+        case 256:
+            keysdir = optarg;
+            break;
+
         default: exit(EXIT_FAILURE);
     }
 }
@@ -167,6 +177,9 @@ int main(int ac, char **av)
 
     atexit(oshd_free);
     oshd_init_conf();
+
+    if (keysdir)
+        oshd_conf_set_keysdir(keysdir);
 
     if (!oshd_load_conf(conf_file))
         return EXIT_FAILURE;
