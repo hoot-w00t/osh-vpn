@@ -253,7 +253,7 @@ static bool oshd_process_hello_challenge(node_t *node, oshpacket_hdr_t *pkt,
 
     char name[NODE_NAME_SIZE + 1];
     memset(name, 0, sizeof(name));
-    memcpy(name, payload->node_name, NODE_NAME_SIZE);
+    memcpy(name, pkt->src_node, NODE_NAME_SIZE);
 
     if (!node_valid_name(name)) {
         logger(LOG_ERR, "%s: Authentication failed: Invalid name", node->addrw);

@@ -83,8 +83,7 @@ typedef struct __attribute__((__packed__)) oshpacket_hdr {
 } oshpacket_hdr_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_hello_challenge {
-    char node_name[NODE_NAME_SIZE];
-    uint8_t challenge[OSHPACKET_PAYLOAD_MAXSIZE - NODE_NAME_SIZE];
+    uint8_t challenge[OSHPACKET_PAYLOAD_MAXSIZE];
 } oshpacket_hello_challenge_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_hello_response {

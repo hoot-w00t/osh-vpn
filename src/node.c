@@ -1148,7 +1148,6 @@ bool node_queue_hello_challenge(node_t *node)
     free(node->hello_chall);
     node->hello_chall = xalloc(sizeof(oshpacket_hello_challenge_t));
 
-    memcpy(node->hello_chall->node_name, oshd.name, NODE_NAME_SIZE);
     if (!random_bytes(node->hello_chall->challenge, sizeof(node->hello_chall->challenge)))
         return false;
 
