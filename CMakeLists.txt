@@ -30,7 +30,7 @@ set(EASYCONF_INCLUDEDIR "${EASYCONF_SOURCE}/include")
 set(EASYCONF_MSG "Configuring '${CMAKE_CURRENT_BINARY_DIR}/${EASYCONF_BUILD}' from '${EASYCONF_SOURCE}'")
 
 message(STATUS "${EASYCONF_MSG}")
-add_subdirectory("${EASYCONF_SOURCE}" "${EASYCONF_BUILD}")
+add_subdirectory("${EASYCONF_SOURCE}" "${EASYCONF_BUILD}" EXCLUDE_FROM_ALL)
 message(STATUS "${EASYCONF_MSG} - done")
 
 link_directories(${EASYCONF_BUILD})
@@ -123,6 +123,9 @@ if (ENABLE_UNIT_TESTS)
     target_link_libraries(oshd_tests criterion)
 
     add_test(NAME unit_tests COMMAND ./oshd_tests)
+
+    # CTest will try to run easyconf's tests too but they are excluded from all
+    add_dependencies(oshd_tests easyconf_tests)
 else()
     message(STATUS "Unit tests disabled")
 endif()
