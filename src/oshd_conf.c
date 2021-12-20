@@ -23,8 +23,72 @@ typedef struct oshd_conf_param {
     oshd_conf_handler_t handler;
 } oshd_conf_param_t;
 
+typedef struct oshd_conf {
+    ec_t *ec;
+    ecp_t *iter;
+    char *filename;
+} oshd_conf_t;
+
 // Buffer to store configuration error messages from handlers
 static char oshd_conf_error[256];
+
+// Configuration stack
+static oshd_conf_t *oshd_conf = NULL;
+static size_t oshd_conf_count = 0;
+#define conf_curr oshd_conf[oshd_conf_count - 1]
+
+// Push configuration file on the stack
+static void oshd_conf_push(ec_t *ec, ecp_t *iter, const char *filename)
+{
+    logger_debug(DBG_CONF, "Pushing '%s' (new count: %zu)",
+        filename, oshd_conf_count + 1);
+    oshd_conf = xreallocarray(oshd_conf, oshd_conf_count + 1,
+        sizeof(oshd_conf_t));
+    oshd_conf[oshd_conf_count].ec = ec;
+    oshd_conf[oshd_conf_count].iter = iter;
+    oshd_conf[oshd_conf_count].filename = xstrdup(filename);
+    oshd_conf_count += 1;
+}
+
+// Pop configuration file from the stack
+static void oshd_conf_pop(void)
+{
+    if (oshd_conf_count > 0) {
+        oshd_conf_count -= 1;
+        logger_debug(DBG_CONF, "Popping '%s' (new count: %zu)",
+            oshd_conf[oshd_conf_count].filename, oshd_conf_count);
+        ec_destroy(oshd_conf[oshd_conf_count].ec);
+        free(oshd_conf[oshd_conf_count].filename);
+        oshd_conf = xreallocarray(oshd_conf, oshd_conf_count,
+            sizeof(oshd_conf_t));
+    }
+}
+
+// Load a configuration file and push it to the stack
+static bool oshd_conf_load(const char *filename)
+{
+    ec_t *ec;
+
+    logger_debug(DBG_CONF, "Loading '%s'", filename);
+
+    // Prevent infinite include loops
+    for (size_t i = 0; i < oshd_conf_count; ++i) {
+        if (!strcmp(filename, oshd_conf[i].filename)) {
+            snprintf(oshd_conf_error, sizeof(oshd_conf_error), "include loop");
+            return false;
+        }
+    }
+
+    // Load the file
+    if (!(ec = ec_load_from_file(filename))) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "%s", strerror(errno));
+        return false;
+    }
+
+    oshd_conf_push(ec, ec->head, filename);
+    return true;
+}
 
 // NoServer
 static bool oshd_param_noserver(__attribute__((unused)) ecp_t *ecp)
@@ -345,6 +409,21 @@ static bool oshd_param_loglevel(ecp_t *ecp)
     return true;
 }
 
+// Include
+static bool oshd_param_include(ecp_t *ecp)
+{
+    char *tmp;
+
+    if (!oshd_conf_load(ecp_value(ecp))) {
+        tmp = xstrdup(oshd_conf_error);
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "Failed to include '%s': %s", ecp_value(ecp), tmp);
+        free(tmp);
+        return false;
+    }
+    return true;
+}
+
 // Parameters that set commands (the command name is the same as the parameter)
 static bool oshd_param_command(ecp_t *ecp)
 {
@@ -380,6 +459,7 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "ResolverFile", .type = VALUE_REQUIRED, &oshd_param_resolverfile },
     { .name = "OnResolverUpdate", .type = VALUE_REQUIRED, &oshd_param_command },
     { .name = "LogLevel", .type = VALUE_REQUIRED, &oshd_param_loglevel },
+    { .name = "Include", .type = VALUE_REQUIRED, &oshd_param_include },
     { NULL, 0, NULL }
 };
 
@@ -411,20 +491,34 @@ void oshd_init_conf(void)
 // Load configuration file
 bool oshd_load_conf(const char *filename)
 {
-    ec_t *conf;
+    bool load_error = false;
 
-    // Reset the oshd_conf_error buffer
+    // Reset global variables
+    oshd_conf = NULL;
+    oshd_conf_count = 0;
     memset(oshd_conf_error, 0, sizeof(oshd_conf_error));
 
-    // Load the configuration file
-    if (!(conf = ec_load_from_file(filename))) {
-        logger(LOG_ERR, "%s: %s", filename, strerror(errno));
+    // Load the primary configuration file
+    if (!oshd_conf_load(filename)) {
+        logger(LOG_ERR, "%s: %s", filename, oshd_conf_error);
         return false;
     }
 
-    // Iterate through each configuration parameter
-    ec_foreach(ecp, conf) {
+    // Iterate through all parameters from the current configuration file
+    while (oshd_conf_count > 0) {
+        ecp_t *ecp = conf_curr.iter;
         bool found = false;
+
+        if (!ecp) {
+            // If the current configuration's iterator is NULL we processed all
+            // the parameters so we can pop it
+            oshd_conf_pop();
+            continue;
+        }
+
+        // Iterate the iterator now because the current configuration can change
+        // if another file is included and we would iterate a different one
+        conf_curr.iter = conf_curr.iter->next;
 
         logger_debug(DBG_CONF, "Processing parameter '%s'", ecp_name(ecp));
 
@@ -432,18 +526,25 @@ bool oshd_load_conf(const char *filename)
         for (size_t i = 0; oshd_conf_params[i].name; ++i) {
             if (!strcmp(ecp_name(ecp), oshd_conf_params[i].name)) {
                 found = true;
-                if (oshd_conf_params[i].type == VALUE_NONE && ecp_value(ecp)) {
+
+                if (   oshd_conf_params[i].type == VALUE_NONE
+                    && ecp_value(ecp))
+                {
                     snprintf(oshd_conf_error, sizeof(oshd_conf_error),
                         "%s does not take a value", oshd_conf_params[i].name);
-                    goto on_error;
-                } else if (oshd_conf_params[i].type == VALUE_REQUIRED && !ecp_value(ecp)) {
+                    load_error = true;
+                    break;
+                } else if (   oshd_conf_params[i].type == VALUE_REQUIRED
+                           && !ecp_value(ecp))
+                {
                     snprintf(oshd_conf_error, sizeof(oshd_conf_error),
                         "%s requires a value", oshd_conf_params[i].name);
-                    goto on_error;
+                    load_error = true;
+                    break;
                 }
 
                 if (!(oshd_conf_params[i].handler(ecp)))
-                    goto on_error;
+                    load_error = true;
                 break;
             }
         }
@@ -451,10 +552,27 @@ bool oshd_load_conf(const char *filename)
         if (!found) {
             snprintf(oshd_conf_error, sizeof(oshd_conf_error),
                 "Invalid parameter: %s", ecp_name(ecp));
-            goto on_error;
+            load_error = true;
         }
+
+        // On any error we stop loading the configuration right away
+        if (load_error)
+            break;
     }
-    ec_destroy(conf);
+
+    // Display error if there was one
+    if (load_error)
+        logger(LOG_ERR, "%s: %s", conf_curr.filename, oshd_conf_error);
+
+    // Pop any remaining configuration files
+    while (oshd_conf_count > 0)
+        oshd_conf_pop();
+
+    // If there was an error we stop here
+    if (load_error)
+        return false;
+
+    // One-shot verifications
 
     if (strlen(oshd.name) == 0) {
         logger(LOG_ERR, "The daemon must have a name");
@@ -468,12 +586,8 @@ bool oshd_load_conf(const char *filename)
     if (!oshd_resolver_check())
         return false;
 
+    // The configuration was loaded successfully
     return true;
-
-on_error:
-    logger(LOG_ERR, "%s: %s", filename, oshd_conf_error);
-    ec_destroy(conf);
-    return false;
 }
 
 // Set oshd.keys_dir to dir
