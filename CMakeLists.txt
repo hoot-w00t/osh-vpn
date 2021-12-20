@@ -74,6 +74,7 @@ set(OSHD_SOURCES
     src/events/node_auth_timeout.c
     src/events/periodic_ping.c
     ${OSH_TUNTAP_SOURCES}
+    src/base64.c
     src/endpoints.c
     src/events.c
     src/logger.c
@@ -100,11 +101,13 @@ set(OSHD_SOURCES
 
 # All sources for oshd_tests
 set(OSHD_TESTS_SOURCES
+    src/base64.c
     src/logger.c
     src/xalloc.c
     src/netaddr.c
     src/netbuffer.c
     src/random.c
+    tests/base64_tests.c
     tests/netaddr_tests.c
     tests/netbuffer_tests.c
     tests/random_tests.c)
