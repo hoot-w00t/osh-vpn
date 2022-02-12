@@ -96,12 +96,15 @@ char *_xstrdup(_xalloc_args_proto, const char *s)
 }
 
 // Duplicate size bytes starting at s
-_xalloc_attr
+// Returns NULL if size is 0
+_xmemdup_attr
 void *_xmemdup(_xalloc_args_proto, const void *s, size_t size)
 {
-    void *newptr = malloc(size);
+    void *newptr;
 
-    if (!newptr) {
+    if (size == 0)
+        return NULL;
+    if (!(newptr = malloc(size))) {
         fprintf(stderr, _xalloc_fmt "xmemdup(%p, %zu) failed\n",
             _xalloc_fmt_args, s, size);
         abort();

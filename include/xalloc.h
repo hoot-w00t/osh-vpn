@@ -5,6 +5,7 @@
 
 #define _xalloc_attr __attribute__((__malloc__, returns_nonnull, warn_unused_result))
 #define _xrealloc_attr __attribute__((__malloc__, warn_unused_result))
+#define _xmemdup_attr _xrealloc_attr
 
 // These are common definitions used in each xalloc function
 // This is to help identify which allocation fails if it does, currently it
@@ -34,7 +35,7 @@ _xalloc_attr
 char *_xstrdup(_xalloc_args_proto, const char *s);
 #define xstrdup(s) _xstrdup(_xalloc_args, s)
 
-_xalloc_attr
+_xmemdup_attr
 void *_xmemdup(_xalloc_args_proto, const void *s, size_t size);
 #define xmemdup(s, size) _xmemdup(_xalloc_args, s, size)
 
