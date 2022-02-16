@@ -830,10 +830,6 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
 
     // Private part of the header
     hdr->type = type;
-    hdr->counter = htonl(node->send_counter);
-
-    // Increment the node's send_counter for next packets
-    node->send_counter += 1;
 
     memcpy(hdr->src_node, oshd.name, sizeof(hdr->src_node));
     memset(hdr->dest_node, 0, sizeof(hdr->dest_node));
@@ -936,13 +932,6 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
 
     // Write the payload size in the correct order
     hdr->payload_size = htons(pkt->payload_size);
-
-    // The counter is not preserved, it is always set to the node we're
-    // sending the packet to
-    hdr->counter = htonl(node->send_counter);
-
-    // Increment the node's send_counter for next packets
-    node->send_counter += 1;
 
     // The node expects all traffic to be encrypted
     size_t original_size = OSHPACKET_PRIVATE_HDR_SIZE + pkt->payload_size;

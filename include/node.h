@@ -178,11 +178,9 @@ struct node {
     // The recv counter increments every time we receive a packet from the node
     EVP_PKEY *send_key;
     cipher_t *send_cipher;
-    uint32_t send_counter;
     EVP_PKEY *recv_key;
     cipher_t *recv_cipher;
     cipher_t *recv_cipher_next;
-    uint32_t recv_counter;
 
     // This is set to true when sending a handshake to the node, it is set to
     // false after the handshake is done to prevent overlaps

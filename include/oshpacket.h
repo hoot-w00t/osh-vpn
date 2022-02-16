@@ -67,7 +67,7 @@ typedef enum oshpacket_type {
 } oshpacket_type_t;
 #define OSHPACKET_TYPE_COUNT (_LAST_OSHPACKET_TYPE_ENTRY)
 
-// For a total of 40 bytes
+// For a total of 36 bytes
 typedef struct __attribute__((__packed__)) oshpacket_hdr {
     // Public header (never encrypted)
     // 3 bytes, if it changes OSHPACKET_PUBLIC_HDR_SIZE needs to be updated
@@ -75,9 +75,8 @@ typedef struct __attribute__((__packed__)) oshpacket_hdr {
     uint16_t         payload_size;
 
     // Private header (after the handshake is done, this is always encrypted)
-    // 37 bytes, if it changes OSHPACKET_HDR_SIZE needs to be updated
+    // 33 bytes, if it changes OSHPACKET_HDR_SIZE needs to be updated
     oshpacket_type_t type : 8;
-    uint32_t         counter;
     char             src_node[NODE_NAME_SIZE];
     char             dest_node[NODE_NAME_SIZE];
 } oshpacket_hdr_t;
@@ -139,7 +138,7 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 #define OSHPACKET_PUBLIC_HDR_SIZE (3)
 
 // Size of the private part of the header
-#define OSHPACKET_PRIVATE_HDR_SIZE (1 + 4 + (NODE_NAME_SIZE * 2))
+#define OSHPACKET_PRIVATE_HDR_SIZE (1 + (NODE_NAME_SIZE * 2))
 
 // Total size of the header
 #define OSHPACKET_HDR_SIZE (OSHPACKET_PUBLIC_HDR_SIZE + OSHPACKET_PRIVATE_HDR_SIZE)

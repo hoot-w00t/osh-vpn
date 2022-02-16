@@ -968,21 +968,6 @@ bool oshd_process_packet(node_t *node, uint8_t *packet)
         }
     }
 
-    // Retrieve the packet's counter value
-    hdr->counter = ntohl(hdr->counter);
-
-    // Verify that the remote node's send_counter matches our recv_counter
-    // This is to prevent replay attacks
-    // If the counter is not correct then we drop the connection
-    if (node->recv_counter != hdr->counter) {
-        logger(LOG_CRIT, "%s: Invalid counter: Expected %u but got %u",
-            node->addrw, node->recv_counter, hdr->counter);
-        return false;
-    }
-
-    // The counter is correct, increment it for the next packet
-    node->recv_counter += 1;
-
     // If the node is unauthenticated we only accept authentication packets,
     // nothing else will be accepted or forwarded, if the authentication encounters
     // an error the connection is terminated
