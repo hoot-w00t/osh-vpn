@@ -1124,6 +1124,17 @@ bool node_queue_handshake_end(node_t *node)
     return node_queue_packet_empty(node, node->id ? node->id->name : NULL, HANDSHAKE_END);
 }
 
+// Queue a HANDSHAKE packet to renew the encryption keys
+// If a handshake is already in progress, nothing is done
+// If packet cannot be queued the connection is terminated
+void node_renew_handshake(node_t *node)
+{
+    if (!node->handshake_in_progress) {
+        if (!node_queue_handshake(node))
+            aio_event_del(node->aio_event);
+    }
+}
+
 // Queue HELLO_CHALLENGE request
 bool node_queue_hello_challenge(node_t *node)
 {

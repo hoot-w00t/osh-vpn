@@ -9,10 +9,7 @@ static time_t handshake_renew_event_handler(void *data)
     node_t *node = (node_t *) data;
 
     node->handshake_renew_event = NULL;
-    if (!node->handshake_in_progress) {
-        if (!node_queue_handshake(node))
-            aio_event_del(node->aio_event);
-    }
+    node_renew_handshake(node);
     return EVENT_IS_DONE;
 }
 
