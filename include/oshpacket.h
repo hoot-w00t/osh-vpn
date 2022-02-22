@@ -147,6 +147,11 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 
 #define OSHPACKET_MAXSIZE (OSHPACKET_HDR_SIZE + OSHPACKET_PAYLOAD_MAXSIZE)
 
+#define _OSHPACKET_OFFSET(pkt, offset) (((uint8_t *) (pkt)) + (offset))
+#define OSHPACKET_HDR(pkt) ((oshpacket_hdr_t *) (pkt))
+#define OSHPACKET_PRIVATE_HDR(pkt) _OSHPACKET_OFFSET(pkt, OSHPACKET_PUBLIC_HDR_SIZE)
+#define OSHPACKET_PAYLOAD(pkt) _OSHPACKET_OFFSET(pkt, OSHPACKET_HDR_SIZE)
+
 const char *oshpacket_type_name(oshpacket_type_t type);
 
 static inline bool oshpacket_type_valid(oshpacket_type_t type)

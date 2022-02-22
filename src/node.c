@@ -837,7 +837,7 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
 
     // Copy the packet's payload to the buffer
     if (payload)
-        memcpy(slot + OSHPACKET_HDR_SIZE, payload, payload_size);
+        memcpy(OSHPACKET_PAYLOAD(slot), payload, payload_size);
 
     if (node->send_cipher) {
         // The node expects all traffic to be encrypted
@@ -850,8 +850,8 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
         // never encrypted as it is required to properly receive and decode the
         // packets
         if (!cipher_encrypt(node->send_cipher,
-                slot + OSHPACKET_PUBLIC_HDR_SIZE, &out_size,
-                slot + OSHPACKET_PUBLIC_HDR_SIZE, original_size,
+                OSHPACKET_PRIVATE_HDR(slot), &out_size,
+                OSHPACKET_PRIVATE_HDR(slot), original_size,
                 hdr->tag))
         {
             logger(LOG_ERR, "%s: Failed to encrypt packet", node->addrw);
@@ -940,8 +940,8 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
     // never encrypted as it is required to properly receive and decode the
     // packets
     if (!cipher_encrypt(node->send_cipher,
-            slot + OSHPACKET_PUBLIC_HDR_SIZE, &out_size,
-            slot + OSHPACKET_PUBLIC_HDR_SIZE, original_size,
+            OSHPACKET_PRIVATE_HDR(slot), &out_size,
+            OSHPACKET_PRIVATE_HDR(slot), original_size,
             hdr->tag))
     {
         logger(LOG_ERR, "%s: Failed to encrypt forwarded packet", node->addrw);

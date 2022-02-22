@@ -936,8 +936,8 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
 // Returns false if node should be disconnected
 bool oshd_process_packet(node_t *node, uint8_t *packet)
 {
-    oshpacket_hdr_t *hdr = (oshpacket_hdr_t *) packet;
-    uint8_t *payload = packet + OSHPACKET_HDR_SIZE;
+    oshpacket_hdr_t *hdr = OSHPACKET_HDR(packet);
+    uint8_t *payload = OSHPACKET_PAYLOAD(packet);
 
     // If we have a recv_cipher, the private header and payload are encrypted,
     // so we need to decrypt it before we can process the data
@@ -951,8 +951,8 @@ bool oshd_process_packet(node_t *node, uint8_t *packet)
         // We decrypt the packet at the same location because we are using a
         // streaming cipher
         if (!cipher_decrypt(node->recv_cipher,
-                packet + OSHPACKET_PUBLIC_HDR_SIZE, &decrypted_size,
-                packet + OSHPACKET_PUBLIC_HDR_SIZE, encrypted_size,
+                OSHPACKET_PRIVATE_HDR(packet), &decrypted_size,
+                OSHPACKET_PRIVATE_HDR(packet), encrypted_size,
                 hdr->tag))
         {
             logger(LOG_ERR, "%s: Failed to decrypt packet", node->addrw);
