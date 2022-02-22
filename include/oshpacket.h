@@ -1,6 +1,7 @@
 #ifndef _OSH_OSHPACKET_H
 #define _OSH_OSHPACKET_H
 
+#include "crypto/cipher.h"
 #include "netaddr.h"
 #include "oshd_device_mode.h"
 #include <stdint.h>
@@ -73,6 +74,7 @@ typedef struct __attribute__((__packed__)) oshpacket_hdr {
     // 3 bytes, if it changes OSHPACKET_PUBLIC_HDR_SIZE needs to be updated
     uint8_t          magic;
     uint16_t         payload_size;
+    uint8_t          tag[CIPHER_TAG_SIZE];
 
     // Private header (after the handshake is done, this is always encrypted)
     // 33 bytes, if it changes OSHPACKET_HDR_SIZE needs to be updated
@@ -135,7 +137,7 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 } oshpacket_route_t;
 
 // Size of the public part of the header
-#define OSHPACKET_PUBLIC_HDR_SIZE (3)
+#define OSHPACKET_PUBLIC_HDR_SIZE (3 + CIPHER_TAG_SIZE)
 
 // Size of the private part of the header
 #define OSHPACKET_PRIVATE_HDR_SIZE (1 + (NODE_NAME_SIZE * 2))

@@ -170,12 +170,9 @@ struct node {
     // start the state exchange
     bool hello_auth;
 
-    // X25519 keys, ciphers and counters to encrypt/decrypt traffic
+    // X25519 keys and ciphers to encrypt/decrypt traffic
     // The send cipher will be used to encrypt outgoing packets
     // The recv cipher will be used to decrypt incoming packets
-    // The send/recv counters are used to prevent replay attacks
-    // The send counter increments every time we send a packet to the node
-    // The recv counter increments every time we receive a packet from the node
     EVP_PKEY *send_key;
     cipher_t *send_cipher;
     EVP_PKEY *recv_key;

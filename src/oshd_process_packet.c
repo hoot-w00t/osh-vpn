@@ -137,12 +137,12 @@ static bool oshd_process_handshake(node_t *node, oshpacket_hdr_t *pkt,
 
     // Create the send/recv ciphers using the two hashes
     logger_debug(DBG_HANDSHAKE, "%s: Creating send_cipher", node->addrw);
-    cipher_t *new_send_cipher = cipher_create_aes_256_ctr(
-            true, send_hash, 32, send_hash + 32, 16);
+    cipher_t *new_send_cipher = cipher_create_aes_256_gcm(
+            true, send_hash, 32, send_hash + 32, 12);
 
     logger_debug(DBG_HANDSHAKE, "%s: Creating recv_cipher", node->addrw);
-    cipher_t *new_recv_cipher = cipher_create_aes_256_ctr(
-            false, recv_hash, 32, recv_hash + 32, 16);
+    cipher_t *new_recv_cipher = cipher_create_aes_256_gcm(
+            false, recv_hash, 32, recv_hash + 32, 12);
 
     if (!new_send_cipher || !new_recv_cipher) {
         logger(LOG_ERR, "%s: Handshake failed: Failed to create ciphers",
@@ -948,19 +948,17 @@ bool oshd_process_packet(node_t *node, uint8_t *packet)
         logger_debug(DBG_ENCRYPTION, "%s: Decrypting packet of %zu bytes",
             node->addrw, encrypted_size);
 
-        // We decrypt packet at the same location because overlapping streams
-        // are supported for AES-256-CTR
-        // TODO: If the cipher does not support this, decrypt in a temporary
-        //       buffer and then copy the decrypted data back in the recvbuf
+        // We decrypt the packet at the same location because we are using a
+        // streaming cipher
         if (!cipher_decrypt(node->recv_cipher,
                 packet + OSHPACKET_PUBLIC_HDR_SIZE, &decrypted_size,
-                packet + OSHPACKET_PUBLIC_HDR_SIZE, encrypted_size))
+                packet + OSHPACKET_PUBLIC_HDR_SIZE, encrypted_size,
+                hdr->tag))
         {
             logger(LOG_ERR, "%s: Failed to decrypt packet", node->addrw);
             return false;
         }
 
-        // TODO: If the cipher pads data, this will create errors
         if (decrypted_size != encrypted_size) {
             logger(LOG_ERR, "%s: Decrypted packet has a different size (encrypted: %zu, decrypted: %zu)",
                 node->addrw, encrypted_size, decrypted_size);

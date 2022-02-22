@@ -846,24 +846,20 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
         logger_debug(DBG_ENCRYPTION, "%s: Encrypting packet of %zu bytes",
             node->addrw, original_size);
 
-        // We are encrypting everything that comes after the public header
-        // The public header is never encrypted, it is the required minimum
-        // to correctly receive and decode all packets
-        // The private header part as well as the payload will be decrypted
-        // after successful reception before being processed.
-        // This is to protect more data, like the counter (used to prevent
-        // replay attacks) and the source and destination nodes
-        // If these aren't encrypted a MITM attack could modify those fields
-        // to cause trouble or spy on/target specific nodes
-        if (!cipher_encrypt(node->send_cipher, slot + OSHPACKET_PUBLIC_HDR_SIZE,
-                &out_size, slot + OSHPACKET_PUBLIC_HDR_SIZE, original_size))
+        // We encrypt the private header and the payload, the public header is
+        // never encrypted as it is required to properly receive and decode the
+        // packets
+        if (!cipher_encrypt(node->send_cipher,
+                slot + OSHPACKET_PUBLIC_HDR_SIZE, &out_size,
+                slot + OSHPACKET_PUBLIC_HDR_SIZE, original_size,
+                hdr->tag))
         {
             logger(LOG_ERR, "%s: Failed to encrypt packet", node->addrw);
             netbuffer_cancel(node->io.sendq, packet_size);
             return false;
         }
+
         if (out_size != original_size) {
-            // TODO: Handle this correctly for ciphers that pad encrypted data
             logger(LOG_ERR, "%s: Encrypted packet has a different size (original: %zu, encrypted %zu)",
                 node->addrw, original_size, out_size);
             netbuffer_cancel(node->io.sendq, packet_size);
@@ -892,6 +888,7 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
         // text
         memset(hdr->src_node, 0, sizeof(hdr->src_node));
         memset(hdr->dest_node, 0, sizeof(hdr->dest_node));
+        memset(hdr->tag, 0, sizeof(hdr->tag));
     }
     aio_enable_poll_events(node->aio_event, AIO_WRITE);
     return true;
@@ -939,24 +936,20 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
     logger_debug(DBG_ENCRYPTION, "%s: Encrypting forwarded packet of %zu bytes",
         node->addrw, original_size);
 
-    // We are encrypting everything that comes after the public header
-    // The public header is never encrypted, it is the required minimum
-    // to correctly receive and decode all packets
-    // The private header part as well as the payload will be decrypted
-    // after successful reception before being processed.
-    // This is to protect more data, like the counter (used to prevent
-    // replay attacks) and the source and destination nodes
-    // If these aren't encrypted a MITM attack could modify those fields
-    // to cause trouble or spy on/target specific nodes
-    if (!cipher_encrypt(node->send_cipher, slot + OSHPACKET_PUBLIC_HDR_SIZE,
-            &out_size, slot + OSHPACKET_PUBLIC_HDR_SIZE, original_size))
+    // We encrypt the private header and the payload, the public header is
+    // never encrypted as it is required to properly receive and decode the
+    // packets
+    if (!cipher_encrypt(node->send_cipher,
+            slot + OSHPACKET_PUBLIC_HDR_SIZE, &out_size,
+            slot + OSHPACKET_PUBLIC_HDR_SIZE, original_size,
+            hdr->tag))
     {
         logger(LOG_ERR, "%s: Failed to encrypt forwarded packet", node->addrw);
         netbuffer_cancel(node->io.sendq, packet_size);
         return false;
     }
+
     if (out_size != original_size) {
-        // TODO: Handle this correctly for ciphers that pad encrypted data
         logger(LOG_ERR, "%s: Encrypted forwarded packet has a different size (original: %zu, encrypted %zu)",
             node->addrw, original_size, out_size);
         netbuffer_cancel(node->io.sendq, packet_size);
