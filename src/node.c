@@ -822,7 +822,7 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
     }
 
     slot = netbuffer_reserve(node->io.sendq, packet_size);
-    hdr = (oshpacket_hdr_t *) slot;
+    hdr = OSHPACKET_HDR(slot);
 
     // Public part of the header
     hdr->magic = OSHPACKET_MAGIC;
@@ -922,7 +922,7 @@ bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
     }
 
     slot = netbuffer_reserve(node->io.sendq, packet_size);
-    hdr = (oshpacket_hdr_t *) slot;
+    hdr = OSHPACKET_HDR(slot);
 
     // Copy the packet's data to the slot
     memcpy(slot, pkt, packet_size);

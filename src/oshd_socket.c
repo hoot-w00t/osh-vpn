@@ -113,7 +113,7 @@ static void node_aio_read(aio_event_t *event)
 
     // Process packets in the buffer
     uint8_t *curr_packet = node->io.recvbuf;
-    oshpacket_hdr_t *curr_hdr = (oshpacket_hdr_t *) curr_packet;
+    oshpacket_hdr_t *curr_hdr = OSHPACKET_HDR(curr_packet);
     size_t remaining_size = node->io.recvbuf_size;
 
     while (1) {
@@ -162,7 +162,7 @@ static void node_aio_read(aio_event_t *event)
                 // Shift the current packet pointer to the next
                 remaining_size -= node->io.recv_pkt_size;
                 curr_packet += node->io.recv_pkt_size;
-                curr_hdr = (oshpacket_hdr_t *) curr_packet;
+                curr_hdr = OSHPACKET_HDR(curr_packet);
             } else {
                 // We haven't fully received the packet and no more data is
                 // ready to be processed, we break the loop
