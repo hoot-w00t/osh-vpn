@@ -41,7 +41,7 @@ static cipher_t *cipher_create(const EVP_CIPHER *evp_cipher, bool encrypts,
             key_size, EVP_CIPHER_name(evp_cipher));
         goto error;
     }
-    if (iv_size > (size_t) EVP_CIPHER_iv_length(evp_cipher)) {
+    if (iv_size != CIPHER_IV_SIZE) {
         logger(LOG_ERR, "cipher_create: Invalid IV size %zu for %s",
             iv_size, EVP_CIPHER_name(evp_cipher));
         goto error;
