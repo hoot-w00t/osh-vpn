@@ -117,7 +117,7 @@ set(OSHD_TESTS_SOURCES
 
 # Osh daemon
 add_executable(oshd ${OSHD_SOURCES})
-target_link_libraries(oshd easyconf ${OPENSSL_LIBRARIES})
+target_link_libraries(oshd easyconf ${OPENSSL_CRYPTO_LIBRARIES})
 
 # Criterion unit tests
 option(ENABLE_UNIT_TESTS "Enable unit testing with Criterion" OFF)
