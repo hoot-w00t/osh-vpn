@@ -466,6 +466,9 @@ static const oshd_conf_param_t oshd_conf_params[] = {
 // Initialize oshd_t global
 void oshd_init_conf(void)
 {
+    // Seed the PRNG
+    srand(time(NULL));
+
     // Everything should be at zero, including pointers and counts
     memset(&oshd, 0, sizeof(oshd_t));
 
