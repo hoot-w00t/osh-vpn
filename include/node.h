@@ -93,7 +93,7 @@ struct node_id {
     uint8_t *pubkey_raw;
     size_t pubkey_raw_size;
 
-    // true if *pubkey is a local key loaded from the keys directory
+    // true if *pubkey is a local key loaded from the configuration
     // false otherwise
     bool pubkey_local;
 

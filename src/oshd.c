@@ -28,76 +28,6 @@ oshd_t oshd;
 // Never times out by default (-1)
 static ssize_t poll_timeout = -1;
 
-// Load a private or a public key from the keys directory
-// name should be a node's name
-// Returns NULL on error
-EVP_PKEY *oshd_open_key(const char *name, bool private)
-{
-    const size_t filename_len = strlen(oshd.keys_dir) + strlen(name) + 5;
-    char *filename = xalloc(filename_len);
-    EVP_PKEY *pkey;
-
-    snprintf(filename, filename_len, "%s%s.%s", oshd.keys_dir, name,
-        private ? "key" : "pub");
-    logger_debug(DBG_OSHD, "Opening %s key '%s'",
-        private ? "private" : "public", filename);
-    pkey = private ? pkey_load_privkey_pem(filename)
-                   : pkey_load_pubkey_pem(filename);
-    free(filename);
-    return pkey;
-}
-
-// Load public keys from the keys directory
-// Returns false on error
-bool oshd_open_keys(const char *dirname)
-{
-    DIR *dir = opendir(dirname);
-    struct dirent *ent;
-
-    if (!dir) {
-        logger(LOG_ERR, "Failed to open %s: %s", dirname, strerror(errno));
-        return false;
-    }
-
-    while ((ent = readdir(dir))) {
-        char *filename = xstrdup(ent->d_name);
-        char *ext = strrchr(filename, '.');
-
-        if (ext && !strcmp(ext, ".pub")) {
-            // This is a public key file, we extract the node's name by
-            // removing the extension
-            *ext = 0;
-
-            // filename now contains the node's name
-            if (node_valid_name(filename)) {
-                node_id_t *id;
-
-                logger_debug(DBG_OSHD, "Opening public key for %s", filename);
-                id = node_id_add(filename);
-                pkey_free(id->pubkey);
-                free(id->pubkey_raw);
-                id->pubkey_raw = NULL;
-                if ((id->pubkey = oshd_open_key(filename, false))) {
-                    id->pubkey_local = true;
-                    if (!pkey_save_ed25519_pubkey(id->pubkey, &id->pubkey_raw,
-                            &id->pubkey_raw_size))
-                    {
-                        pkey_free(id->pubkey);
-                        id->pubkey = NULL;
-                        logger(LOG_ERR, "Failed to export raw public key for %s", id->name);
-                    }
-                }
-            } else {
-                logger(LOG_ERR, "Failed to open public key for '%s': Invalid name",
-                    filename);
-            }
-        }
-        free(filename);
-    }
-    closedir(dir);
-    return true;
-}
-
 // Set file descriptor flag O_NONBLOCK
 int set_nonblocking(int fd)
 {
@@ -188,13 +118,35 @@ bool oshd_init(void)
     // We are the one and only local node
     me->local_node = true;
 
-    // Load our local node's private
-    if (!(oshd.privkey = oshd_open_key(oshd.name, true)))
+    // Load our own public key
+    logger_debug(DBG_OSHD, "Loading the daemon's public key");
+    if (!pkey_save_pubkey(oshd.privkey, &me->pubkey_raw, &me->pubkey_raw_size))
         return false;
+    me->pubkey = pkey_load_ed25519_pubkey(me->pubkey_raw, me->pubkey_raw_size);
+    if (!me->pubkey)
+        return false;
+    me->pubkey_local = true;
 
-    // Load all public keys in the keys directory
-    if (!oshd_open_keys(oshd.keys_dir))
-        return false;
+    // Add the loaded public keys to the tree
+    for (size_t i = 0; i < oshd.conf_pubkeys_size; ++i) {
+        node_id_t *nid = node_id_add(oshd.conf_pubkeys[i].node_name);
+
+        // The daemon's public key is always obtained from the loaded private
+        // key, we can safely ignore public keys for the daemon without throwing
+        // an error
+        if (nid->local_node) {
+            logger_debug(DBG_OSHD, "Ignoring the configured public key for this daemon");
+            continue;
+        }
+
+        // Load the node's public key
+        logger_debug(DBG_OSHD, "Loading the public key for %s", nid->name);
+        nid->pubkey = oshd.conf_pubkeys[i].pkey;
+        oshd.conf_pubkeys[i].pkey = NULL;
+        if (!pkey_save_pubkey(nid->pubkey, &nid->pubkey_raw, &nid->pubkey_raw_size))
+            return false;
+        nid->pubkey_local = true;
+    }
 
     signal(SIGINT, oshd_signal_exit);
     signal(SIGTERM, oshd_signal_exit);
@@ -245,9 +197,12 @@ void oshd_free(void)
 
     event_cancel_queue();
 
-    free(oshd.keys_dir);
     pkey_free(oshd.privkey);
     free(oshd.digraph_file);
+
+    for (size_t i = 0; i < oshd.conf_pubkeys_size; ++i)
+        pkey_free(oshd.conf_pubkeys[i].pkey);
+    free(oshd.conf_pubkeys);
 }
 
 void oshd_loop(void)

@@ -1,3 +1,4 @@
+#include "base64.h"
 #include "version.h"
 #include "logger.h"
 #include "oshd.h"
@@ -12,18 +13,19 @@ static const char *av_cmd = NULL;
 
 #define default_conf_file "oshd.conf"
 static char *conf_file = NULL;
-static char *keysdir = NULL;
 
 static bool stop_after_conf_loaded = false;
 
-static const char shortopts[] = "hVd:g:t";
+static const char shortopts[] = "hVd:t";
 static const struct option longopts[] = {
     {"help",                no_argument,        NULL, 'h'},
     {"version",             no_argument,        NULL, 'V'},
     {"debug",               required_argument,  NULL, 'd'},
-    {"generate-keypair",    required_argument,  NULL, 'g'},
     {"test-config",         no_argument,        NULL, 't'},
-    {"keysdir",             required_argument,  NULL, 256},
+    {"generate-key",        no_argument,        NULL, 256},
+    {"generate-key-pem",    required_argument,  NULL, 257},
+    {"public-key",          no_argument,        NULL, 258},
+    {"public-key-pem",      required_argument,  NULL, 259},
     {NULL,                  0,                  NULL,  0 }
 };
 
@@ -68,9 +70,19 @@ static void print_help(const char *cmd)
         }
     }
 
-    printf(help_argnl,
-        "-g, --generate-keypair=FILE",
-        "Generate Ed25519 keys to FILE.key and FILE.pub\n");
+    printf(help_arg,
+        "--generate-key",
+        "Generate a private key and print it in Base64");
+    printf(help_arg,
+        "--generate-key-pem=FILE",
+        "Generate a private key and write it to FILE\n");
+
+    printf(help_arg,
+        "--public-key",
+        "Read a private key in Base64 and print the associated public key");
+    printf(help_arg,
+        "--public-key-pem=FILE",
+        "Read a private key from FILE and print the associated public key\n");
 
     printf(help_arg,
         "-t, --test-config",
@@ -78,35 +90,141 @@ static void print_help(const char *cmd)
     printf(help_indent "  Returns 0 on success, 1 on error\n");
 
     printf("\n");
-    printf(help_arg, "--keysdir=DIR", "Set the keys directory to DIR");
-    printf(help_indent "  Defaults to the working directory\n");
-
-    printf("\n");
     printf("config_file: Path to the configuration file for the daemon\n");
     printf("             Defaults to \"" default_conf_file "\"\n");
 }
 
-static bool generate_keys_to_file(const char *filename)
+// --generate-key
+static bool generate_key(void)
 {
-    const size_t filename_len = strlen(filename);
-    const size_t outfile_len = filename_len + 5; // .pub or .key + '\0'
-    char *outfile = xzalloc(outfile_len);
+    uint8_t *privkey = NULL;
+    size_t privkey_size = 0;
+    char *privkey64 = NULL;
+    EVP_PKEY *pkey = NULL;
     bool success = false;
+
+    // Generate the private key
+    if (!(pkey = pkey_generate_ed25519()))
+        goto end;
+
+    // Save it to memory
+    if (!pkey_save_privkey(pkey, &privkey, &privkey_size))
+        goto end;
+
+    // Encode it in Base64 and print it to stdout
+    privkey64 = xzalloc(BASE64_ENCODE_OUTSIZE(privkey_size));
+    base64_encode(privkey64, privkey, privkey_size);
+    printf("%s\n", privkey64);
+    success = true;
+
+end:
+    free(privkey);
+    free(privkey64);
+    pkey_free(pkey);
+    return success;
+}
+
+// --generate-key-pem
+static bool generate_key_pem(const char *filename)
+{
+    bool success;
     EVP_PKEY *pkey;
 
-    printf("Generating Ed25519 keys...\n");
+    // Generate the private key
     pkey = pkey_generate_ed25519();
-    if (pkey) {
-        snprintf(outfile, outfile_len, "%s.key", filename);
-        printf("Writing private key to '%s'...\n", outfile);
-        if (pkey_save_privkey_pem(pkey, outfile)) {
-            snprintf(outfile, outfile_len, "%s.pub", filename);
-            printf("Writing public key to '%s'...\n", outfile);
-            success = pkey_save_pubkey_pem(pkey, outfile);
-        }
+    if (!pkey)
+        return false;
+
+    // Save it to filename
+    success = pkey_save_privkey_pem(pkey, filename);
+    if (success)
+        printf("Generated private key to: %s\n", filename);
+
+    pkey_free(pkey);
+    return success;
+}
+
+// --public-key
+static bool public_key(void)
+{
+    char privkey64[BASE64_ENCODE_EXACTSIZE(ED25519_KEY_SIZE)];
+    size_t privkey64_size;
+    uint8_t privkey[BASE64_DECODE_OUTSIZE(sizeof(privkey64))];
+    size_t privkey_size;
+    uint8_t *pubkey = NULL;
+    size_t pubkey_size;
+    char *pubkey64 = NULL;
+    EVP_PKEY *pkey = NULL;
+    bool success = false;
+
+    // Read the Base64 encoded private key from stdin
+    memset(privkey64, 0, sizeof(privkey64));
+    privkey64_size = fread(privkey64, 1, sizeof(privkey64) - 1, stdin);
+    if (privkey64_size < sizeof(privkey64) - 1) {
+        fprintf(stderr, "Encoded private key is too short\n");
+        goto end;
     }
-    free(outfile);
-    if (success) printf("Successfully generated Ed25519 keys\n");
+
+    // Decode it
+    if (!base64_decode(privkey, &privkey_size, privkey64, strlen(privkey64))) {
+        fprintf(stderr, "Failed to decode Base64 private key\n");
+        goto end;
+    }
+
+    // Load it
+    if (!(pkey = pkey_load_ed25519_privkey(privkey, privkey_size))) {
+        fprintf(stderr, "Failed to load private key\n");
+        goto end;
+    }
+
+    // Save the public key to memory
+    if (!pkey_save_pubkey(pkey, &pubkey, &pubkey_size)) {
+        fprintf(stderr, "Failed to save public key\n");
+        goto end;
+    }
+
+    // Encode it in Base64 and print it to stdout
+    pubkey64 = xzalloc(BASE64_ENCODE_OUTSIZE(pubkey_size));
+    base64_encode(pubkey64, pubkey, pubkey_size);
+    printf("%s\n", pubkey64);
+    success = true;
+
+end:
+    free(pubkey);
+    free(pubkey64);
+    pkey_free(pkey);
+    return success;
+}
+
+// --public-key-pem
+static bool public_key_pem(const char *filename)
+{
+    EVP_PKEY *pkey = NULL;
+    uint8_t *pubkey = NULL;
+    size_t pubkey_size;
+    char *pubkey64 = NULL;
+    bool success = false;
+
+    // Load the private key from filename
+    if (!(pkey = pkey_load_privkey_pem(filename)))
+        goto end;
+
+    // Save the public key to memory
+    if (!pkey_save_pubkey(pkey, &pubkey, &pubkey_size)) {
+        fprintf(stderr, "Failed to save public key\n");
+        goto end;
+    }
+
+    // Encode it in Base64 and print it to stdout
+    pubkey64 = xzalloc(BASE64_ENCODE_OUTSIZE(pubkey_size));
+    base64_encode(pubkey64, pubkey, pubkey_size);
+    printf("%s\n", pubkey64);
+    success = true;
+
+end:
+    free(pubkey);
+    free(pubkey64);
+    pkey_free(pkey);
     return success;
 }
 
@@ -139,16 +257,21 @@ static void parse_opt(int opt)
             break;
         }
 
-        case 'g':
-            exit(generate_keys_to_file(optarg) ? EXIT_SUCCESS : EXIT_FAILURE);
-
         case 't':
             stop_after_conf_loaded = true;
             break;
 
         case 256:
-            keysdir = optarg;
-            break;
+            exit(generate_key() ? EXIT_SUCCESS : EXIT_FAILURE);
+
+        case 257:
+            exit(generate_key_pem(optarg) ? EXIT_SUCCESS : EXIT_FAILURE);
+
+        case 258:
+            exit(public_key() ? EXIT_SUCCESS : EXIT_FAILURE);
+
+        case 259:
+            exit(public_key_pem(optarg) ? EXIT_SUCCESS : EXIT_FAILURE);
 
         default: exit(EXIT_FAILURE);
     }
@@ -177,9 +300,6 @@ int main(int ac, char **av)
 
     atexit(oshd_free);
     oshd_init_conf();
-
-    if (keysdir)
-        oshd_conf_set_keysdir(keysdir);
 
     if (!oshd_load_conf(conf_file))
         return EXIT_FAILURE;

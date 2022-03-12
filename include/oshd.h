@@ -17,12 +17,14 @@
 #define OSHD_TCP_SERVER_BACKLOG (5)
 #endif
 
+typedef struct conf_pubkey {
+    char node_name[NODE_NAME_SIZE + 1];
+    EVP_PKEY *pkey;
+} conf_pubkey_t;
+
 typedef struct oshd {
     // Name of the local node
     char name[NODE_NAME_SIZE + 1];
-
-    // Keys directory to fetch all private and public keys from
-    char *keys_dir;
 
     // true if authenticating nodes using remote keys is allowed, otherwise only
     // local keys will be used
@@ -91,6 +93,10 @@ typedef struct oshd {
     // Path to a file to dump the digraph to
     char *digraph_file;
 
+    // Nodes' public keys loaded from the configuration
+    conf_pubkey_t *conf_pubkeys;
+    size_t conf_pubkeys_size;
+
     // When set to false the daemon will stop
     bool run;
 
@@ -100,9 +106,6 @@ typedef struct oshd {
 
 // true if the maximum number of nodes is reached
 #define oshd_nodes_limited() (oshd.nodes_count_max != 0 && oshd.nodes_count >= oshd.nodes_count_max)
-
-EVP_PKEY *oshd_open_key(const char *name, bool private);
-bool oshd_open_keys(const char *dirname);
 
 int set_nonblocking(int fd);
 

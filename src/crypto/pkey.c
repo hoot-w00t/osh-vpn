@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include <openssl/ecdh.h>
 #include <openssl/pem.h>
 
@@ -173,46 +176,71 @@ error:
 // Returns false on error
 bool pkey_save_privkey_pem(EVP_PKEY *pkey, const char *filename)
 {
-    FILE *fp = fopen(filename, "w");
+    const int flags = O_WRONLY | O_CREAT | O_EXCL;
+    const int mode = S_IRUSR | S_IWUSR;
+    int fd = -1;
+    FILE *fp = NULL;
+    bool success = false;
 
-    if (!fp) {
+    if ((fd = open(filename, flags, mode)) < 0) {
         logger(LOG_ERR, "Failed to open %s: %s", filename, strerror(errno));
-        goto error;
+        goto end;
     }
+    if (!(fp = fdopen(fd, "w"))) {
+        logger(LOG_ERR, "%s: fdopen(%i): %s", filename, fd, strerror(errno));
+        goto end;
+    }
+    fd = -1;
     if (!PEM_write_PKCS8PrivateKey(fp, pkey, NULL, NULL, 0, NULL, NULL)) {
         logger(LOG_ERR, "Failed to write private key to %s: %s", filename,
             osh_openssl_strerror);
-        goto error;
+        goto end;
     }
-    fclose(fp);
-    return true;
+    success = true;
 
-error:
-    if (fp) fclose(fp);
-    return false;
+end:
+    if (fp) {
+        fclose(fp);
+    } else if (fd >= 0) {
+        close(fd);
+    }
+    return success;
 }
 
-// Save a public key to a file
+// Save a private key to memory
+// Dynamically allocates *dest
 // Returns false on error
-bool pkey_save_pubkey_pem(EVP_PKEY *pkey, const char *filename)
+bool pkey_save_privkey(const EVP_PKEY *privkey, uint8_t **dest, size_t *dest_size)
 {
-    FILE *fp = fopen(filename, "w");
-
-    if (!fp) {
-        logger(LOG_ERR, "Failed to open %s: %s", filename, strerror(errno));
-        goto error;
+    if (!EVP_PKEY_get_raw_private_key(privkey, NULL, dest_size)) {
+        logger(LOG_ERR, "pkey_save_privkey: %s", osh_openssl_strerror);
+        return false;
     }
-    if (!PEM_write_PUBKEY(fp, pkey)) {
-        logger(LOG_ERR, "Failed to write public key to %s: %s", filename,
-            osh_openssl_strerror);
-        goto error;
+    *dest = xzalloc(*dest_size);
+    if (!EVP_PKEY_get_raw_private_key(privkey, *dest, dest_size)) {
+        free(*dest);
+        logger(LOG_ERR, "pkey_save_privkey: %s", osh_openssl_strerror);
+        return false;
     }
-    fclose(fp);
     return true;
+}
 
-error:
-    if (fp) fclose(fp);
-    return false;
+// Save a public key to memory
+// Dynamically allocates *dest
+// Returns false on error
+bool pkey_save_pubkey(const EVP_PKEY *pubkey, uint8_t **dest, size_t *dest_size)
+{
+    if (!EVP_PKEY_get_raw_public_key(pubkey, NULL, dest_size)) {
+        logger(LOG_ERR, "pkey_save_pubkey: %s", osh_openssl_strerror);
+        return false;
+    }
+    *dest = xzalloc(*dest_size);
+    if (!EVP_PKEY_get_raw_public_key(pubkey, *dest, dest_size)) {
+        free(*dest);
+        logger(LOG_ERR, "pkey_save_pubkey: %s", osh_openssl_strerror);
+        return false;
+    }
+    return true;
 }
 
 // Load a private key from a file
@@ -241,65 +269,23 @@ error:
     return NULL;
 }
 
-// Load a public key from a file
-// Returns NULL on error
-EVP_PKEY *pkey_load_pubkey_pem(const char *filename)
+// Load a raw private key, if the algorithm allows it the public key is
+// automatically derived from the private key
+static EVP_PKEY *pkey_load_privkey(int id, const char *id_name,
+    const uint8_t *privkey, size_t privkey_size)
 {
-    FILE *fp = fopen(filename, "r");
-    EVP_PKEY *pkey = NULL;
+    EVP_PKEY *pkey = EVP_PKEY_new_raw_private_key(id, NULL, privkey, privkey_size);
 
-    if (!fp) {
-        logger(LOG_ERR, "Failed to open %s: %s", filename, strerror(errno));
-        goto error;
-    }
-    pkey = PEM_read_PUBKEY(fp, &pkey, NULL, NULL);
-    if (!pkey) {
-        logger(LOG_ERR, "Failed to read public key from %s: %s", filename,
-            osh_openssl_strerror);
-        goto error;
-    }
-    fclose(fp);
+    if (!pkey)
+        logger(LOG_ERR,"pkey_load_privkey: %s: %s", id_name, osh_openssl_strerror);
     return pkey;
-
-error:
-    if (fp) fclose(fp);
-    EVP_PKEY_free(pkey);
-    return NULL;
 }
 
-// Save a public key to memory
-static bool pkey_save_pubkey(const char *id_name, const EVP_PKEY *pubkey,
-    uint8_t **dest, size_t *dest_size)
+// Load a raw Ed25519 private key and derives the public key
+// Returns NULL on error
+EVP_PKEY *pkey_load_ed25519_privkey(const uint8_t *privkey, size_t privkey_size)
 {
-    if (!EVP_PKEY_get_raw_public_key(pubkey, NULL, dest_size)) {
-        logger(LOG_ERR, "pkey_save_pubkey: %s: %s", id_name, osh_openssl_strerror);
-        return false;
-    }
-    *dest = xzalloc(*dest_size);
-    if (!EVP_PKEY_get_raw_public_key(pubkey, *dest, dest_size)) {
-        free(*dest);
-        logger(LOG_ERR, "pkey_save_pubkey: %s: %s", id_name, osh_openssl_strerror);
-        return false;
-    }
-    return true;
-}
-
-// Save a public X25519 key to memory
-// Dynamically allocates *dest to hold the key
-// Returns false on error
-bool pkey_save_x25519_pubkey(const EVP_PKEY *pubkey, uint8_t **dest,
-    size_t *dest_size)
-{
-    return pkey_save_pubkey("X25519", pubkey, dest, dest_size);
-}
-
-// Save a public Ed25519 key to memory
-// Dynamically allocates *dest to hold the key
-// Returns false on error
-bool pkey_save_ed25519_pubkey(const EVP_PKEY *pubkey, uint8_t **dest,
-    size_t *dest_size)
-{
-    return pkey_save_pubkey("Ed25519", pubkey, dest, dest_size);
+    return pkey_load_privkey(EVP_PKEY_ED25519, "Ed25519", privkey, privkey_size);
 }
 
 // Load a public key from memory

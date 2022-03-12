@@ -1064,7 +1064,7 @@ bool node_queue_handshake(node_t *node)
 
     // Export the keys to the packet
     logger_debug(DBG_HANDSHAKE, "%s: Exporting send_key", node->addrw);
-    if (!pkey_save_x25519_pubkey(node->send_key, &pubkey, &pubkey_size))
+    if (!pkey_save_pubkey(node->send_key, &pubkey, &pubkey_size))
         return false;
     if (pubkey_size != sizeof(packet.keys.k.send)) {
         free(pubkey);
@@ -1076,7 +1076,7 @@ bool node_queue_handshake(node_t *node)
     free(pubkey);
 
     logger_debug(DBG_HANDSHAKE, "%s: Exporting recv_key", node->addrw);
-    if (!pkey_save_x25519_pubkey(node->recv_key, &pubkey, &pubkey_size))
+    if (!pkey_save_pubkey(node->recv_key, &pubkey, &pubkey_size))
         return false;
     if (pubkey_size != sizeof(packet.keys.k.recv)) {
         free(pubkey);

@@ -1,6 +1,7 @@
 #include "oshd.h"
 #include "oshd_cmd.h"
 #include "oshd_conf.h"
+#include "base64.h"
 #include "xalloc.h"
 #include "logger.h"
 #include <stdio.h>
@@ -31,6 +32,9 @@ typedef struct oshd_conf {
 
 // Buffer to store configuration error messages from handlers
 static char oshd_conf_error[256];
+
+// Line number of the last error message
+static size_t oshd_conf_error_line_no = 0;
 
 // Configuration stack
 static oshd_conf_t *oshd_conf = NULL;
@@ -110,13 +114,6 @@ static bool oshd_param_name(ecp_t *ecp)
     memset(oshd.name, 0, sizeof(oshd.name));
     strncpy(oshd.name, ecp_value(ecp), NODE_NAME_SIZE);
     logger_debug(DBG_CONF, "Set daemon name to '%s'", oshd.name);
-    return true;
-}
-
-// KeysDir
-static bool oshd_param_keysdir(ecp_t *ecp)
-{
-    oshd_conf_set_keysdir(ecp_value(ecp));
     return true;
 }
 
@@ -424,6 +421,172 @@ static bool oshd_param_include(ecp_t *ecp)
     return true;
 }
 
+// PrivateKey
+static bool oshd_param_privatekey(ecp_t *ecp)
+{
+    const char *b64 = ecp_value(ecp);
+    const size_t b64_size = strlen(b64);
+    uint8_t *privkey = NULL;
+    size_t privkey_size;
+    bool success = false;
+
+    if (oshd.privkey) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "A private key was already loaded");
+        goto end;
+    }
+
+    privkey_size = BASE64_DECODE_OUTSIZE(b64_size);
+    privkey = xzalloc(privkey_size);
+
+    if (!base64_decode(privkey, &privkey_size, b64, b64_size)) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "Failed to decode private key");
+        goto end;
+    }
+
+    if (!(oshd.privkey = pkey_load_ed25519_privkey(privkey, privkey_size))) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "Failed to load private key");
+        goto end;
+    }
+
+    success = true;
+    logger_debug(DBG_CONF, "Loaded private key from configuration file");
+
+end:
+    free(privkey);
+    return success;
+}
+
+// PrivateKeyFile
+static bool oshd_param_privatekeyfile(ecp_t *ecp)
+{
+    const char *filename = ecp_value(ecp);
+
+    if (oshd.privkey) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "A private key was already loaded");
+        return false;
+    }
+
+    if (!(oshd.privkey = pkey_load_privkey_pem(filename))) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "Failed to load private key from '%s'", filename);
+        return false;
+    }
+
+    logger_debug(DBG_CONF, "Loaded private key from '%s'", filename);
+    return true;
+}
+
+// Load a Base64 encoded public key for a node and add it to oshd.conf_pubkeys
+// Returns false on error
+static bool conf_pubkey_add(const char *node_name, const char *pubkey64)
+{
+    size_t pubkey64_size;
+    uint8_t *pubkey = NULL;
+    size_t pubkey_size;
+    EVP_PKEY *pkey = NULL;
+    bool success = false;
+
+    // Verify that the node's name is valid
+    if (!node_valid_name(node_name)) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "Invalid node name: '%s'", node_name);
+        goto end;
+    }
+
+    // Verify that there is a public key
+    pubkey64_size = pubkey64 ? strlen(pubkey64) : 0;
+    if (pubkey64_size == 0) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "%s does not have a public key", node_name);
+        goto end;
+    }
+
+    // Decode the Base64 public key
+    pubkey = xzalloc(BASE64_DECODE_OUTSIZE(pubkey64_size));
+    if (!base64_decode(pubkey, &pubkey_size, pubkey64, pubkey64_size)) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "Failed to decode public key for %s", node_name);
+        goto end;
+    }
+
+    // Load it
+    if (!(pkey = pkey_load_ed25519_pubkey(pubkey, pubkey_size))) {
+        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+            "Failed to load public key for %s", node_name);
+        goto end;
+    }
+
+    // Check if this node is already in the conf_pubkeys list to prevent
+    // duplicates
+    for (size_t i = 0; i < oshd.conf_pubkeys_size; ++i) {
+        if (!strcmp(oshd.conf_pubkeys[i].node_name, node_name)) {
+            snprintf(oshd_conf_error, sizeof(oshd_conf_error),
+                "A public key was already loaded for %s", node_name);
+            goto end;
+        }
+    }
+
+    // Add the public key
+    oshd.conf_pubkeys = xreallocarray(oshd.conf_pubkeys,
+        oshd.conf_pubkeys_size + 1, sizeof(conf_pubkey_t));
+    memset(&oshd.conf_pubkeys[oshd.conf_pubkeys_size], 0, sizeof(conf_pubkey_t));
+    strncpy(oshd.conf_pubkeys[oshd.conf_pubkeys_size].node_name, node_name, NODE_NAME_SIZE);
+    oshd.conf_pubkeys[oshd.conf_pubkeys_size].pkey = pkey;
+    oshd.conf_pubkeys_size += 1;
+
+    pkey = NULL; // The key shouldn't be freed
+    success = true;
+    logger_debug(DBG_CONF, "Loaded public key for %s", node_name);
+
+end:
+    free(pubkey);
+    pkey_free(pkey);
+    return success;
+}
+
+// PublicKey
+static bool oshd_param_publickey(ecp_t *ecp)
+{
+    char *node_name = xstrdup(ecp_value(ecp));
+    char *pubkey64 = node_name;
+    bool success;
+
+    // Get to the end of the node name
+    for (; *pubkey64 && *pubkey64 != ' ' && *pubkey64 != '\t'; ++pubkey64);
+
+    // End the node name
+    if (*pubkey64) *pubkey64++ = 0;
+
+    // Skip the whitespaces to get to the start of the public key
+    for (; *pubkey64 == ' ' || *pubkey64 == '\t'; ++pubkey64);
+
+    success = conf_pubkey_add(node_name, pubkey64);
+    free(node_name);
+    return success;
+}
+
+// PublicKeysFile
+static bool oshd_param_publickeysfile(ecp_t *ecp)
+{
+    bool success = false;
+    const char *filename = ecp_value(ecp);
+    ec_t *conf = ec_load_from_file(filename);
+
+    ec_foreach(i, conf) {
+        if (!conf_pubkey_add(ecp_name(i), ecp_value(i)))
+            goto end;
+    }
+    success = true;
+
+end:
+    ec_destroy(conf);
+    return success;
+}
+
 // Parameters that set commands (the command name is the same as the parameter)
 static bool oshd_param_command(ecp_t *ecp)
 {
@@ -436,7 +599,6 @@ static bool oshd_param_command(ecp_t *ecp)
 static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "NoServer", .type = VALUE_NONE, &oshd_param_noserver },
     { .name = "Name", .type = VALUE_REQUIRED, &oshd_param_name },
-    { .name = "KeysDir", .type = VALUE_REQUIRED, &oshd_param_keysdir },
     { .name = "KeysTrust", .type = VALUE_REQUIRED, &oshd_param_keystrust },
     { .name = "ShareRemotes", .type = VALUE_NONE, &oshd_param_shareremotes },
     { .name = "DiscoverEndpoints", .type = VALUE_NONE, &oshd_param_discoverendpoints },
@@ -460,6 +622,10 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "OnResolverUpdate", .type = VALUE_REQUIRED, &oshd_param_command },
     { .name = "LogLevel", .type = VALUE_REQUIRED, &oshd_param_loglevel },
     { .name = "Include", .type = VALUE_REQUIRED, &oshd_param_include },
+    { .name = "PrivateKey", .type = VALUE_REQUIRED, &oshd_param_privatekey },
+    { .name = "PrivateKeyFile", .type = VALUE_REQUIRED, &oshd_param_privatekeyfile },
+    { .name = "PublicKey", .type = VALUE_REQUIRED, &oshd_param_publickey },
+    { .name = "PublicKeysFile", .type = VALUE_REQUIRED, &oshd_param_publickeysfile },
     { NULL, 0, NULL }
 };
 
@@ -473,8 +639,6 @@ void oshd_init_conf(void)
     memset(&oshd, 0, sizeof(oshd_t));
 
     // Everything that should not be zero by default is set
-    oshd.keys_dir = xstrdup("./");
-
     oshd.server_fd = -1;
     oshd.server_fd6 = -1;
     oshd.server_port = OSHD_DEFAULT_PORT;
@@ -519,11 +683,15 @@ bool oshd_load_conf(const char *filename)
             continue;
         }
 
+        // Remember the current parameter's line number to display on error
+        oshd_conf_error_line_no = ecp_line_no(ecp);
+
         // Iterate the iterator now because the current configuration can change
         // if another file is included and we would iterate a different one
         conf_curr.iter = conf_curr.iter->next;
 
-        logger_debug(DBG_CONF, "Processing parameter '%s'", ecp_name(ecp));
+        logger_debug(DBG_CONF, "Processing parameter '%s' line %zu",
+            ecp_name(ecp), ecp_line_no(ecp));
 
         // Find the corresponding handler for the parameter
         for (size_t i = 0; oshd_conf_params[i].name; ++i) {
@@ -564,8 +732,10 @@ bool oshd_load_conf(const char *filename)
     }
 
     // Display error if there was one
-    if (load_error)
-        logger(LOG_ERR, "%s: %s", conf_curr.filename, oshd_conf_error);
+    if (load_error) {
+        logger(LOG_ERR, "%s: line %zu: %s", conf_curr.filename,
+            oshd_conf_error_line_no, oshd_conf_error);
+    }
 
     // Pop any remaining configuration files
     while (oshd_conf_count > 0)
@@ -581,31 +751,21 @@ bool oshd_load_conf(const char *filename)
         logger(LOG_ERR, "The daemon must have a name");
         return false;
     }
+
+    if (!oshd.privkey) {
+        logger(LOG_ERR, "The daemon must have a private key");
+        return false;
+    }
+
     if (oshd.reconnect_delay_max < oshd.reconnect_delay_min) {
         logger(LOG_ERR, "ReconnectDelayMax (%lis) cannot be smaller than ReconnectDelayMin (%lis)",
             oshd.reconnect_delay_max, oshd.reconnect_delay_min);
         return false;
     }
+
     if (!oshd_resolver_check())
         return false;
 
     // The configuration was loaded successfully
     return true;
-}
-
-// Set oshd.keys_dir to dir
-// Adds a / if necessary
-void oshd_conf_set_keysdir(const char *dir)
-{
-    free(oshd.keys_dir);
-    oshd.keys_dir = xstrdup(dir);
-
-    // If the path does not end with a /, add one
-    size_t len = strlen(oshd.keys_dir);
-    if (len == 0 || oshd.keys_dir[len - 1] != '/') {
-        oshd.keys_dir = xrealloc(oshd.keys_dir, len + 2);
-        oshd.keys_dir[len] = '/';
-        oshd.keys_dir[len + 1] = '\0';
-    }
-    logger_debug(DBG_CONF, "Set keys directory to '%s'", oshd.keys_dir);
 }

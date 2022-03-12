@@ -17,15 +17,13 @@ bool pkey_verify(EVP_PKEY *pubkey, const uint8_t *data, size_t data_size,
     const uint8_t *sig, size_t sig_size);
 
 bool pkey_save_privkey_pem(EVP_PKEY *pkey, const char *filename);
-bool pkey_save_pubkey_pem(EVP_PKEY *pkey, const char *filename);
+bool pkey_save_privkey(const EVP_PKEY *privkey, uint8_t **dest, size_t *dest_size);
+
+bool pkey_save_pubkey(const EVP_PKEY *pubkey, uint8_t **dest, size_t *dest_size);
 
 EVP_PKEY *pkey_load_privkey_pem(const char *filename);
-EVP_PKEY *pkey_load_pubkey_pem(const char *filename);
+EVP_PKEY *pkey_load_ed25519_privkey(const uint8_t *privkey, size_t privkey_size);
 
-bool pkey_save_x25519_pubkey(const EVP_PKEY *pubkey, uint8_t **dest,
-    size_t *dest_size);
-bool pkey_save_ed25519_pubkey(const EVP_PKEY *pubkey, uint8_t **dest,
-    size_t *dest_size);
 EVP_PKEY *pkey_load_x25519_pubkey(const uint8_t *pubkey, size_t pubkey_size);
 EVP_PKEY *pkey_load_ed25519_pubkey(const uint8_t *pubkey, size_t pubkey_size);
 
