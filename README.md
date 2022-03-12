@@ -60,6 +60,9 @@ It's also possible to run the unit tests alone with `./oshd_tests`.
 #### Disabling epoll
 `epoll` will be used instead of `poll` when it is available, but you can disable it if you want by configuring the build with `-DDISABLE_EPOLL=ON`.
 
+#### Systemd service
+You can use `-DENABLE_SYSTEMD=ON` to configure a systemd service file for running Osh.
+
 ## Installing
 It is possible to install Osh with `sudo make install` after compiling.
 

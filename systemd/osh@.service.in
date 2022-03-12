@@ -1,0 +1,29 @@
+[Unit]
+Description="Osh VPN daemon"
+Documentation=https://github.com/hoot-w00t/osh-vpn
+
+Wants=multi-user.target
+After=network.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+Type=simple
+
+WorkingDirectory=@CMAKE_INSTALL_FULL_SYSCONFDIR@/osh/%i
+ExecStartPre=@CMAKE_INSTALL_FULL_BINDIR@/oshd --test-config
+ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/oshd
+
+TimeoutStopSec=10
+
+Restart=on-failure
+RestartSec=3s
+
+Nice=0
+
+User=root
+Group=root
+
+NoNewPrivileges=true
+ProtectSystem=true

@@ -9,6 +9,7 @@ include(CheckCCompilerFlag)
 include(CheckIncludeFile)
 include(CheckLinkerFlag OPTIONAL RESULT_VARIABLE CheckLinkerFlagPath)
 include(CTest)
+include(GNUInstallDirs)
 
 enable_testing()
 
@@ -41,6 +42,18 @@ include_directories(${EASYCONF_INCLUDEDIR})
 
 # Header directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+# systemd service
+option(ENABLE_SYSTEMD "Configure and install systemd service" OFF)
+
+set(SYSTEMD_SERVICE_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/systemd/osh@.service.in")
+set(SYSTEMD_SERVICE_DEST "${CMAKE_CURRENT_BINARY_DIR}/osh@.service")
+
+if (ENABLE_SYSTEMD)
+    configure_file("${SYSTEMD_SERVICE_SOURCE}" "${SYSTEMD_SERVICE_DEST}" @ONLY)
+    install(FILES "${SYSTEMD_SERVICE_DEST}"
+            DESTINATION "${CMAKE_INSTALL_LIBDIR}/systemd/system")
+endif()
 
 # TUN/TAP sources
 set(OSH_TUNTAP_SOURCES src/tuntap/common.c)
