@@ -1,0 +1,29 @@
+name: Build (Linux)
+on:
+  push:
+    branches: [ '**' ]
+  pull_request:
+    branches: [ '**' ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install requirements
+        run: |
+          sudo apt-get update
+          sudo apt-get install -yq make git gcc pkg-config libssl-dev cmake
+
+      - name: Clone main repository
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          path: osh-vpn
+
+      - name: Build project
+        run: |
+          cd "$GITHUB_WORKSPACE/osh-vpn"
+          cmake -B build -G "Unix Makefiles" -DCMAKE_C_FLAGS="-Werror" -DCMAKE_BUILD_TYPE=Hardened .
+          make -C build
+          cmake -B build -DDISABLE_EPOLL=ON
+          make -C build

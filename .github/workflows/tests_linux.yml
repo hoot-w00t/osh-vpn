@@ -1,4 +1,4 @@
-name: Run tests
+name: Run tests (Linux)
 on:
   push:
     branches: [ '**' ]
@@ -6,34 +6,38 @@ on:
     branches: [ '**' ]
 
 jobs:
-  linux_test:
+  tests:
     runs-on: ubuntu-latest
     steps:
       - name: Install requirements
         run: |
           sudo apt-get update
-          sudo apt-get install -yq make git gcc pkg-config libssl-dev cmake
+          sudo apt-get install -yq make git gcc pkg-config libssl-dev cmake ninja-build meson libffi-dev libgit2-dev
+
+      - name: Clone main repository
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          path: osh-vpn
 
       - name: Clone Snaipe/Criterion repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: Snaipe/Criterion
-          ref: v2.3.3
+          ref: v2.4.0
+          submodules: recursive
+          path: Criterion
 
       - name: Build and install Criterion
         run: |
-          mkdir build
-          cd build
-          cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release ..
-          make -j$(nproc)
-          sudo make install
+          cd "$GITHUB_WORKSPACE/Criterion"
+          meson --prefix=/usr build
+          ninja -C build
+          sudo ninja -C build install
 
-      - name: Clone main repository
-        uses: actions/checkout@v2
-        with:
-          submodules: true
       - name: Build and run tests
         run: |
+          cd "$GITHUB_WORKSPACE/osh-vpn"
           mkdir build
           cd build
           cmake -G "Unix Makefiles" -DCMAKE_C_FLAGS="-Werror" -DCMAKE_BUILD_TYPE=Hardened -DENABLE_UNIT_TESTS=ON ..
