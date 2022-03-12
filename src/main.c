@@ -4,9 +4,11 @@
 #include "oshd.h"
 #include "oshd_conf.h"
 #include "xalloc.h"
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <getopt.h>
 
 static const char *av_cmd = NULL;
@@ -16,10 +18,12 @@ static char *conf_file = NULL;
 
 static bool stop_after_conf_loaded = false;
 
-static const char shortopts[] = "hVd:t";
+// Don't forget to update shortopts too!
+static const char shortopts[] = "hVC:d:t";
 static const struct option longopts[] = {
     {"help",                no_argument,        NULL, 'h'},
     {"version",             no_argument,        NULL, 'V'},
+    {"workdir",             required_argument,  NULL, 'C'},
     {"debug",               required_argument,  NULL, 'd'},
     {"test-config",         no_argument,        NULL, 't'},
     {"generate-key",        no_argument,        NULL, 256},
@@ -49,6 +53,10 @@ static void print_help(const char *cmd)
     printf(help_arg,
         "-V, --version",
         "Display the program version and exit");
+    printf(help_arg,
+        "-C, --workdir=DIR",
+        "Change the working directory to DIR");
+    printf("\n");
 
     // Print all the possible debug options
     // TODO: Make a better display
@@ -238,6 +246,14 @@ static void parse_opt(int opt)
         case 'V':
             printf(OSH_VERSION_FMT "\n", OSH_VERSION_FMT_ARGS);
             exit(EXIT_SUCCESS);
+
+        case 'C':
+            if (chdir(optarg) != 0) {
+                fprintf(stderr, "Failed to enter directory: %s: %s",
+                    optarg, strerror(errno));
+                exit(EXIT_FAILURE);
+            }
+            break;
 
         case 'd': {
             bool success = true;
