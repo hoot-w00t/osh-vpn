@@ -79,6 +79,11 @@ static void print_help(const char *cmd)
     }
 
     printf(help_arg,
+        "-t, --test-config",
+        "Load the configuration and exit");
+    printf(help_indent "  Returns 0 on success, 1 on error\n\n");
+
+    printf(help_arg,
         "--generate-key",
         "Generate a private key and print it in Base64");
     printf(help_arg,
@@ -90,12 +95,7 @@ static void print_help(const char *cmd)
         "Read a private key in Base64 and print the associated public key");
     printf(help_arg,
         "--public-key-pem=FILE",
-        "Read a private key from FILE and print the associated public key\n");
-
-    printf(help_arg,
-        "-t, --test-config",
-        "Load the configuration and exit");
-    printf(help_indent "  Returns 0 on success, 1 on error\n");
+        "Read a private key from FILE and print the associated public key");
 
     printf("\n");
     printf("config_file: Path to the configuration file for the daemon\n");
