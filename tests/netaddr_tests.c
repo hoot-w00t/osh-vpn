@@ -179,3 +179,38 @@ Test(netaddr_area, test_netaddr_area_192_168_0_0)
         cr_assert_eq(netaddr_area(&addr), NETAREA_LAN);
     }
 }
+
+Test(netaddr_area, test_netaddr_area_ipv4_loopback)
+{
+    netaddr_t addr;
+
+    addr.type = IP4;
+    for (in_addr_t i = 0; i <= 0x00ffffff; ++i) {
+        addr.data.ip4.s_addr = htonl(0x7f000000 | i);
+        cr_assert_eq(netaddr_area(&addr), NETAREA_LAN);
+    }
+}
+
+Test(netaddr_area, test_netaddr_area_link_local)
+{
+    netaddr_t addr;
+
+    addr.type = IP6;
+    memset(&addr.data.ip6, 0, sizeof(addr.data.ip6));
+    for (uint16_t i = 0; i <= 0x3ff; ++i) {
+        addr.data.ip6.__in6_u.__u6_addr16[0] = htons(i);
+        if (i == 0xfe8) {
+            cr_assert_eq(netaddr_area(&addr), NETAREA_LAN);
+        } else {
+            cr_assert_eq(netaddr_area(&addr), NETAREA_WAN);
+        }
+    }
+}
+
+Test(netaddr_area, test_netaddr_area_ipv6_loopback)
+{
+    netaddr_t addr;
+
+    cr_assert_eq(netaddr_pton(&addr, "::1"), true);
+    cr_assert_eq(netaddr_area(&addr), NETAREA_LAN);
+}
