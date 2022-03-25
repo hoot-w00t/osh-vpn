@@ -4,12 +4,11 @@
 
 Test(netaddr_dton, test_netaddr_dton)
 {
-    uint8_t macaddr[6] = {0x1, 0x2, 0x3, 0x4, 0x5, 0x6};
-    struct in_addr sin;
-    struct in6_addr sin6 = in6addr_loopback;
+    const uint8_t macaddr[6] = {0x1, 0x2, 0x3, 0x4, 0x5, 0x6};
+    const struct in_addr sin = {htonl(INADDR_LOOPBACK)};
+    const struct in6_addr sin6 = in6addr_loopback;
     netaddr_t nmac, nip4, nip6;
 
-    sin.s_addr = htonl(INADDR_LOOPBACK);
     cr_assert_neq(netaddr_dton(&nmac, MAC, macaddr), false);
     cr_assert_neq(netaddr_dton(&nip4, IP4, &sin), false);
     cr_assert_neq(netaddr_dton(&nip6, IP6, &sin6), false);
@@ -54,7 +53,7 @@ Test(netaddr_cpy, test_netaddr_cpy)
     netaddr_cpy(&dest, &src);
     cr_assert_eq(src.type, dest.type);
     for (uint8_t i = 0; i < sizeof(src.data); ++i)
-        cr_assert_eq(src.data[i], dest.data[i]);
+        cr_assert_eq(src.data.b[i], dest.data.b[i]);
 }
 
 Test(netaddr_dup, test_netaddr_dup)
@@ -66,7 +65,7 @@ Test(netaddr_dup, test_netaddr_dup)
     dup = netaddr_dup(&src);
     cr_assert_eq(src.type, dup->type);
     for (uint8_t i = 0; i < sizeof(src.data); ++i)
-        cr_assert_eq(src.data[i], dup->data[i]);
+        cr_assert_eq(src.data.b[i], dup->data.b[i]);
     free(dup);
 }
 
@@ -106,4 +105,77 @@ Test(netaddr_eq, test_netaddr_eq)
     cr_assert_eq(netaddr_eq(&mac_0, &mac_1), true);
     mac_1.type = IP4;
     cr_assert_eq(netaddr_eq(&mac_0, &mac_1), false);
+}
+
+Test(netaddr_is_loopback, netaddr_is_loopback_invalid)
+{
+    netaddr_t addr;
+
+    memset(&addr, 0, sizeof(addr));
+    addr.type = MAC;
+    cr_assert_eq(netaddr_is_loopback(&addr), false);
+}
+
+Test(netaddr_is_loopback, netaddr_is_loopback_ipv4)
+{
+    netaddr_t addr;
+
+    addr.type = IP4;
+    for (size_t i = 0; i < 256; ++i) {
+        if (i == 127)
+            continue;
+
+        addr.data.ip4.s_addr = htonl((i << 24) & 0xff000000);
+        cr_assert_eq(netaddr_is_loopback(&addr), false);
+    }
+
+    for (in_addr_t i = 0x7f000000; i <= 0x7fffffff; ++i) {
+        addr.data.ip4.s_addr = htonl(i);
+        cr_assert_eq(netaddr_is_loopback(&addr), true);
+    }
+}
+
+Test(netaddr_is_loopback, netaddr_is_loopback_ipv6)
+{
+    netaddr_t addr;
+
+    cr_assert_eq(netaddr_pton(&addr, "::"), true);
+    cr_assert_eq(netaddr_is_loopback(&addr), false);
+    cr_assert_eq(netaddr_pton(&addr, "::1"), true);
+    cr_assert_eq(netaddr_is_loopback(&addr), true);
+    cr_assert_eq(netaddr_pton(&addr, "::2"), true);
+    cr_assert_eq(netaddr_is_loopback(&addr), false);
+}
+
+Test(netaddr_area, test_netaddr_area_10_0_0_0)
+{
+    netaddr_t addr;
+
+    addr.type = IP4;
+    for (in_addr_t i = 0; i <= 0x00ffffff; ++i) {
+        addr.data.ip4.s_addr = htonl(0x0A000000 | i);
+        cr_assert_eq(netaddr_area(&addr), NETAREA_LAN);
+    }
+}
+
+Test(netaddr_area, test_netaddr_area_172_16_0_0)
+{
+    netaddr_t addr;
+
+    addr.type = IP4;
+    for (in_addr_t i = 0; i <= 0x000fffff; ++i) {
+        addr.data.ip4.s_addr = htonl(0xac100000 | i);
+        cr_assert_eq(netaddr_area(&addr), NETAREA_LAN);
+    }
+}
+
+Test(netaddr_area, test_netaddr_area_192_168_0_0)
+{
+    netaddr_t addr;
+
+    addr.type = IP4;
+    for (in_addr_t i = 0; i <= 0x0000ffff; ++i) {
+        addr.data.ip4.s_addr = htonl(0xc0a80000 | i);
+        cr_assert_eq(netaddr_area(&addr), NETAREA_LAN);
+    }
 }
