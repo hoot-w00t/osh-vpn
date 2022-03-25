@@ -171,50 +171,6 @@ bool netaddr_eq(const netaddr_t *s1, const netaddr_t *s2)
     }
 }
 
-// Create a network mask from cidr
-// The address type is left unchanged
-void netaddr_mask_from_cidr(netaddr_t *mask, cidr_t cidr)
-{
-    if (cidr > 128)
-        cidr = 128;
-
-    memset(&mask->data, 0, sizeof(mask->data.b));
-    for (cidr_t i = 0; i < cidr; ++i)
-        mask->data.b[(i / 8)] |= (1 << (7 - (i % 8)));
-}
-
-// Returns the CIDR from a network mask
-cidr_t netaddr_cidr_from_mask(const netaddr_t *mask)
-{
-    cidr_t cidr = 0;
-
-    while (mask->data.b[(cidr / 8)] & (1 << (7 - (cidr % 8))))
-        ++cidr;
-    return cidr;
-}
-
-// Masks addr using mask to masked_addr
-// Set the masked_addr->type to addr->type, ignores mask->type
-void netaddr_mask(netaddr_t *masked_addr, const netaddr_t *addr,
-    const netaddr_t *mask)
-{
-    masked_addr->type = addr->type;
-    for (size_t i = 0; i < sizeof(masked_addr->data.b); ++i)
-        masked_addr->data.b[i] = addr->data.b[i] & mask->data.b[i];
-}
-
-// Masks addr using cidr to masked_addr
-// Set the masked_addr->type to addr->type
-// This is a wrapper that creates a mask and uses netaddr_mask
-void netaddr_mask_cidr(netaddr_t *masked_addr, const netaddr_t *addr,
-    cidr_t cidr)
-{
-    netaddr_t mask;
-
-    netaddr_mask_from_cidr(&mask, cidr);
-    netaddr_mask(masked_addr, addr, &mask);
-}
-
 // Returns true if *addr is all zero
 bool netaddr_is_zero(const netaddr_t *addr)
 {
