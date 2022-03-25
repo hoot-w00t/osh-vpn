@@ -53,6 +53,32 @@ bool netaddr_ntop(char *dest, uint32_t maxlen, const netaddr_t *addr)
     }
 }
 
+// Convert IP4/IP6 netaddr_t to a text address:port
+bool netaddr_ntop2(char *dest, size_t maxlen, const netaddr_t *addr,
+    const uint16_t port)
+{
+    char tmp[INET6_ADDRSTRLEN];
+
+    switch (addr->type) {
+        case IP4:
+            if (!inet_ntop(AF_INET, addr->data, tmp, sizeof(tmp)))
+                return false;
+
+            snprintf(dest, maxlen, "%s:%u", tmp, port);
+            return true;
+
+        case IP6:
+            if (!inet_ntop(AF_INET6, addr->data, tmp, sizeof(tmp)))
+                return false;
+
+            snprintf(dest, maxlen, "[%s]:%u", tmp, port);
+            return true;
+
+        default:
+            return false;
+    }
+}
+
 // Convert text address to netaddr_t data and put it into *dest
 bool netaddr_pton(netaddr_t *dest, const char *data)
 {

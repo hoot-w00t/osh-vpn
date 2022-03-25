@@ -635,15 +635,13 @@ void node_destroy(node_t *node)
 node_t *node_init(int fd, bool initiator, netaddr_t *addr, uint16_t port)
 {
     node_t *node = xzalloc(sizeof(node_t));
-    char addrp[INET6_ADDRSTRLEN];
 
     node->fd = fd;
     node->initiator = initiator;
 
     // Write the node's address:port
-    netaddr_ntop(addrp, sizeof(addrp), addr);
-    snprintf(node->addrw, sizeof(node->addrw),
-        (addr->type == IP6) ? "[%s]:%u" : "%s:%u", addrp, port);
+    if (!netaddr_ntop2(node->addrw, sizeof(node->addrw), addr, port))
+        snprintf(node->addrw, sizeof(node->addrw), "(invalid address)");
 
     // Initialize network buffers
     node->io.recvbuf = xalloc(NODE_RECVBUF_SIZE);

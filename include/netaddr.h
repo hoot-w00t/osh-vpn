@@ -4,6 +4,7 @@
 #include "netarea.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 typedef enum netaddr_type {
     MAC = 0,
@@ -20,6 +21,8 @@ typedef uint8_t cidr_t;
 
 bool netaddr_lookup(netaddr_t *addr, const char *hostname);
 bool netaddr_ntop(char *dest, uint32_t maxlen, const netaddr_t *addr);
+bool netaddr_ntop2(char *dest, size_t maxlen, const netaddr_t *addr,
+    const uint16_t port);
 bool netaddr_pton(netaddr_t *dest, const char *data);
 bool netaddr_dton(netaddr_t *dest, netaddr_type_t type, const void *data);
 void netaddr_cpy(netaddr_t *dest, const netaddr_t *src);
