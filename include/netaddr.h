@@ -20,7 +20,7 @@ typedef struct netaddr {
 typedef uint8_t cidr_t;
 
 bool netaddr_lookup(netaddr_t *addr, const char *hostname);
-bool netaddr_ntop(char *dest, uint32_t maxlen, const netaddr_t *addr);
+bool netaddr_ntop(char *dest, size_t maxlen, const netaddr_t *addr);
 bool netaddr_ntop2(char *dest, size_t maxlen, const netaddr_t *addr,
     const uint16_t port);
 bool netaddr_pton(netaddr_t *dest, const char *data);

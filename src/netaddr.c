@@ -35,7 +35,7 @@ bool netaddr_lookup(netaddr_t *addr, const char *hostname)
 }
 
 // Convert netaddr_t data to a text address in *dest
-bool netaddr_ntop(char *dest, uint32_t maxlen, const netaddr_t *addr)
+bool netaddr_ntop(char *dest, size_t maxlen, const netaddr_t *addr)
 {
     switch (addr->type) {
         case MAC:
@@ -43,13 +43,12 @@ bool netaddr_ntop(char *dest, uint32_t maxlen, const netaddr_t *addr)
                      addr->data[0], addr->data[1], addr->data[2],
                      addr->data[3], addr->data[4], addr->data[5]);
             return true;
-        case IP4:
 
-            return inet_ntop(AF_INET, addr->data, dest, maxlen) != 0;
-        case IP6:
-            return inet_ntop(AF_INET6, addr->data, dest, maxlen) != 0;
-        default:
-            return false;
+        case IP4: return inet_ntop(AF_INET, addr->data, dest, maxlen) != NULL;
+
+        case IP6: return inet_ntop(AF_INET6, addr->data, dest, maxlen) != NULL;
+
+        default:  return false;
     }
 }
 
