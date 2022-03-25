@@ -2,9 +2,10 @@
 #define _OSH_NETADDR_H
 
 #include "netarea.h"
-#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <netinet/in.h>
 
 typedef enum netaddr_type {
     MAC = 0,
@@ -12,12 +13,28 @@ typedef enum netaddr_type {
     IP6
 } netaddr_type_t;
 
+struct __attribute__((packed)) netaddr_data_mac {
+    uint8_t addr[8];
+};
+
+typedef union netaddr_data {
+    uint8_t b[16];
+    struct in_addr ip4;
+    struct in6_addr ip6;
+    struct netaddr_data_mac mac;
+} netaddr_data_t;
+
 typedef struct netaddr {
-    netaddr_type_t type;   // Address type
-    uint8_t data[16];      // Address data
+    netaddr_type_t type; // Address type
+    netaddr_data_t data; // Address data
 } netaddr_t;
 
 typedef uint8_t cidr_t;
+
+// Mask IPv4 netaddr_t with mask and compare it with net
+// The mask and network must be in host byte order
+#define NETADDR_IP4_NET(addr, mask, net) \
+    (((addr)->data.ip4.s_addr & htonl(mask)) == htonl(net))
 
 bool netaddr_lookup(netaddr_t *addr, const char *hostname);
 bool netaddr_ntop(char *dest, size_t maxlen, const netaddr_t *addr);
