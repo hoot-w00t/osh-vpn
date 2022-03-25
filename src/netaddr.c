@@ -206,7 +206,8 @@ netarea_t netaddr_area(const netaddr_t *addr)
         case IP4: {
             if (   NETADDR_IP4_NET(addr, 0xff000000, 0x0a000000)  // 10.0.0.0/8
                 || NETADDR_IP4_NET(addr, 0xfff00000, 0xac100000)  // 172.16.0.0/12
-                || NETADDR_IP4_NET(addr, 0xffff0000, 0xc0a80000)) // 192.168.0.0/16
+                || NETADDR_IP4_NET(addr, 0xffff0000, 0xc0a80000)  // 192.168.0.0/16
+                || NETADDR_IP4_NET(addr, 0xff000000, 0x7f000000)) // 127.0.0.0/8
             {
                 return NETAREA_LAN;
             }
@@ -215,8 +216,8 @@ netarea_t netaddr_area(const netaddr_t *addr)
         }
 
         case IP6:
-            if (   IN6_IS_ADDR_LINKLOCAL(&addr->data.ip6)
-                || IN6_IS_ADDR_SITELOCAL(&addr->data.ip6))
+            if (   IN6_IS_ADDR_LINKLOCAL(&addr->data.ip6)  // fe80::/10
+                || IN6_IS_ADDR_LOOPBACK (&addr->data.ip6)) // ::1
             {
                 return NETAREA_LAN;
             }
