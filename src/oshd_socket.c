@@ -311,8 +311,7 @@ bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay)
     int client_fd;
     char d_addr[128];
     netaddr_t naddr;
-    struct sockaddr_in6 d_sin;
-    socklen_t d_sin_len = sizeof(struct sockaddr_in6);
+    struct sockaddr_storage d_sin;
     endpoint_t *endpoint = endpoint_group_selected(endpoints);
 
     if (endpoints->has_owner) {
@@ -330,7 +329,7 @@ bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay)
 
     // Initialize and create a socket to connect to address:port
     memset(d_addr, 0, sizeof(d_addr));
-    memset(&d_sin, 0, d_sin_len);
+    memset(&d_sin, 0, sizeof(d_sin));
 
     if (!endpoint) {
         // If this warning appears the code is glitched
@@ -339,7 +338,7 @@ bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay)
     }
 
     client_fd = tcp_outgoing_socket(endpoint->hostname, endpoint->port, d_addr,
-        sizeof(d_addr), (struct sockaddr *) &d_sin, d_sin_len);
+        sizeof(d_addr), (struct sockaddr *) &d_sin, sizeof(d_sin));
 
     if (client_fd < 0) {
         // Either the socket could not be created or there was a DNS lookup
@@ -353,7 +352,7 @@ bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay)
     netaddr_pton(&naddr, d_addr);
     node = node_init(client_fd, true, &naddr, endpoint->port);
     node_reconnect_to(node, endpoints, delay);
-    memcpy(&node->sin, &d_sin, d_sin_len);
+    memcpy(&node->sin, &d_sin, sizeof(d_sin));
 
     // Set all the socket options
     oshd_setsockopts(client_fd);

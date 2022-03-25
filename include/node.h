@@ -133,10 +133,10 @@ struct node_id {
 };
 
 struct node {
-    int fd;                  // Network socket handle
-    struct sockaddr_in6 sin; // Socket data (pointed to by *sin)
-    struct node_io io;       // send/recv data buffers
-    aio_event_t *aio_event;  // Node's async I/O event
+    int fd;                      // Network socket handle
+    struct sockaddr_storage sin; // Socket data
+    struct node_io io;           // send/recv data buffers
+    aio_event_t *aio_event;      // Node's async I/O event
 
     bool initiator;     // true if it is an outgoing connection
     bool connected;     // true if the socket is connected (used for the async
