@@ -52,7 +52,7 @@ Test(netaddr_cpy, test_netaddr_cpy)
     cr_assert_neq(netaddr_pton(&src, "01:02:03:04:05:06"), false);
     netaddr_cpy(&dest, &src);
     cr_assert_eq(src.type, dest.type);
-    for (uint8_t i = 0; i < sizeof(src.data); ++i)
+    for (uint8_t i = 0; i < sizeof(src.data.mac); ++i)
         cr_assert_eq(src.data.b[i], dest.data.b[i]);
 }
 
@@ -64,7 +64,7 @@ Test(netaddr_dup, test_netaddr_dup)
     cr_assert_neq(netaddr_pton(&src, "01:02:03:04:05:06"), false);
     dup = netaddr_dup(&src);
     cr_assert_eq(src.type, dup->type);
-    for (uint8_t i = 0; i < sizeof(src.data); ++i)
+    for (uint8_t i = 0; i < sizeof(src.data.mac); ++i)
         cr_assert_eq(src.data.b[i], dup->data.b[i]);
     free(dup);
 }

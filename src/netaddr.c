@@ -145,7 +145,13 @@ bool netaddr_dton(netaddr_t *dest, netaddr_type_t type, const void *data)
 // Copy netaddr from *src to *dest
 void netaddr_cpy(netaddr_t *dest, const netaddr_t *src)
 {
-    memcpy(dest, src, sizeof(netaddr_t));
+    dest->type = src->type;
+    switch (src->type) {
+        case MAC: dest->data.mac = src->data.mac; break;
+        case IP4: dest->data.ip4 = src->data.ip4; break;
+        case IP6: dest->data.ip6 = src->data.ip6; break;
+         default: break;
+    }
 }
 
 // Copy the src->data to dest and initializes remaining bytes to 0
