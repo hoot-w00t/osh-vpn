@@ -148,6 +148,21 @@ void netaddr_cpy(netaddr_t *dest, const netaddr_t *src)
     memcpy(dest, src, sizeof(netaddr_t));
 }
 
+// Copy the src->data to dest and initializes remaining bytes to 0
+// This function is intended to safely copy the address bytes without copying
+// uninitialized bytes
+// If the source address is invalid dest will be zeroed out
+void netaddr_cpy_data(void *dest, const netaddr_t *src)
+{
+    memset(dest, 0, sizeof(netaddr_data_t));
+    switch (src->type) {
+        case MAC: ((netaddr_data_t *) dest)->mac = src->data.mac; break;
+        case IP4: ((netaddr_data_t *) dest)->ip4 = src->data.ip4; break;
+        case IP6: ((netaddr_data_t *) dest)->ip6 = src->data.ip6; break;
+         default: break;
+    }
+}
+
 // Returns an allocated copy of *src
 netaddr_t *netaddr_dup(netaddr_t *src)
 {

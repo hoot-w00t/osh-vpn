@@ -1283,7 +1283,7 @@ bool node_queue_endpoint_broadcast(node_t *exclude, const endpoint_t *endpoint,
     for (size_t i = 0; (group->owner_name[i] != 0) && (i < NODE_NAME_SIZE); ++i)
         pkt.node_name[i] = group->owner_name[i];
     pkt.addr_type = addr.type;
-    memcpy(pkt.addr_data, addr.data, 16);
+    netaddr_cpy_data(&pkt.addr_data, &addr);
     pkt.port = htons(endpoint->port);
 
     logger_debug(DBG_ENDPOINTS, "Broadcasting endpoint %s:%u owned by %s",
@@ -1315,7 +1315,7 @@ static bool node_queue_endpoint(node_t *node, const endpoint_t *endpoint,
     for (size_t i = 0; (group->owner_name[i] != 0) && (i < NODE_NAME_SIZE); ++i)
         pkt.node_name[i] = group->owner_name[i];
     pkt.addr_type = addr.type;
-    memcpy(pkt.addr_data, addr.data, 16);
+    netaddr_cpy_data(&pkt.addr_data, &addr);
     pkt.port = htons(endpoint->port);
 
     logger_debug(DBG_ENDPOINTS, "%s: Queuing endpoint %s:%u owned by %s",
@@ -1485,7 +1485,7 @@ bool node_queue_route_add_local(node_t *exclude, const netaddr_t *addrs,
     for (size_t i = 0; i < count; ++i) {
         memcpy(buf[i].node_name, oshd.name, NODE_NAME_SIZE);
         buf[i].addr_type = addrs[i].type;
-        memcpy(buf[i].addr_data, addrs[i].data, 16);
+        netaddr_cpy_data(&buf[i].addr_data, &addrs[i]);
     }
 
     bool success = node_queue_packet_fragmented(exclude, ROUTE_ADD, buf, buf_size,
@@ -1511,7 +1511,7 @@ bool node_queue_route_exg(node_t *node)
     foreach_oshd_route(route, oshd.routes) {
         memcpy(buf[i].node_name, route->dest_node->name, NODE_NAME_SIZE);
         buf[i].addr_type = route->addr.type;
-        memcpy(buf[i].addr_data, route->addr.data, 16);
+        netaddr_cpy_data(&buf[i].addr_data, &route->addr);
         ++i;
     }
 
