@@ -10,7 +10,7 @@
 // Write buf_size random bytes starting at buf
 // This function can block
 // Returns false on any error (including incomplete reads)
-bool random_bytes(uint8_t *buf, size_t buf_size)
+bool random_bytes(void *buf, size_t buf_size)
 {
     int fd = open(random_filepath, O_RDONLY);
     size_t total = 0;
