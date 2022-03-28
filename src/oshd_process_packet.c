@@ -597,13 +597,14 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
     memset(node_name, 0, sizeof(node_name));
     for (size_t i = 0; i < entries; ++i) {
         // Extract and verify the network address
-        addr.type = payload[i].addr_type;
-        if (addr.type > IP6) {
+        if (!netaddr_dton(&addr,
+                           payload[i].addr_type,
+                          &payload[i].addr_data))
+        {
             logger(LOG_ERR, "%s: %s: Add route: Invalid address type",
                 node->addrw, node->id->name);
             return false;
         }
-        memcpy(addr.data, payload[i].addr_data, 16);
 
         // Extract and verify the node's name
         memcpy(node_name, payload[i].node_name, NODE_NAME_SIZE);
@@ -846,8 +847,15 @@ static bool oshd_process_authenticated(node_t *node, oshpacket_hdr_t *pkt,
                 uint16_t hport;
                 char hostname[INET6_ADDRSTRLEN];
 
-                addr.type = endpoints[i].addr_type;
-                memcpy(addr.data, endpoints[i].addr_data, 16);
+                if (!netaddr_dton(&addr,
+                                   endpoints[i].addr_type,
+                                  &endpoints[i].addr_data))
+                {
+                    logger(LOG_ERR, "%s: %s: Endpoint: Invalid endpoint type",
+                        node->addrw, node->id->name);
+                    return false;
+                }
+
                 netaddr_ntop(hostname, sizeof(hostname), &addr);
                 area = netaddr_area(&addr);
                 hport = ntohs(endpoints[i].port);

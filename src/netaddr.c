@@ -40,15 +40,22 @@ bool netaddr_ntop(char *dest, size_t maxlen, const netaddr_t *addr)
     switch (addr->type) {
         case MAC:
             snprintf(dest, maxlen, "%02x:%02x:%02x:%02x:%02x:%02x",
-                     addr->data[0], addr->data[1], addr->data[2],
-                     addr->data[3], addr->data[4], addr->data[5]);
+                addr->data.mac.addr[0],
+                addr->data.mac.addr[1],
+                addr->data.mac.addr[2],
+                addr->data.mac.addr[3],
+                addr->data.mac.addr[4],
+                addr->data.mac.addr[5]);
             return true;
 
-        case IP4: return inet_ntop(AF_INET, addr->data, dest, maxlen) != NULL;
+        case IP4:
+            return inet_ntop(AF_INET, &addr->data.ip4, dest, maxlen) != NULL;
 
-        case IP6: return inet_ntop(AF_INET6, addr->data, dest, maxlen) != NULL;
+        case IP6:
+            return inet_ntop(AF_INET6, &addr->data.ip6, dest, maxlen) != NULL;
 
-        default:  return false;
+        default:
+            return false;
     }
 }
 
@@ -60,14 +67,14 @@ bool netaddr_ntop2(char *dest, size_t maxlen, const netaddr_t *addr,
 
     switch (addr->type) {
         case IP4:
-            if (!inet_ntop(AF_INET, addr->data, tmp, sizeof(tmp)))
+            if (!inet_ntop(AF_INET, &addr->data.ip4, tmp, sizeof(tmp)))
                 return false;
 
             snprintf(dest, maxlen, "%s:%u", tmp, port);
             return true;
 
         case IP6:
-            if (!inet_ntop(AF_INET6, addr->data, tmp, sizeof(tmp)))
+            if (!inet_ntop(AF_INET6, &addr->data.ip6, tmp, sizeof(tmp)))
                 return false;
 
             snprintf(dest, maxlen, "[%s]:%u", tmp, port);
@@ -88,19 +95,22 @@ bool netaddr_pton(netaddr_t *dest, const char *data)
                &buf[3], &buf[4], &buf[5]) == 6)
     {
         dest->type = MAC;
-        dest->data[0] = (uint8_t) buf[0];
-        dest->data[1] = (uint8_t) buf[1];
-        dest->data[2] = (uint8_t) buf[2];
-        dest->data[3] = (uint8_t) buf[3];
-        dest->data[4] = (uint8_t) buf[4];
-        dest->data[5] = (uint8_t) buf[5];
+        dest->data.mac.addr[0] = (uint8_t) buf[0];
+        dest->data.mac.addr[1] = (uint8_t) buf[1];
+        dest->data.mac.addr[2] = (uint8_t) buf[2];
+        dest->data.mac.addr[3] = (uint8_t) buf[3];
+        dest->data.mac.addr[4] = (uint8_t) buf[4];
+        dest->data.mac.addr[5] = (uint8_t) buf[5];
         return true;
-    } else if (inet_pton(AF_INET, data, dest->data) > 0) {
+
+    } else if (inet_pton(AF_INET, data, &dest->data.ip4) > 0) {
         dest->type = IP4;
         return true;
-    } else if (inet_pton(AF_INET6, data, dest->data) > 0) {
+
+    } else if (inet_pton(AF_INET6, data, &dest->data.ip6) > 0) {
         dest->type = IP6;
         return true;
+
     } else {
         return false;
     }
@@ -108,7 +118,7 @@ bool netaddr_pton(netaddr_t *dest, const char *data)
 
 // Convert network address data to netaddr_t and put it into *dest
 // Depending on type, data should point to:
-//     MAC: a 6 bytes array
+//     MAC: struct netaddr_data_mac
 //     IP4: struct in_addr
 //     IP6: struct in6_addr
 bool netaddr_dton(netaddr_t *dest, netaddr_type_t type, const void *data)
@@ -116,16 +126,17 @@ bool netaddr_dton(netaddr_t *dest, netaddr_type_t type, const void *data)
     dest->type = type;
     switch (type) {
         case MAC:
-            memcpy(dest->data, data, 6);
-            memset(dest->data + 6, 0, sizeof(dest->data) - 6);
+            dest->data.mac = *((struct netaddr_data_mac *) data);
             return true;
+
         case IP4:
-            *((in_addr_t *) dest->data) = ((struct in_addr *) data)->s_addr;
-            memset(dest->data + 4, 0, sizeof(dest->data) - 4);
+            dest->data.ip4 = *((struct in_addr *) data);
             return true;
+
         case IP6:
-            memcpy(dest->data, data, sizeof(struct in6_addr));
+            dest->data.ip6 = *((struct in6_addr *) data);
             return true;
+
         default:
             return false;
     }
@@ -134,7 +145,28 @@ bool netaddr_dton(netaddr_t *dest, netaddr_type_t type, const void *data)
 // Copy netaddr from *src to *dest
 void netaddr_cpy(netaddr_t *dest, const netaddr_t *src)
 {
-    memcpy(dest, src, sizeof(netaddr_t));
+    dest->type = src->type;
+    switch (src->type) {
+        case MAC: dest->data.mac = src->data.mac; break;
+        case IP4: dest->data.ip4 = src->data.ip4; break;
+        case IP6: dest->data.ip6 = src->data.ip6; break;
+         default: break;
+    }
+}
+
+// Copy the src->data to dest and initializes remaining bytes to 0
+// This function is intended to safely copy the address bytes without copying
+// uninitialized bytes
+// If the source address is invalid dest will be zeroed out
+void netaddr_cpy_data(void *dest, const netaddr_t *src)
+{
+    memset(dest, 0, sizeof(netaddr_data_t));
+    switch (src->type) {
+        case MAC: ((netaddr_data_t *) dest)->mac = src->data.mac; break;
+        case IP4: ((netaddr_data_t *) dest)->ip4 = src->data.ip4; break;
+        case IP6: ((netaddr_data_t *) dest)->ip6 = src->data.ip6; break;
+         default: break;
+    }
 }
 
 // Returns an allocated copy of *src
@@ -153,59 +185,11 @@ bool netaddr_eq(const netaddr_t *s1, const netaddr_t *s2)
         return false;
 
     switch (s1->type) {
-        case MAC:
-            return !memcmp(s1->data, s2->data, 6);
-        case IP4:
-            return !memcmp(s1->data, s2->data, 4);
-        case IP6:
-            return !memcmp(s1->data, s2->data, 16);
-        default:
-            return false;
+    case MAC: return !memcmp(&s1->data.mac, &s2->data.mac, sizeof(s1->data.mac));
+    case IP4: return !memcmp(&s1->data.ip4, &s2->data.ip4, sizeof(s1->data.ip4));
+    case IP6: return !memcmp(&s1->data.ip6, &s2->data.ip6, sizeof(s1->data.ip6));
+     default: return false;
     }
-}
-
-// Create a network mask from cidr
-// The address type is left unchanged
-void netaddr_mask_from_cidr(netaddr_t *mask, cidr_t cidr)
-{
-    if (cidr > 128)
-        cidr = 128;
-
-    memset(mask->data, 0, 16);
-    for (cidr_t i = 0; i < cidr; ++i)
-        mask->data[(i / 8)] |= (1 << (7 - (i % 8)));
-}
-
-// Returns the CIDR from a network mask
-cidr_t netaddr_cidr_from_mask(const netaddr_t *mask)
-{
-    cidr_t cidr = 0;
-
-    while (mask->data[(cidr / 8)] & (1 << (7 - (cidr % 8))))
-        ++cidr;
-    return cidr;
-}
-
-// Masks addr using mask to masked_addr
-// Set the masked_addr->type to addr->type, ignores mask->type
-void netaddr_mask(netaddr_t *masked_addr, const netaddr_t *addr,
-    const netaddr_t *mask)
-{
-    masked_addr->type = addr->type;
-    for (uint8_t i = 0; i < 16; ++i)
-        masked_addr->data[i] = addr->data[i] & mask->data[i];
-}
-
-// Masks addr using cidr to masked_addr
-// Set the masked_addr->type to addr->type
-// This is a wrapper that creates a mask and uses netaddr_mask
-void netaddr_mask_cidr(netaddr_t *masked_addr, const netaddr_t *addr,
-    cidr_t cidr)
-{
-    netaddr_t mask;
-
-    netaddr_mask_from_cidr(&mask, cidr);
-    netaddr_mask(masked_addr, addr, &mask);
 }
 
 // Returns true if *addr is all zero
@@ -214,28 +198,23 @@ bool netaddr_is_zero(const netaddr_t *addr)
     const uint8_t zero[16] = {0};
 
     switch (addr->type) {
-        case MAC:
-            return !memcmp(addr->data, zero, 6);
-        case IP4:
-            return !memcmp(addr->data, zero, 4);
-        case IP6:
-            return !memcmp(addr->data, zero, 16);
-        default:
-            return false;
+        case MAC: return !memcmp(&addr->data.mac, zero, sizeof(addr->data.mac));
+        case IP4: return !memcmp(&addr->data.ip4, zero, sizeof(addr->data.ip4));
+        case IP6: return !memcmp(&addr->data.ip6, zero, sizeof(addr->data.ip6));
+         default: return false;
     }
 }
 
 // Returns true if *addr is a loopback address
 bool netaddr_is_loopback(const netaddr_t *addr)
 {
-    const uint8_t ip6_loopback[16] = {0, 0, 0, 0, 0, 0, 0, 0,
-                                      0, 0, 0, 0, 0, 0, 0, 1};
-
     switch (addr->type) {
         case IP4:
-            return addr->data[0] == 0x7F;
+            return NETADDR_IP4_NET(addr, 0xff000000, 0x7f000000);
+
         case IP6:
-            return !memcmp(addr->data, ip6_loopback, sizeof(ip6_loopback));
+            return IN6_IS_ADDR_LOOPBACK(&addr->data.ip6);
+
         default:
             return false;
     }
@@ -246,22 +225,24 @@ netarea_t netaddr_area(const netaddr_t *addr)
 {
     switch (addr->type) {
         case IP4: {
-            // 10.0.0.0/8
-            if (addr->data[0] == 10)
+            if (   NETADDR_IP4_NET(addr, 0xff000000, 0x0a000000)  // 10.0.0.0/8
+                || NETADDR_IP4_NET(addr, 0xfff00000, 0xac100000)  // 172.16.0.0/12
+                || NETADDR_IP4_NET(addr, 0xffff0000, 0xc0a80000)  // 192.168.0.0/16
+                || NETADDR_IP4_NET(addr, 0xff000000, 0x7f000000)) // 127.0.0.0/8
+            {
                 return NETAREA_LAN;
-
-            // 172.16.0.0/12
-            if (addr->data[0] == 172 && addr->data[1] >= 16 && addr->data[1] <= 31)
-                return NETAREA_LAN;
-
-            // 192.168.0.0/16
-            if (addr->data[0] == 192 && addr->data[1] == 168)
-                return NETAREA_LAN;
+            }
 
             return NETAREA_WAN;
         }
 
         case IP6:
+            if (   IN6_IS_ADDR_LINKLOCAL(&addr->data.ip6)  // fe80::/10
+                || IN6_IS_ADDR_LOOPBACK (&addr->data.ip6)) // ::1
+            {
+                return NETAREA_LAN;
+            }
+
             return NETAREA_WAN;
 
         default: return NETAREA_UNK;
