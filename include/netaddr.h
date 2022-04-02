@@ -14,7 +14,7 @@ typedef enum netaddr_type {
 } netaddr_type_t;
 
 struct __attribute__((packed)) netaddr_data_mac {
-    uint8_t addr[8];
+    uint8_t addr[6];
 };
 
 typedef union netaddr_data {
