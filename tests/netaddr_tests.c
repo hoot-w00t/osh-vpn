@@ -2,6 +2,17 @@
 #include <criterion/criterion.h>
 #include <netinet/in.h>
 
+Test(netaddr_data_t, netaddr_data_sizes)
+{
+    netaddr_data_t d;
+
+    cr_assert_eq(sizeof(d), 16);
+    cr_assert_eq(sizeof(d.b), sizeof(d));
+    cr_assert_eq(sizeof(d.mac), 6);
+    cr_assert_eq(sizeof(d.ip4), 4);
+    cr_assert_eq(sizeof(d.ip6), 16);
+}
+
 Test(netaddr_dton, test_netaddr_dton)
 {
     const uint8_t macaddr[6] = {0x1, 0x2, 0x3, 0x4, 0x5, 0x6};
