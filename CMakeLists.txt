@@ -122,10 +122,12 @@ set(OSHD_TESTS_SOURCES
     src/xalloc.c
     src/netaddr.c
     src/netbuffer.c
+    src/oshpacket.c
     src/random.c
     tests/base64_tests.c
     tests/netaddr_tests.c
     tests/netbuffer_tests.c
+    tests/oshpacket_tests.c
     tests/random_tests.c)
 
 # Osh daemon
