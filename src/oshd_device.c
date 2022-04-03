@@ -7,29 +7,6 @@
 #include <errno.h>
 #include <unistd.h>
 
-// Return the name of the device mode
-const char *device_mode_name(device_mode_t devmode)
-{
-    switch (devmode) {
-        case MODE_NODEVICE: return "NoDevice";
-        case MODE_TAP     : return "TAP";
-        case MODE_TUN     : return "TUN";
-             default      : return "Unknown mode";
-    }
-}
-
-// Returns true if the device mode is a TAP device
-bool device_mode_is_tap(device_mode_t devmode)
-{
-    switch (devmode) {
-        case MODE_TAP:
-            return true;
-
-        default:
-            return false;
-    }
-}
-
 // Error callback for the TUN/TAP device
 // Stops the daemon on any error
 static void device_aio_error(aio_event_t *event, aio_poll_event_t revents)

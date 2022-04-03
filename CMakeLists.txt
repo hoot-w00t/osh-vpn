@@ -102,6 +102,7 @@ set(OSHD_SOURCES
     src/oshd_clock.c
     src/oshd_cmd.c
     src/oshd_conf.c
+    src/oshd_device_mode.c
     src/oshd_device.c
     src/oshd_discovery.c
     src/oshd_process_packet.c
@@ -122,11 +123,13 @@ set(OSHD_TESTS_SOURCES
     src/xalloc.c
     src/netaddr.c
     src/netbuffer.c
+    src/oshd_device_mode.c
     src/oshpacket.c
     src/random.c
     tests/base64_tests.c
     tests/netaddr_tests.c
     tests/netbuffer_tests.c
+    tests/oshd_device_mode_tests.c
     tests/oshpacket_tests.c
     tests/random_tests.c)
 
