@@ -104,10 +104,6 @@ oshd_route_t *oshd_route_add(oshd_route_group_t *group, const netaddr_t *addr,
             }
         }
 
-        // If the route is an IPv4 or IPv6 it belongs in the resolver list
-        if (addr->type == IP4 || addr->type == IP6)
-            oshd_route_add_to(&group->resolver, &group->resolver_count, route);
-
         if (logger_is_debugged(DBG_ROUTING)) {
             char addrw[INET6_ADDRSTRLEN];
 
@@ -115,7 +111,6 @@ oshd_route_t *oshd_route_add(oshd_route_group_t *group, const netaddr_t *addr,
             logger_debug(DBG_ROUTING, "Added route %s owned by %s",
                 addrw, dest_node->name);
         }
-        oshd_resolver_update();
     }
 
     if (refresh && route->dest_node == dest_node) {
@@ -160,7 +155,6 @@ static bool oshd_route_del(oshd_route_group_t *group, oshd_route_t *route)
             *i = (*i)->next;
             oshd_route_del_from(&group->remote, &group->remote_count, route);
             oshd_route_del_from(&group->local, &group->local_count, route);
-            oshd_route_del_from(&group->resolver, &group->resolver_count, route);
             group->total_count -= 1;
 
             if (logger_is_debugged(DBG_ROUTING)) {
@@ -190,7 +184,6 @@ void oshd_route_del_addr(oshd_route_group_t *group, const netaddr_t *addr)
 
     if (route) {
         oshd_route_del(group, route);
-        oshd_resolver_update();
     }
 }
 
@@ -199,18 +192,14 @@ void oshd_route_del_dest(oshd_route_group_t *group, node_id_t *dest_node)
 {
     oshd_route_t *route = group->head;
     oshd_route_t *next;
-    bool deleted = false;
 
     while (route) {
         next = route->next;
         if (route->dest_node == dest_node) {
-            if (oshd_route_del(group, route))
-                deleted = true;
+            oshd_route_del(group, route);
         }
         route = next;
     }
-    if (deleted)
-        oshd_resolver_update();
 }
 
 // Delete expired routes
@@ -241,8 +230,6 @@ bool oshd_route_del_expired(oshd_route_group_t *group)
 
         route = next;
     }
-    if (deleted)
-        oshd_resolver_update();
     return deleted;
 }
 
@@ -266,7 +253,6 @@ bool oshd_route_del_orphan(oshd_route_group_t *group)
 // Deletes all routes
 void oshd_route_clear(oshd_route_group_t *group)
 {
-    const size_t previous_total_count = group->total_count;
     oshd_route_t *next;
 
     while (group->head) {
@@ -284,14 +270,7 @@ void oshd_route_clear(oshd_route_group_t *group)
     group->local = NULL;
     group->local_count = 0;
 
-    free(group->resolver);
-    group->resolver = NULL;
-    group->resolver_count = 0;
-
     logger_debug(DBG_ROUTING, "Cleared all routes");
-
-    if (previous_total_count > 0)
-        oshd_resolver_update();
 }
 
 // Dump list to outfile
@@ -322,9 +301,6 @@ void oshd_route_dump_to(oshd_route_group_t *group, FILE *outfile)
 
     fprintf(outfile, "\nRemote routes (%zu):\n", group->remote_count);
     oshd_route_dump_list_to(group->remote, group->remote_count, outfile);
-
-    fprintf(outfile, "\nResolver routes (%zu):\n", group->resolver_count);
-    oshd_route_dump_list_to(group->resolver, group->resolver_count, outfile);
 
     fflush(outfile);
 }

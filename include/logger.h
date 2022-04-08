@@ -27,7 +27,6 @@ typedef enum debug_what {
     DBG_ENCRYPTION,
     DBG_HANDSHAKE,
     DBG_STATEEXG,
-    DBG_RESOLVER,
     DBG_ENDPOINTS,
     _last_debug_what_entry // must always be the last entry
 } debug_what_t;

@@ -169,7 +169,7 @@ void oshd_free(void)
         node_destroy(oshd.nodes[i]);
     free(oshd.nodes);
 
-    // Free all routes (local, remote and resolver)
+    // Free all routes (local and remote)
     oshd_route_group_free(oshd.routes);
 
     // We have to reset those in case the event queue tries to remove nodes
@@ -188,9 +188,6 @@ void oshd_free(void)
     free(oshd.node_tree);
     free(oshd.node_tree_ordered_hops);
 
-    free(oshd.resolver_tld);
-    free(oshd.resolver_file);
-
     for (size_t i = 0; i < oshd.excluded_devices_count; ++i)
         free(oshd.excluded_devices[i]);
     free(oshd.excluded_devices);
@@ -208,10 +205,6 @@ void oshd_free(void)
 void oshd_loop(void)
 {
     ssize_t events;
-
-    // Update the resolver with its initial state
-    oshd_resolver_check_tld();
-    oshd_resolver_update();
 
     // Discover network devices' addresses
     if (oshd.tuntap)

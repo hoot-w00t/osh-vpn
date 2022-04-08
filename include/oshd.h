@@ -5,7 +5,6 @@
 #include "node.h"
 #include "tuntap.h"
 #include "oshd_route.h"
-#include "oshd_resolver.h"
 #include "oshd_device_mode.h"
 #include "crypto/pkey.h"
 #include <stdbool.h>
@@ -84,11 +83,6 @@ typedef struct oshd {
     // Minimum and maximum reconnection delays (in seconds)
     time_t reconnect_delay_min;
     time_t reconnect_delay_max;
-
-    // Resolver parameters
-    resolver_type_t resolver;
-    char *resolver_tld;
-    char *resolver_file;
 
     // Path to a file to dump the digraph to
     char *digraph_file;

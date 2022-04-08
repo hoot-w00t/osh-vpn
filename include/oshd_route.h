@@ -36,9 +36,6 @@ struct oshd_route_group {
 
     oshd_route_t **local;
     size_t local_count;
-
-    oshd_route_t **resolver;
-    size_t resolver_count;
 };
 
 oshd_route_group_t *oshd_route_group_create(void);
@@ -55,10 +52,6 @@ oshd_route_t *oshd_route_find_in(oshd_route_t **list, size_t list_size,
 // Find addr in the local routes (MAC addresses in TAP mode, IPv4/6 in TUN)
 #define oshd_route_find_local(group, addr) \
     oshd_route_find_in((group)->local, (group)->local_count, addr)
-
-// Find addr in the resolver addresses
-#define oshd_route_find_resolver(group, addr) \
-    oshd_route_find_in((group)->resolver, (group)->resolver_count, addr)
 
 oshd_route_t *oshd_route_add(oshd_route_group_t *group, const netaddr_t *addr,
     node_id_t *dest_node, bool refresh);

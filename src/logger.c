@@ -18,7 +18,6 @@ static const char *debug_names[debug_what_size] = {
     "encryption",
     "handshake",
     "stateexg",
-    "resolver",
     "endpoints"
 };
 

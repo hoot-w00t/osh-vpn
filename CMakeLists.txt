@@ -105,7 +105,6 @@ set(OSHD_SOURCES
     src/oshd_device.c
     src/oshd_discovery.c
     src/oshd_process_packet.c
-    src/oshd_resolver.c
     src/oshd_route.c
     src/oshd_socket.c
     src/oshd.c

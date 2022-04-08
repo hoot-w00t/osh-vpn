@@ -355,41 +355,10 @@ static bool oshd_param_digraphfile(ecp_t *ecp)
     return true;
 }
 
-// Resolver
-static bool oshd_param_resolver(ecp_t *ecp)
+// Old resolver parameters
+static bool oshd_param_resolver_removed(__attribute__((unused)) ecp_t *ecp)
 {
-    if (!strcasecmp(ecp_value(ecp), "None")) {
-        oshd.resolver = RESOLVER_NONE;
-    } else if (!strcasecmp(ecp_value(ecp), "HostsDump")) {
-        oshd.resolver = RESOLVER_HOSTSDUMP;
-    } else if (!strcasecmp(ecp_value(ecp), "HostsDynamic")) {
-        oshd.resolver = RESOLVER_HOSTSDYNAMIC;
-    } else {
-        snprintf(oshd_conf_error, sizeof(oshd_conf_error),
-            "Invalid resolver: %s", ecp_value(ecp));
-        return false;
-    }
-
-    logger_debug(DBG_CONF, "Set Resolver to %s",
-        oshd_resolver_name(oshd.resolver));
-    return true;
-}
-
-// ResolverTLD
-static bool oshd_param_resolvertld(ecp_t *ecp)
-{
-    free(oshd.resolver_tld);
-    oshd.resolver_tld = xstrdup(ecp_value(ecp));
-    logger_debug(DBG_CONF, "Set ResolverTLD to '%s'", oshd.resolver_tld);
-    return true;
-}
-
-// ResolverFile
-static bool oshd_param_resolverfile(ecp_t *ecp)
-{
-    free(oshd.resolver_file);
-    oshd.resolver_file = xstrdup(ecp_value(ecp));
-    logger_debug(DBG_CONF, "Set ResolverFile to '%s'", oshd.resolver_file);
+    logger(LOG_WARN, "Ignoring '%s': this parameter was removed", ecp_name(ecp));
     return true;
 }
 
@@ -616,10 +585,10 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "ReconnectDelayMax", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymax },
     { .name = "ConnectionsLimit", .type = VALUE_REQUIRED, &oshd_param_connectionslimit },
     { .name = "DigraphFile", .type = VALUE_REQUIRED, &oshd_param_digraphfile },
-    { .name = "Resolver", .type = VALUE_REQUIRED, &oshd_param_resolver },
-    { .name = "ResolverTLD", .type = VALUE_REQUIRED, &oshd_param_resolvertld },
-    { .name = "ResolverFile", .type = VALUE_REQUIRED, &oshd_param_resolverfile },
-    { .name = "OnResolverUpdate", .type = VALUE_REQUIRED, &oshd_param_command },
+    { .name = "Resolver", .type = VALUE_OPTIONAL, &oshd_param_resolver_removed },
+    { .name = "ResolverTLD", .type = VALUE_OPTIONAL, &oshd_param_resolver_removed },
+    { .name = "ResolverFile", .type = VALUE_OPTIONAL, &oshd_param_resolver_removed },
+    { .name = "OnResolverUpdate", .type = VALUE_OPTIONAL, &oshd_param_resolver_removed },
     { .name = "LogLevel", .type = VALUE_REQUIRED, &oshd_param_loglevel },
     { .name = "Include", .type = VALUE_REQUIRED, &oshd_param_include },
     { .name = "PrivateKey", .type = VALUE_REQUIRED, &oshd_param_privatekey },
@@ -762,9 +731,6 @@ bool oshd_load_conf(const char *filename)
             oshd.reconnect_delay_max, oshd.reconnect_delay_min);
         return false;
     }
-
-    if (!oshd_resolver_check())
-        return false;
 
     // The configuration was loaded successfully
     return true;
