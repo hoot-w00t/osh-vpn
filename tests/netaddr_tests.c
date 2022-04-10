@@ -214,3 +214,104 @@ Test(netaddr_area, test_netaddr_area_ipv6_loopback)
     cr_assert_eq(netaddr_pton(&addr, "::1"), true);
     cr_assert_eq(netaddr_area(&addr), NETAREA_LAN);
 }
+
+Test(netaddr_mask_from_prefix, prefixlen_zero)
+{
+    const uint8_t zero[16] = {0};
+    netaddr_t masks[3];
+
+    cr_assert_eq(netaddr_mask_from_prefix(&masks[0], MAC, 0), true);
+    cr_assert_eq(netaddr_mask_from_prefix(&masks[1], IP4, 0), true);
+    cr_assert_eq(netaddr_mask_from_prefix(&masks[2], IP6, 0), true);
+    cr_assert_eq(masks[0].type, MAC);
+    cr_assert_eq(masks[1].type, IP4);
+    cr_assert_eq(masks[2].type, IP6);
+    cr_assert_eq(memcmp(&masks[0].data.mac, zero, sizeof(masks[0].data.mac)), 0);
+    cr_assert_eq(memcmp(&masks[1].data.ip4, zero, sizeof(masks[1].data.ip4)), 0);
+    cr_assert_eq(memcmp(&masks[2].data.ip6, zero, sizeof(masks[2].data.ip6)), 0);
+}
+
+Test(netaddr_mask_from_prefix, ipv4_masks_from_prefix)
+{
+    netaddr_t ref[32];
+    netaddr_t from;
+
+    netaddr_pton(&ref[0],  "128.0.0.0");
+    netaddr_pton(&ref[1],  "192.0.0.0");
+    netaddr_pton(&ref[2],  "224.0.0.0");
+    netaddr_pton(&ref[3],  "240.0.0.0");
+    netaddr_pton(&ref[4],  "248.0.0.0");
+    netaddr_pton(&ref[5],  "252.0.0.0");
+    netaddr_pton(&ref[6],  "254.0.0.0");
+    netaddr_pton(&ref[7],  "255.0.0.0");
+    netaddr_pton(&ref[8],  "255.128.0.0");
+    netaddr_pton(&ref[9],  "255.192.0.0");
+    netaddr_pton(&ref[10], "255.224.0.0");
+    netaddr_pton(&ref[11], "255.240.0.0");
+    netaddr_pton(&ref[12], "255.248.0.0");
+    netaddr_pton(&ref[13], "255.252.0.0");
+    netaddr_pton(&ref[14], "255.254.0.0");
+    netaddr_pton(&ref[15], "255.255.0.0");
+    netaddr_pton(&ref[16], "255.255.128.0");
+    netaddr_pton(&ref[17], "255.255.192.0");
+    netaddr_pton(&ref[18], "255.255.224.0");
+    netaddr_pton(&ref[19], "255.255.240.0");
+    netaddr_pton(&ref[20], "255.255.248.0");
+    netaddr_pton(&ref[21], "255.255.252.0");
+    netaddr_pton(&ref[22], "255.255.254.0");
+    netaddr_pton(&ref[23], "255.255.255.0");
+    netaddr_pton(&ref[24], "255.255.255.128");
+    netaddr_pton(&ref[25], "255.255.255.192");
+    netaddr_pton(&ref[26], "255.255.255.224");
+    netaddr_pton(&ref[27], "255.255.255.240");
+    netaddr_pton(&ref[28], "255.255.255.248");
+    netaddr_pton(&ref[29], "255.255.255.252");
+    netaddr_pton(&ref[30], "255.255.255.254");
+    netaddr_pton(&ref[31], "255.255.255.255");
+    for (netaddr_prefixlen_t i = 0; i < 32; ++i) {
+        netaddr_mask_from_prefix(&from, IP4, i + 1);
+        cr_assert_eq(netaddr_eq(&from, &ref[i]), true);
+    }
+}
+
+Test(netaddr_mask, mask_mac)
+{
+    netaddr_t mac, mask1, mask2, tmp;
+
+    netaddr_pton(&mac,   "ff:ff:ff:ff:ff:ff");
+    netaddr_pton(&mask1, "aa:aa:aa:aa:aa:aa");
+    netaddr_pton(&mask2, "55:55:55:55:55:55");
+
+    netaddr_mask(&tmp, &mac, &mask1);
+    cr_assert_eq(netaddr_eq(&tmp, &mask1), true);
+    netaddr_mask(&tmp, &mac, &mask2);
+    cr_assert_eq(netaddr_eq(&tmp, &mask2), true);
+}
+
+Test(netaddr_mask, mask_ipv4)
+{
+    netaddr_t ip4, mask1, mask2, tmp;
+
+    netaddr_pton(&ip4,   "255.255.255.255");
+    netaddr_pton(&mask1, "170.170.170.170");
+    netaddr_pton(&mask2, "85.85.85.85");
+
+    netaddr_mask(&tmp, &ip4, &mask1);
+    cr_assert_eq(netaddr_eq(&tmp, &mask1), true);
+    netaddr_mask(&tmp, &ip4, &mask2);
+    cr_assert_eq(netaddr_eq(&tmp, &mask2), true);
+}
+
+Test(netaddr_mask, mask_ipv6)
+{
+    netaddr_t ip6, mask1, mask2, tmp;
+
+    netaddr_pton(&ip6,   "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff");
+    netaddr_pton(&mask1, "aaaa:aaaa:aaaa:aaaa:aaaa:aaaa:aaaa:aaaa");
+    netaddr_pton(&mask2, "5555:5555:5555:5555:5555:5555:5555:5555");
+
+    netaddr_mask(&tmp, &ip6, &mask1);
+    cr_assert_eq(netaddr_eq(&tmp, &mask1), true);
+    netaddr_mask(&tmp, &ip6, &mask2);
+    cr_assert_eq(netaddr_eq(&tmp, &mask2), true);
+}

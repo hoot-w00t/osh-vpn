@@ -29,7 +29,7 @@ typedef struct netaddr {
     netaddr_data_t data; // Address data
 } netaddr_t;
 
-typedef uint8_t cidr_t;
+typedef uint8_t netaddr_prefixlen_t;
 
 // Mask IPv4 netaddr_t with mask and compare it with net
 // The mask and network must be in host byte order
@@ -50,5 +50,9 @@ bool netaddr_eq(const netaddr_t *s1, const netaddr_t *s2);
 bool netaddr_is_zero(const netaddr_t *addr);
 bool netaddr_is_loopback(const netaddr_t *addr);
 netarea_t netaddr_area(const netaddr_t *addr);
+
+void netaddr_mask(netaddr_t *dest, const netaddr_t *addr, const netaddr_t *mask);
+bool netaddr_mask_from_prefix(netaddr_t *mask, netaddr_type_t type,
+    netaddr_prefixlen_t prefixlen);
 
 #endif

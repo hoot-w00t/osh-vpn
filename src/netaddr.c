@@ -248,3 +248,78 @@ netarea_t netaddr_area(const netaddr_t *addr)
         default: return NETAREA_UNK;
     }
 }
+
+// Mask addr with mask into dest
+// This function assumes that both addr and mask have the same type, it will not
+// be checked
+void netaddr_mask(netaddr_t *dest, const netaddr_t *addr, const netaddr_t *mask)
+{
+    dest->type = addr->type;
+    switch (addr->type) {
+    case MAC:
+        *((uint32_t *) &dest->data.mac.addr[0]) =   *((const uint32_t *) &addr->data.mac.addr[0])
+                                                  & *((const uint32_t *) &mask->data.mac.addr[0]);
+
+        *((uint16_t *) &dest->data.mac.addr[4]) =   *((const uint16_t *) &addr->data.mac.addr[4])
+                                                  & *((const uint16_t *) &mask->data.mac.addr[4]);
+        break;
+
+    case IP4:
+        dest->data.ip4.s_addr = addr->data.ip4.s_addr & mask->data.ip4.s_addr;
+        break;
+
+    case IP6:
+        ((uint64_t *) &dest->data.ip6)[0] =   ((const uint64_t *) &addr->data.ip6)[0]
+                                            & ((const uint64_t *) &mask->data.ip6)[0];
+
+        ((uint64_t *) &dest->data.ip6)[1] =   ((const uint64_t *) &addr->data.ip6)[1]
+                                            & ((const uint64_t *) &mask->data.ip6)[1];
+        break;
+
+    default: break;
+    }
+}
+
+static const netaddr_prefixlen_t mask_table[8] = {
+    0b10000000,
+    0b11000000,
+    0b11100000,
+    0b11110000,
+    0b11111000,
+    0b11111100,
+    0b11111110,
+    0b11111111
+};
+
+// Create a network mask from prefixlen
+bool netaddr_mask_from_prefix(netaddr_t *mask, netaddr_type_t type,
+    netaddr_prefixlen_t prefixlen)
+{
+    switch (type) {
+        case MAC:
+            memset(&mask->data.mac, 0, sizeof(mask->data.mac));
+            if (prefixlen > 48)
+                prefixlen = 48;
+            break;
+
+        case IP4:
+            memset(&mask->data.ip4, 0, sizeof(mask->data.ip4));
+            if (prefixlen > 32)
+                prefixlen = 32;
+            break;
+
+        case IP6:
+            memset(&mask->data.ip6, 0, sizeof(mask->data.ip6));
+            if (prefixlen > 128)
+                prefixlen = 128;
+            break;
+
+        default: return false;
+    }
+
+    mask->type = type;
+    for (netaddr_prefixlen_t i = 0; i < prefixlen; ++i)
+        ((uint8_t *) &mask->data)[i / 8] |= mask_table[i % 8];
+
+    return true;
+}
