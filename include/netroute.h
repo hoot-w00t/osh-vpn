@@ -70,6 +70,8 @@ void netroute_table_clear(netroute_table_t *table);
 
 netroute_t *netroute_find(netroute_table_t *table, const netaddr_t *addr);
 
+netroute_mask_t *netroute_add_mask(netroute_table_t *table,
+    const netaddr_t *mask, netaddr_prefixlen_t prefixlen);
 netroute_t *netroute_add(netroute_table_t *table, const netaddr_t *addr,
     node_id_t *owner, bool refresh);
 

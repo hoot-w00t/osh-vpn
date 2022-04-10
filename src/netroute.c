@@ -123,6 +123,42 @@ netroute_t *netroute_find(netroute_table_t *table, const netaddr_t *addr)
     return netroute_find_head(table->heads[hash], addr);
 }
 
+// Add a network mask to the table
+netroute_mask_t *netroute_add_mask(netroute_table_t *table,
+    const netaddr_t *mask, netaddr_prefixlen_t prefixlen)
+{
+    netroute_mask_t **it;
+
+    // Select the correct mask list
+    switch (mask->type) {
+        case MAC: it = &table->masks_mac; break;
+        case IP4: it = &table->masks_ip4; break;
+        case IP6: it = &table->masks_ip6; break;
+         default: return NULL;
+    }
+
+    // Sort the masks from highest prefix length to smallest
+    while (*it) {
+        if (   prefixlen > (*it)->prefixlen
+            || netaddr_eq(mask, &(*it)->mask))
+        {
+            break;
+        }
+        it = &(*it)->next;
+    }
+
+    // If the iterator is NULL the mask doesn't exist, we create and insert it
+    if (*it == NULL) {
+        netroute_mask_t *rmask = netroute_mask_create(mask, prefixlen);
+
+        rmask->next = *it;
+        *it = rmask;
+    }
+
+    return *it;
+}
+
+// Insert a new netroute in the table
 static netroute_t *netroute_insert(netroute_table_t *table,
     const netaddr_t *addr, const netroute_hash_t addr_hash, node_id_t *owner)
 {
