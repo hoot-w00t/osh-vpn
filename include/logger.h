@@ -28,6 +28,7 @@ typedef enum debug_what {
     DBG_HANDSHAKE,
     DBG_STATEEXG,
     DBG_ENDPOINTS,
+    DBG_NETROUTE,
     _last_debug_what_entry // must always be the last entry
 } debug_what_t;
 #define debug_what_size (_last_debug_what_entry)

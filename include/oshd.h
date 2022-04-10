@@ -4,7 +4,7 @@
 #include "aio.h"
 #include "node.h"
 #include "tuntap.h"
-#include "oshd_route.h"
+#include "netroute.h"
 #include "oshd_device_mode.h"
 #include "crypto/pkey.h"
 #include <stdbool.h>
@@ -72,8 +72,11 @@ typedef struct oshd {
     // Node ID tree sorted by hops_count (highest to lowest)
     node_id_t **node_tree_ordered_hops;
 
-    // Array of all network routes
-    oshd_route_group_t *routes;
+    // Routing tables
+    // The local routing table contains the routes which we own
+    // The remote routing table contain all the other routes owned by other nodes
+    netroute_table_t *local_routes;
+    netroute_table_t *remote_routes;
 
     // Array of network device names/IDs which should be excluded from the
     // endpoint discovery

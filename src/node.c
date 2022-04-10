@@ -358,7 +358,11 @@ static void node_tree_dump_digraph_to(FILE *out)
     }
 
     // We define and label all routes
-    foreach_oshd_route(route, oshd.routes) {
+    foreach_netroute(route, oshd.local_routes, i) {
+        netaddr_ntop(addr, sizeof(addr), &route->addr);
+        fprintf(out, "    \"%s\" [label=\"%s\", color=grey, style=solid];\n", addr, addr);
+    }
+    foreach_netroute(route, oshd.remote_routes, i) {
         netaddr_ntop(addr, sizeof(addr), &route->addr);
         fprintf(out, "    \"%s\" [label=\"%s\", color=grey, style=solid];\n", addr, addr);
     }
@@ -376,9 +380,14 @@ static void node_tree_dump_digraph_to(FILE *out)
     }
 
     // We connect all nodes to their routes
-    foreach_oshd_route(route, oshd.routes) {
+    foreach_netroute(route, oshd.local_routes, i) {
         netaddr_ntop(addr, sizeof(addr), &route->addr);
-        fprintf(out, "    \"%s\" -> \"%s\";\n", route->dest_node->name, addr);
+        fprintf(out, "    \"%s\" -> \"%s\";\n", netroute_owner_name(route), addr);
+    }
+
+    foreach_netroute(route, oshd.remote_routes, i) {
+        netaddr_ntop(addr, sizeof(addr), &route->addr);
+        fprintf(out, "    \"%s\" -> \"%s\";\n", netroute_owner_name(route), addr);
     }
 
     fprintf(out, "}\n");
@@ -526,6 +535,22 @@ static void node_tree_update_next_hops(void)
     }
 }
 
+// Deletes all routes owned by orphan nodes from the routing table
+// Returns true if routes were deleted, false otherwise
+static bool netroute_del_orphan(netroute_table_t *table)
+{
+    bool deleted = false;
+
+    for (size_t i = 1; i < oshd.node_tree_count; ++i) {
+        if (!oshd.node_tree[i]->next_hop) {
+            netroute_del_owner(table, oshd.node_tree[i]);
+            deleted = true;
+        }
+    }
+
+    return deleted;
+}
+
 void node_tree_update(void)
 {
     logger_debug(DBG_NODETREE, "Node tree updated");
@@ -542,9 +567,11 @@ void node_tree_update(void)
     node_tree_calc_hops_count();
 
     // We also need to delete all routes to orphan nodes
-    if (oshd_route_del_orphan(oshd.routes)) {
-        if (logger_is_debugged(DBG_ROUTING))
-            oshd_route_dump(oshd.routes);
+    if (netroute_del_orphan(oshd.remote_routes)) {
+        if (logger_is_debugged(DBG_ROUTING)) {
+            printf("Remote routes (%zu):\n", oshd.remote_routes->total_routes);
+            netroute_dump(oshd.remote_routes);
+        }
     }
 
     if (logger_is_debugged(DBG_NODETREE))
@@ -1499,24 +1526,43 @@ bool node_queue_route_add_local(node_t *exclude, const netaddr_t *addrs,
 // Queue ROUTE_ADD request with all our known routes
 bool node_queue_route_exg(node_t *node)
 {
-    if (oshd.routes->total_count == 0)
+    const size_t total_count = oshd.local_routes->total_owned_routes + oshd.remote_routes->total_owned_routes;
+
+    if (total_count == 0)
         return true;
 
-    size_t buf_size = sizeof(oshpacket_route_t) * oshd.routes->total_count;
+    size_t buf_size = sizeof(oshpacket_route_t) * total_count;
     oshpacket_route_t *buf = xalloc(buf_size);
 
     // Format all routes' addresses into buf
     size_t i = 0;
 
-    foreach_oshd_route(route, oshd.routes) {
-        memcpy(buf[i].node_name, route->dest_node->name, NODE_NAME_SIZE);
-        buf[i].addr_type = route->addr.type;
-        netaddr_cpy_data(&buf[i].addr_data, &route->addr);
-        ++i;
+    foreach_netroute(route, oshd.local_routes, route_iter) {
+        if (route->owner) {
+            memcpy(buf[i].node_name, route->owner->name, NODE_NAME_SIZE);
+            buf[i].addr_type = route->addr.type;
+            netaddr_cpy_data(&buf[i].addr_data, &route->addr);
+            ++i;
+        }
+    }
+    foreach_netroute(route, oshd.remote_routes, route_iter) {
+        if (route->owner) {
+            memcpy(buf[i].node_name, route->owner->name, NODE_NAME_SIZE);
+            buf[i].addr_type = route->addr.type;
+            netaddr_cpy_data(&buf[i].addr_data, &route->addr);
+            ++i;
+        }
     }
 
-    bool success = node_queue_packet_fragmented(node, ROUTE_ADD, buf, buf_size,
-        sizeof(oshpacket_route_t), false);
+    bool success = false;
+
+    if (i == total_count) {
+        success = node_queue_packet_fragmented(node, ROUTE_ADD, buf, buf_size,
+            sizeof(oshpacket_route_t), false);
+    } else {
+        logger(LOG_CRIT, "%s: %s: Route exchange copied %zu routes but expected %zu (this should never happen)",
+            node->addrw, node->id->name, i, total_count);
+    }
 
     // We need to free the memory before returning
     free(buf);

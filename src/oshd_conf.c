@@ -619,7 +619,8 @@ void oshd_init_conf(void)
     oshd.automatic_connections_interval = 3600; // 1 hour (60m, 3600s)
     oshd.automatic_connections_percent = 50;
 
-    oshd.routes = oshd_route_group_create();
+    oshd.local_routes = netroute_table_create(4096);
+    oshd.remote_routes = netroute_table_create(4096);
 
     oshd.run = true;
 }

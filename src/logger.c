@@ -18,7 +18,8 @@ static const char *debug_names[debug_what_size] = {
     "encryption",
     "handshake",
     "stateexg",
-    "endpoints"
+    "endpoints",
+    "netroute"
 };
 
 static loglevel_t logger_level = LOG_INFO;

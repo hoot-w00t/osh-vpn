@@ -58,12 +58,12 @@ void oshd_discover_local_routes(void)
             && (   (oshd.tuntap->dev_name && !strcmp(ifa->ifa_name, oshd.tuntap->dev_name))
                 || (oshd.tuntap->dev_id   && !strcmp(ifa->ifa_name, oshd.tuntap->dev_id))))
         {
-            if (!oshd_route_find(oshd.routes, &addr)) {
-                oshd_route_t *route;
+            if (!netroute_find(oshd.local_routes, &addr)) {
+                netroute_t *route;
 
                 logger_debug(DBG_ROUTING, "Discovered local route %s (%s)",
                     addrw, oshd.tuntap->dev_name);
-                route = oshd_route_add(oshd.routes, &addr, node_id_find_local(), true);
+                route = netroute_add(oshd.local_routes, &addr, node_id_find_local(), true);
                 node_queue_route_add_local(NULL, &route->addr, 1);
             }
         }

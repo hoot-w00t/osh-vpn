@@ -84,7 +84,8 @@ set(OSHD_SOURCES
     src/events/automatic_connections.c
     src/events/connect.c
     src/events/expire_endpoints.c
-    src/events/expire_routes_refresh.c
+    src/events/expire_local_routes.c
+    src/events/expire_remote_routes.c
     src/events/handshake_renew.c
     src/events/handshake_timeout.c
     src/events/node_auth_timeout.c
@@ -95,9 +96,11 @@ set(OSHD_SOURCES
     src/events.c
     src/logger.c
     src/main.c
+    src/murmurhash.c
     src/netaddr.c
     src/netbuffer.c
     src/netpacket.c
+    src/netroute.c
     src/node.c
     src/oshd_clock.c
     src/oshd_cmd.c
@@ -105,7 +108,6 @@ set(OSHD_SOURCES
     src/oshd_device.c
     src/oshd_discovery.c
     src/oshd_process_packet.c
-    src/oshd_route.c
     src/oshd_socket.c
     src/oshd.c
     src/oshpacket.c
@@ -118,13 +120,17 @@ set(OSHD_SOURCES
 set(OSHD_TESTS_SOURCES
     src/base64.c
     src/logger.c
-    src/xalloc.c
+    src/murmurhash.c
     src/netaddr.c
     src/netbuffer.c
+    src/netroute.c
+    src/oshd_clock.c
     src/random.c
+    src/xalloc.c
     tests/base64_tests.c
     tests/netaddr_tests.c
     tests/netbuffer_tests.c
+    tests/netroute_tests.c
     tests/random_tests.c)
 
 # Osh daemon

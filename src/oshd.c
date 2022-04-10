@@ -4,7 +4,6 @@
 #include "oshd_device.h"
 #include "oshd_discovery.h"
 #include "oshd_socket.h"
-#include "oshd_route.h"
 #include "oshd.h"
 
 #include "events.h"
@@ -169,8 +168,9 @@ void oshd_free(void)
         node_destroy(oshd.nodes[i]);
     free(oshd.nodes);
 
-    // Free all routes (local and remote)
-    oshd_route_group_free(oshd.routes);
+    // Free routing tables
+    netroute_table_free(oshd.local_routes);
+    netroute_table_free(oshd.remote_routes);
 
     // We have to reset those in case the event queue tries to remove nodes
     // This is to safely cancel these events
@@ -220,7 +220,8 @@ void oshd_loop(void)
     // Osh actually starts
     event_queue_periodic_ping();
     event_queue_expire_endpoints();
-    event_queue_expire_routes_refresh();
+    event_queue_expire_local_routes();
+    event_queue_expire_remote_routes();
     if (oshd.automatic_connections)
         event_queue_automatic_connections();
 
