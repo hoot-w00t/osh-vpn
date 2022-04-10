@@ -222,9 +222,11 @@ bool netroute_del_expired(netroute_table_t *table, const time_t expire_secs,
             next = route->next;
 
             timespecsub(&now, &route->last_refresh, &delta);
-            if (delta.tv_sec >= expire_secs && route->owner != NULL) {
-                netroute_del(table, route);
-                deleted = true;
+            if (delta.tv_sec >= expire_secs) {
+                if (route->owner) {
+                    netroute_del(table, route);
+                    deleted = true;
+                }
             } else {
                 if ((expire_secs - delta.tv_sec) < *next_expire)
                     *next_expire = (expire_secs - delta.tv_sec) + 1;
@@ -234,9 +236,7 @@ bool netroute_del_expired(netroute_table_t *table, const time_t expire_secs,
         }
     }
 
-    if (*next_expire < 0)
-        *next_expire = 0;
-    if (*next_expire > expire_secs)
+    if (*next_expire <= 0 || *next_expire > expire_secs)
         *next_expire = expire_secs;
 
     return deleted;
