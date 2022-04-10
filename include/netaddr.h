@@ -31,6 +31,17 @@ typedef struct netaddr {
 
 typedef uint8_t netaddr_prefixlen_t;
 
+// Returns the maximum prefix length for this address type
+static inline netaddr_prefixlen_t netaddr_max_prefixlen(const netaddr_type_t type)
+{
+    switch (type) {
+        case MAC: return  48;
+        case IP4: return  32;
+        case IP6: return 128;
+         default: return   0;
+    }
+}
+
 // Mask IPv4 netaddr_t with mask and compare it with net
 // The mask and network must be in host byte order
 #define NETADDR_IP4_NET(addr, mask, net) \

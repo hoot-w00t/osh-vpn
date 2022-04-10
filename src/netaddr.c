@@ -296,26 +296,14 @@ bool netaddr_mask_from_prefix(netaddr_t *mask, netaddr_type_t type,
     netaddr_prefixlen_t prefixlen)
 {
     switch (type) {
-        case MAC:
-            memset(&mask->data.mac, 0, sizeof(mask->data.mac));
-            if (prefixlen > 48)
-                prefixlen = 48;
-            break;
-
-        case IP4:
-            memset(&mask->data.ip4, 0, sizeof(mask->data.ip4));
-            if (prefixlen > 32)
-                prefixlen = 32;
-            break;
-
-        case IP6:
-            memset(&mask->data.ip6, 0, sizeof(mask->data.ip6));
-            if (prefixlen > 128)
-                prefixlen = 128;
-            break;
-
-        default: return false;
+        case MAC: memset(&mask->data.mac, 0, sizeof(mask->data.mac)); break;
+        case IP4: memset(&mask->data.ip4, 0, sizeof(mask->data.ip4)); break;
+        case IP6: memset(&mask->data.ip6, 0, sizeof(mask->data.ip6)); break;
+         default: return false;
     }
+
+    if (prefixlen > netaddr_max_prefixlen(type))
+        prefixlen = netaddr_max_prefixlen(type);
 
     mask->type = type;
     for (netaddr_prefixlen_t i = 0; i < prefixlen; ++i)
