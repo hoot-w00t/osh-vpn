@@ -36,6 +36,36 @@ static void netroute_free_all(netroute_t *head)
     }
 }
 
+// Create a new netroute_mask_t
+static netroute_mask_t *netroute_mask_create(const netaddr_t *mask,
+    netaddr_prefixlen_t prefixlen)
+{
+    netroute_mask_t *rmask = xzalloc(sizeof(netroute_mask_t));
+
+    netaddr_cpy(&rmask->mask, mask);
+    rmask->prefixlen = prefixlen;
+    return rmask;
+}
+
+// Free netroute_mask_t
+static void netroute_mask_free(netroute_mask_t *rmask)
+{
+    free(rmask);
+}
+
+// Free all the linked netroute_mask_t
+static void netroute_mask_free_all(netroute_mask_t *head)
+{
+    netroute_mask_t *rmask = head;
+    netroute_mask_t *next;
+
+    while (rmask) {
+        next = rmask->next;
+        netroute_mask_free(rmask);
+        rmask = next;
+    }
+}
+
 // Allocate an empty route table
 netroute_table_t *netroute_table_create(size_t hash_table_size)
 {
@@ -54,6 +84,9 @@ void netroute_table_free(netroute_table_t *table)
 {
     if (table) {
         netroute_table_clear(table);
+        netroute_mask_free_all(table->masks_mac);
+        netroute_mask_free_all(table->masks_ip4);
+        netroute_mask_free_all(table->masks_ip6);
         free(table->heads);
         free(table);
     }

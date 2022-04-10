@@ -14,6 +14,7 @@
 #define ROUTE_REMOTE_EXPIRY (ROUTE_LOCAL_EXPIRY * 2)
 
 typedef struct netroute netroute_t;
+typedef struct netroute_mask netroute_mask_t;
 typedef struct netroute_table netroute_table_t;
 typedef uint32_t netroute_hash_t;
 
@@ -32,6 +33,18 @@ struct netroute {
     netroute_t *next;
 };
 
+struct netroute_mask {
+    // Network mask
+    netaddr_t mask;
+    netaddr_prefixlen_t prefixlen;
+
+    // Number of routes using this mask
+    size_t use_count;
+
+    // Next item in the linked list
+    netroute_mask_t *next;
+};
+
 struct netroute_table {
     // Array of all routes
     netroute_t **heads;
@@ -44,6 +57,11 @@ struct netroute_table {
 
     // Total number of routes wuth an owner in the table
     size_t total_owned_routes;
+
+    // Masks used in the table
+    netroute_mask_t *masks_mac;
+    netroute_mask_t *masks_ip4;
+    netroute_mask_t *masks_ip6;
 };
 
 netroute_table_t *netroute_table_create(size_t hash_table_size);
