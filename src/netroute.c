@@ -23,6 +23,19 @@ static void netroute_free(netroute_t *route)
     free(route);
 }
 
+// Free all the linked netroute_t
+static void netroute_free_all(netroute_t *head)
+{
+    netroute_t *route = head;
+    netroute_t *next;
+
+    while (route) {
+        next = route->next;
+        netroute_free(route);
+        route = next;
+    }
+}
+
 // Allocate an empty route table
 netroute_table_t *netroute_table_create(size_t hash_table_size)
 {
@@ -49,14 +62,9 @@ void netroute_table_free(netroute_table_t *table)
 // Delete all routes from the table
 void netroute_table_clear(netroute_table_t *table)
 {
-    netroute_t *next;
-
     for (size_t i = 0; i < table->heads_count; ++i) {
-        while (table->heads[i]) {
-            next = table->heads[i]->next;
-            netroute_free(table->heads[i]);
-            table->heads[i] = next;
-        }
+        netroute_free_all(table->heads[i]);
+        table->heads[i] = NULL;
     }
     table->total_routes = 0;
     table->total_owned_routes = 0;
