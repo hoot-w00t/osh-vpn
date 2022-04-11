@@ -575,6 +575,7 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
     char addr_str[INET6_ADDRSTRLEN];
     netaddr_t addr;
     node_id_t *id;
+    const netroute_t *route;
 
     if (    pkt->payload_size < sizeof(oshpacket_route_t)
         || (pkt->payload_size % sizeof(oshpacket_route_t)) != 0)
@@ -635,6 +636,15 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
                 logger(LOG_WARN, "%s: %s: Add route: %s -> %s: No route",
                     node->addrw, node->id->name, addr_str, node_name);
             }
+            continue;
+        }
+
+        // Prevent adding broadcast routes
+        route = netroute_lookup(oshd.remote_routes, &addr);
+        if (route && !route->owner) {
+            netaddr_ntop(addr_str, sizeof(addr_str), &addr);
+            logger(LOG_WARN, "%s: %s: Ignoring broadcast route: %s -> %s",
+                node->addrw, node->id->name, addr_str, id->name);
             continue;
         }
 
