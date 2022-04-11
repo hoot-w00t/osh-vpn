@@ -131,9 +131,10 @@ typedef struct __attribute__((__packed__)) oshpacket_edge {
 } oshpacket_edge_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_route {
-    char node_name[NODE_NAME_SIZE];
-    netaddr_type_t addr_type : 8;
-    netaddr_data_t addr_data;
+    char owner_name[NODE_NAME_SIZE];
+    netaddr_type_t type : 8;
+    netaddr_prefixlen_t prefixlen : 8;
+    netaddr_data_t addr;
 } oshpacket_route_t;
 
 // Size of the public part of the header

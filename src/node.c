@@ -1513,9 +1513,10 @@ bool node_queue_route_add_local(node_t *exclude, const netaddr_t *addrs,
 
     // Format the addresses's type and data into buf
     for (size_t i = 0; i < count; ++i) {
-        memcpy(buf[i].node_name, oshd.name, NODE_NAME_SIZE);
-        buf[i].addr_type = addrs[i].type;
-        netaddr_cpy_data(&buf[i].addr_data, &addrs[i]);
+        memcpy(buf[i].owner_name, oshd.name, NODE_NAME_SIZE);
+        buf[i].type = addrs[i].type;
+        buf[i].prefixlen = netaddr_max_prefixlen(addrs[i].type);
+        netaddr_cpy_data(&buf[i].addr, &addrs[i]);
     }
 
     bool success = node_queue_packet_fragmented(exclude, ROUTE_ADD, buf, buf_size,
@@ -1542,17 +1543,19 @@ bool node_queue_route_exg(node_t *node)
 
     foreach_netroute_const(route, oshd.local_routes, route_iter) {
         if (route->owner) {
-            memcpy(buf[i].node_name, route->owner->name, NODE_NAME_SIZE);
-            buf[i].addr_type = route->addr.type;
-            netaddr_cpy_data(&buf[i].addr_data, &route->addr);
+            memcpy(buf[i].owner_name, route->owner->name, NODE_NAME_SIZE);
+            buf[i].type = route->addr.type;
+            buf[i].prefixlen = route->prefixlen;
+            netaddr_cpy_data(&buf[i].addr, &route->addr);
             ++i;
         }
     }
     foreach_netroute_const(route, oshd.remote_routes, route_iter) {
         if (route->owner) {
-            memcpy(buf[i].node_name, route->owner->name, NODE_NAME_SIZE);
-            buf[i].addr_type = route->addr.type;
-            netaddr_cpy_data(&buf[i].addr_data, &route->addr);
+            memcpy(buf[i].owner_name, route->owner->name, NODE_NAME_SIZE);
+            buf[i].type = route->addr.type;
+            buf[i].prefixlen = route->prefixlen;
+            netaddr_cpy_data(&buf[i].addr, &route->addr);
             ++i;
         }
     }

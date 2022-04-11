@@ -598,8 +598,8 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
     for (size_t i = 0; i < entries; ++i) {
         // Extract and verify the network address
         if (!netaddr_dton(&addr,
-                           payload[i].addr_type,
-                          &payload[i].addr_data))
+                           payload[i].type,
+                          &payload[i].addr))
         {
             logger(LOG_ERR, "%s: %s: Add route: Invalid address type",
                 node->addrw, node->id->name);
@@ -607,7 +607,7 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
         }
 
         // Extract and verify the node's name
-        memcpy(node_name, payload[i].node_name, NODE_NAME_SIZE);
+        memcpy(node_name, payload[i].owner_name, NODE_NAME_SIZE);
         if (!node_valid_name(node_name)) {
             logger(LOG_ERR, "%s: %s: Add route: Invalid name",
                 node->addrw, node->id->name);
@@ -645,7 +645,7 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
                 node->id->name, addr_str, id->name);
         }
 
-        netroute_add(oshd.remote_routes, &addr, netaddr_max_prefixlen(addr.type), id, true);
+        netroute_add(oshd.remote_routes, &addr, payload[i].prefixlen, id, true);
     }
 
     if (logger_is_debugged(DBG_ROUTING)) {
