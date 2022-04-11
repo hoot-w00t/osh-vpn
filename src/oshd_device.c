@@ -77,14 +77,16 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
         node_queue_route_add_local(NULL, &pkt_hdr.src, 1);
     }
 
-    if ((route = netroute_lookup(oshd.remote_routes, &pkt_hdr.dest))) {
-        // We have a route for this network destination
-        if (route->owner) {
-            node_queue_packet(route->owner->next_hop, route->owner->name,
-                DATA, pkt, (uint16_t) pkt_size);
-        }
+    route = netroute_lookup(oshd.remote_routes, &pkt_hdr.dest);
+    if (!route)
+        return;
+
+    if (route->owner) {
+        // We have a node to send this packet to
+        node_queue_packet(route->owner->next_hop, route->owner->name, DATA,
+            pkt, (uint16_t) pkt_size);
     } else {
-        // We don't have a route for this network destination so we broadcast it
+        // This route is a broadcast
         node_queue_packet_broadcast(NULL, DATA, pkt, (uint16_t) pkt_size);
     }
 
@@ -95,12 +97,10 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
         netaddr_ntop(pkt_src, sizeof(pkt_src), &pkt_hdr.src);
         netaddr_ntop(pkt_dest, sizeof(pkt_dest), &pkt_hdr.dest);
 
-        if (route) {
-            if (route->owner) {
-                logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zu bytes, to %s)",
-                    oshd.tuntap->dev_name, oshd.name, pkt_src, pkt_dest, pkt_size,
-                    route->owner->name);
-            }
+        if (route->owner) {
+            logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zu bytes, to %s)",
+                oshd.tuntap->dev_name, oshd.name, pkt_src, pkt_dest, pkt_size,
+                route->owner->name);
         } else {
             logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zu bytes, broadcast)",
                 oshd.tuntap->dev_name, oshd.name, pkt_src, pkt_dest, pkt_size);

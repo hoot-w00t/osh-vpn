@@ -116,7 +116,7 @@ static inline netroute_hash_t netroute_hash(
 
 static inline const char *netroute_owner_name(const netroute_t *route)
 {
-    return route->owner ? route->owner->name : "(unknown)";
+    return route->owner ? route->owner->name : "(broadcast)";
 }
 
 #endif
