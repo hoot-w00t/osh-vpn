@@ -180,7 +180,12 @@ const netroute_t *netroute_lookup(netroute_table_t *table, const netaddr_t *addr
 static netroute_mask_t *netroute_add_mask(netroute_table_t *table,
     const netaddr_t *mask, netaddr_prefixlen_t prefixlen)
 {
+    netroute_mask_t *rmask = netroute_mask_find(table, mask, prefixlen);
     netroute_mask_t **it;
+
+    // Stop here if the mask is already in the list
+    if (rmask)
+        return rmask;
 
     // Select the correct mask list
     switch (mask->type) {
@@ -196,28 +201,24 @@ static netroute_mask_t *netroute_add_mask(netroute_table_t *table,
 
     // Sort the masks from highest prefix length to smallest
     while (*it) {
-        if (   prefixlen > (*it)->prefixlen
-            || netaddr_eq(mask, &(*it)->mask))
-        {
+        // If the prefix length is bigger, insert it here
+        if (prefixlen > (*it)->prefixlen)
             break;
-        }
+
         it = &(*it)->next;
     }
 
-    // If the iterator is NULL the mask doesn't exist, we create and insert it
-    if (*it == NULL) {
-        netroute_mask_t *rmask = netroute_mask_create(mask, prefixlen);
+    // Create and insert this new mask in the list
+    rmask = netroute_mask_create(mask, prefixlen);
+    rmask->next = *it;
+    *it = rmask;
 
-        rmask->next = *it;
-        *it = rmask;
+    if (logger_is_debugged(DBG_NETROUTE)) {
+        char addrw[INET6_ADDRSTRLEN];
 
-        if (logger_is_debugged(DBG_NETROUTE)) {
-            char addrw[INET6_ADDRSTRLEN];
-
-            netaddr_ntop(addrw, sizeof(addrw), &rmask->mask);
-            logger_debug(DBG_NETROUTE, "Added mask %s/%u to %p",
-                addrw, rmask->prefixlen, table);
-        }
+        netaddr_ntop(addrw, sizeof(addrw), &rmask->mask);
+        logger_debug(DBG_NETROUTE, "Added mask %s/%u to %p",
+            addrw, rmask->prefixlen, table);
     }
 
     return *it;
