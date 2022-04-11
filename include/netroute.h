@@ -8,10 +8,10 @@
 
 // Local routes expire sooner than remote routes so that Osh can advertise them
 // to other nodes before they expire there
-// Local routes expire after 30 minutes
-// Remote routes expire after 60 minutes
-#define ROUTE_LOCAL_EXPIRY (1800)
-#define ROUTE_REMOTE_EXPIRY (ROUTE_LOCAL_EXPIRY * 2)
+// Remote routes expire after 5 minutes
+// Local routes expire after 4 minutes
+#define ROUTE_REMOTE_EXPIRY (300)
+#define ROUTE_LOCAL_EXPIRY (240)
 
 typedef struct netroute netroute_t;
 typedef struct netroute_mask netroute_mask_t;
