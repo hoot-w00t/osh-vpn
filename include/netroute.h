@@ -22,6 +22,8 @@ struct netroute {
     // Network address
     netaddr_t addr;
     netroute_hash_t addr_hash;
+    netaddr_t mask;
+    netaddr_prefixlen_t prefixlen;
 
     // The node owning this network address
     node_id_t *owner;
@@ -72,7 +74,8 @@ netroute_t *netroute_find(netroute_table_t *table, const netaddr_t *addr);
 
 netroute_mask_t *netroute_add_mask(netroute_table_t *table,
     const netaddr_t *mask, netaddr_prefixlen_t prefixlen);
-netroute_t *netroute_add(netroute_table_t *table, const netaddr_t *addr,
+netroute_t *netroute_add(netroute_table_t *table,
+    const netaddr_t *addr, netaddr_prefixlen_t prefixlen,
     node_id_t *owner, bool refresh);
 
 void netroute_del_addr(netroute_table_t *table, const netaddr_t *addr);
@@ -91,6 +94,10 @@ void netroute_dump(netroute_table_t *table);
 #define foreach_netroute(route, table, iter)                   \
     for (size_t iter = 0; iter < (table)->heads_count; ++iter) \
         foreach_netroute_head(route, (table)->heads[iter])
+
+// Iterate through all netroute masks in a linked list
+#define foreach_netroute_mask_head(rmask, head) \
+    for (netroute_mask_t *rmask = (head); rmask; rmask = rmask->next)
 
 // Returns the route table hash of addr
 static inline netroute_hash_t netroute_hash(

@@ -6,13 +6,19 @@
 #include <string.h>
 
 // Create a new netroute_t
-static netroute_t *netroute_create(const netaddr_t *addr,
+static netroute_t *netroute_create(
+    const netaddr_t *addr, netaddr_prefixlen_t prefixlen,
     const netroute_hash_t addr_hash, node_id_t *owner)
 {
     netroute_t *route = xzalloc(sizeof(netroute_t));
 
     netaddr_cpy(&route->addr, addr);
     route->addr_hash = addr_hash;
+
+    if (prefixlen > netaddr_max_prefixlen(addr->type))
+        prefixlen = netaddr_max_prefixlen(addr->type);
+    netaddr_mask_from_prefix(&route->mask, addr->type, prefixlen);
+
     route->owner = owner;
     return route;
 }
@@ -64,6 +70,26 @@ static void netroute_mask_free_all(netroute_mask_t *head)
         netroute_mask_free(rmask);
         rmask = next;
     }
+}
+
+// Return the matching netroute_mask_t, or NULL if it is not found
+static netroute_mask_t *netroute_mask_find(netroute_table_t *table,
+    const netaddr_t *mask, netaddr_prefixlen_t prefixlen)
+{
+    netroute_mask_t *head;
+
+    switch (mask->type) {
+        case MAC: head = table->masks_mac; break;
+        case IP4: head = table->masks_ip4; break;
+        case IP6: head = table->masks_ip6; break;
+         default: return NULL;
+    }
+
+    foreach_netroute_mask_head(rmask, head) {
+        if (rmask->prefixlen == prefixlen && netaddr_eq(&rmask->mask, mask))
+            return rmask;
+    }
+    return NULL;
 }
 
 // Allocate an empty route table
@@ -137,6 +163,10 @@ netroute_mask_t *netroute_add_mask(netroute_table_t *table,
          default: return NULL;
     }
 
+    // Validate the prefix length
+    if (prefixlen > netaddr_max_prefixlen(mask->type))
+        prefixlen = netaddr_max_prefixlen(mask->type);
+
     // Sort the masks from highest prefix length to smallest
     while (*it) {
         if (   prefixlen > (*it)->prefixlen
@@ -153,27 +183,82 @@ netroute_mask_t *netroute_add_mask(netroute_table_t *table,
 
         rmask->next = *it;
         *it = rmask;
+
+        if (logger_is_debugged(DBG_NETROUTE)) {
+            char addrw[INET6_ADDRSTRLEN];
+
+            netaddr_ntop(addrw, sizeof(addrw), &rmask->mask);
+            logger_debug(DBG_NETROUTE, "Added mask %s to %p", addrw, table);
+        }
     }
 
     return *it;
 }
 
+// Delete a network mask from the table
+static bool netroute_del_mask(netroute_table_t *table, netroute_mask_t *rmask)
+{
+    netroute_mask_t **it;
+
+    // Select the correct mask list
+    switch (rmask->mask.type) {
+        case MAC: it = &table->masks_mac; break;
+        case IP4: it = &table->masks_ip4; break;
+        case IP6: it = &table->masks_ip6; break;
+         default: return false;
+    }
+
+    // Look for rmask
+    while (*it) {
+        if (*it == rmask) {
+            // Delete rmask from the list
+            *it = (*it)->next;
+
+            if (logger_is_debugged(DBG_NETROUTE)) {
+                char addrw[INET6_ADDRSTRLEN];
+
+                netaddr_ntop(addrw, sizeof(addrw), &rmask->mask);
+                logger_debug(DBG_NETROUTE, "Deleted mask %s from %p", addrw, table);
+            }
+
+            netroute_mask_free(rmask);
+            return true;
+        }
+        it = &(*it)->next;
+    }
+
+    return false;
+}
+
 // Insert a new netroute in the table
 static netroute_t *netroute_insert(netroute_table_t *table,
-    const netaddr_t *addr, const netroute_hash_t addr_hash, node_id_t *owner)
+    const netaddr_t *addr, netaddr_prefixlen_t prefixlen,
+    const netroute_hash_t addr_hash, node_id_t *owner)
 {
     netroute_t **it = &table->heads[addr_hash];
+    netroute_mask_t *rmask;
 
+    // Go to the end of the linked list
     while (*it)
         it = &(*it)->next;
-    *it = netroute_create(addr, addr_hash, owner);
+
+    // Create the new route
+    *it = netroute_create(addr, prefixlen, addr_hash, owner);
     table->total_routes += 1;
     if (owner)
         table->total_owned_routes += 1;
+
+    // Add the route's mask to the table
+    rmask = netroute_add_mask(table, &(*it)->mask, (*it)->prefixlen);
+    if (rmask)
+        rmask->use_count += 1;
+
     return *it;
 }
 
 // Add a new route to the table
+// The prefix length is used to create and add the corresponding network mask to
+// the table
 //
 // If refresh is true the route's last_refresh timestamp will be updated to the
 // current time
@@ -182,7 +267,8 @@ static netroute_t *netroute_insert(netroute_table_t *table,
 //  to NULL or from NULL)
 //
 // Returns a pointer to the netroute_t from the table
-netroute_t *netroute_add(netroute_table_t *table, const netaddr_t *addr,
+netroute_t *netroute_add(netroute_table_t *table,
+    const netaddr_t *addr, netaddr_prefixlen_t prefixlen,
     node_id_t *owner, bool refresh)
 {
     const netroute_hash_t hash = netroute_hash(table, addr);
@@ -190,7 +276,7 @@ netroute_t *netroute_add(netroute_table_t *table, const netaddr_t *addr,
 
     if (!route) {
         // The route doesn't exist, create it and append it to the list
-        route = netroute_insert(table, addr, hash, owner);
+        route = netroute_insert(table, addr, prefixlen, hash, owner);
     }
 
     // Update the owner if none of the two are NULL
@@ -217,6 +303,7 @@ netroute_t *netroute_add(netroute_table_t *table, const netaddr_t *addr,
 static bool netroute_del(netroute_table_t *table, netroute_t *route)
 {
     netroute_t **it = &table->heads[route->addr_hash];
+    netroute_mask_t *rmask;
 
     while (*it) {
         if (*it == route) {
@@ -225,6 +312,15 @@ static bool netroute_del(netroute_table_t *table, netroute_t *route)
             table->total_routes -= 1;
             if (route->owner)
                 table->total_owned_routes -= 1;
+
+            // Decrement the mask's use count and delete it if it reaches zero
+            rmask = netroute_mask_find(table, &route->mask, route->prefixlen);
+            if (rmask) {
+                if (rmask->use_count > 0)
+                    rmask->use_count -= 1;
+                if (rmask->use_count == 0)
+                    netroute_del_mask(table, rmask);
+            }
 
             if (logger_is_debugged(DBG_NETROUTE)) {
                 char addrw[INET6_ADDRSTRLEN];

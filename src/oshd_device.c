@@ -72,7 +72,8 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
     // If the source address was not in our local routes, broadcast the new
     // route to the network
     if (!netroute_find(oshd.local_routes, &pkt_hdr.src)) {
-        netroute_add(oshd.local_routes, &pkt_hdr.src, node_id_find_local(), true);
+        netroute_add(oshd.local_routes, &pkt_hdr.src,
+            netaddr_max_prefixlen(pkt_hdr.src.type), node_id_find_local(), true);
         node_queue_route_add_local(NULL, &pkt_hdr.src, 1);
     }
 

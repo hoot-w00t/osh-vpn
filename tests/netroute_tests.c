@@ -61,7 +61,7 @@ static void fuzz_netroute_table(const size_t size, const size_t addr_count,
 
     for (size_t i = 0; i < addr_count; ++i) {
         rand_addr(&addr);
-        route = netroute_add(table, &addr, NULL, false);
+        route = netroute_add(table, &addr, netaddr_max_prefixlen(addr.type), NULL, false);
 
         cr_assert_not_null(route);
         cr_assert_eq(netaddr_eq(&route->addr, &addr), true);
