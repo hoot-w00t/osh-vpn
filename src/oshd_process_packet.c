@@ -645,7 +645,8 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
                 node->id->name, addr_str, id->name);
         }
 
-        netroute_add(oshd.remote_routes, &addr, payload[i].prefixlen, id, true);
+        netroute_add(oshd.remote_routes, &addr, payload[i].prefixlen, id,
+            payload[i].can_expire);
     }
 
     if (logger_is_debugged(DBG_ROUTING)) {

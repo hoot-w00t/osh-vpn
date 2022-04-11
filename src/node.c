@@ -1517,6 +1517,7 @@ bool node_queue_route_add_local(node_t *exclude, const netaddr_t *addrs,
         buf[i].type = addrs[i].type;
         buf[i].prefixlen = netaddr_max_prefixlen(addrs[i].type);
         netaddr_cpy_data(&buf[i].addr, &addrs[i]);
+        buf[i].can_expire = true;
     }
 
     bool success = node_queue_packet_fragmented(exclude, ROUTE_ADD, buf, buf_size,
@@ -1547,6 +1548,7 @@ bool node_queue_route_exg(node_t *node)
             buf[i].type = route->addr.type;
             buf[i].prefixlen = route->prefixlen;
             netaddr_cpy_data(&buf[i].addr, &route->addr);
+            buf[i].can_expire = route->can_expire;
             ++i;
         }
     }
@@ -1556,6 +1558,7 @@ bool node_queue_route_exg(node_t *node)
             buf[i].type = route->addr.type;
             buf[i].prefixlen = route->prefixlen;
             netaddr_cpy_data(&buf[i].addr, &route->addr);
+            buf[i].can_expire = route->can_expire;
             ++i;
         }
     }

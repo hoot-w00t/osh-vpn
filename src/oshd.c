@@ -147,6 +147,12 @@ bool oshd_init(void)
         nid->pubkey_local = true;
     }
 
+    // Add manually configured local routes
+    for (size_t i = 0; i < oshd.conf_routes_size; ++i) {
+        netroute_add(oshd.local_routes, &oshd.conf_routes[i].addr,
+            oshd.conf_routes[i].prefixlen, me, false);
+    }
+
     signal(SIGINT, oshd_signal_exit);
     signal(SIGTERM, oshd_signal_exit);
     signal(SIGUSR1, oshd_signal_digraph);
