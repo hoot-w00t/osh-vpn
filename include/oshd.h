@@ -21,6 +21,11 @@ typedef struct conf_pubkey {
     EVP_PKEY *pkey;
 } conf_pubkey_t;
 
+typedef struct conf_route {
+    netaddr_t addr;
+    netaddr_prefixlen_t prefixlen;
+} conf_route_t;
+
 typedef struct oshd {
     // Name of the local node
     char name[NODE_NAME_SIZE + 1];
@@ -77,6 +82,10 @@ typedef struct oshd {
     // The remote routing table contain all the other routes owned by other nodes
     netroute_table_t *local_routes;
     netroute_table_t *remote_routes;
+
+    // Manually configured local routes
+    conf_route_t *conf_routes;
+    size_t conf_routes_size;
 
     // Array of network device names/IDs which should be excluded from the
     // endpoint discovery

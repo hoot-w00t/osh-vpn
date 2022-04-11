@@ -200,6 +200,8 @@ void oshd_free(void)
     for (size_t i = 0; i < oshd.conf_pubkeys_size; ++i)
         pkey_free(oshd.conf_pubkeys[i].pkey);
     free(oshd.conf_pubkeys);
+
+    free(oshd.conf_routes);
 }
 
 void oshd_loop(void)

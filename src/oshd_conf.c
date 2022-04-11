@@ -582,6 +582,64 @@ end:
     return success;
 }
 
+// Add a route to oshd.conf_routes
+static bool conf_route_add(const netaddr_t *addr, netaddr_prefixlen_t prefixlen)
+{
+    // Prevent adding the same route twice
+    for (size_t i = 0; i < oshd.conf_routes_size; ++i) {
+        if (   oshd.conf_routes[i].prefixlen == prefixlen
+            && netaddr_eq(&oshd.conf_routes[i].addr, addr))
+        {
+            return false;
+        }
+    }
+
+    oshd.conf_routes = xreallocarray(oshd.conf_routes, oshd.conf_routes_size + 1,
+        sizeof(conf_route_t));
+    netaddr_cpy(&oshd.conf_routes[oshd.conf_routes_size].addr, addr);
+    oshd.conf_routes[oshd.conf_routes_size].prefixlen = prefixlen;
+    oshd.conf_routes_size += 1;
+    return true;
+}
+
+// Route
+static bool oshd_param_route(ecp_t *ecp)
+{
+    char *addrp = NULL;
+    unsigned int prefixlen;
+    netaddr_t addr;
+
+    // Separate the address and prefix length
+    if (sscanf(ecp_value(ecp), "%m[^/]/%u", &addrp, &prefixlen) != 2) {
+        set_error("Invalid route format");
+        free(addrp);
+        return false;
+    }
+
+    // Parse the address
+    if (!addrp || !netaddr_pton(&addr, addrp)) {
+        set_error("Invalid route address");
+        free(addrp);
+        return false;
+    }
+
+    // Verify the prefix length
+    if (prefixlen > netaddr_max_prefixlen(addr.type)) {
+        set_error("Invalid route prefix length %u", prefixlen);
+        free(addrp);
+        return false;
+    }
+
+    // Add the local route
+    if (conf_route_add(&addr, prefixlen)) {
+        logger_debug(DBG_CONF, "Added local route %s/%u", addrp, prefixlen);
+    } else {
+        logger(LOG_WARN, "Ignoring duplicate local route %s/%u", addrp, prefixlen);
+    }
+    free(addrp);
+    return true;
+}
+
 // Parameters that set commands (the command name is the same as the parameter)
 static bool oshd_param_command(ecp_t *ecp)
 {
@@ -621,6 +679,7 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "PrivateKeyFile", .type = VALUE_REQUIRED, &oshd_param_privatekeyfile },
     { .name = "PublicKey", .type = VALUE_REQUIRED, &oshd_param_publickey },
     { .name = "PublicKeysFile", .type = VALUE_REQUIRED, &oshd_param_publickeysfile },
+    { .name = "Route", .type = VALUE_REQUIRED, &oshd_param_route },
     { NULL, 0, NULL }
 };
 
