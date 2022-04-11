@@ -350,6 +350,10 @@ void netroute_add_broadcasts(netroute_table_t *table)
     ip4_broadcast.data.ip4.s_addr = htonl(0xe0000000);
     netroute_add(table, &ip4_broadcast, 4, NULL, false);
 
+    // 255.255.255.255/32
+    ip4_broadcast.data.ip4.s_addr = htonl(0xffffffff);
+    netroute_add(table, &ip4_broadcast, 32, NULL, false);
+
     // ff00::/8
     ip6_broadcast.type = IP6;
     memset(&ip6_broadcast.data.ip6, 0, sizeof(ip6_broadcast.data.ip6));
