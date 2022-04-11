@@ -177,7 +177,7 @@ const netroute_t *netroute_lookup(netroute_table_t *table, const netaddr_t *addr
 }
 
 // Add a network mask to the table
-netroute_mask_t *netroute_add_mask(netroute_table_t *table,
+static netroute_mask_t *netroute_add_mask(netroute_table_t *table,
     const netaddr_t *mask, netaddr_prefixlen_t prefixlen)
 {
     netroute_mask_t **it;
