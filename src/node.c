@@ -359,12 +359,22 @@ static void node_tree_dump_digraph_to(FILE *out)
 
     // We define and label all routes
     foreach_netroute_const(route, oshd.local_routes, i) {
+        if (!route->owner)
+            continue;
+
         netaddr_ntop(addr, sizeof(addr), &route->addr);
-        fprintf(out, "    \"%s\" [label=\"%s\", color=grey, style=solid];\n", addr, addr);
+        fprintf(out, "    \"%s/%u\" [label=\"%s/%u%s\", color=grey, style=solid];\n",
+            addr, route->prefixlen, addr, route->prefixlen,
+            route->can_expire ? "" : " (static)");
     }
     foreach_netroute_const(route, oshd.remote_routes, i) {
+        if (!route->owner)
+            continue;
+
         netaddr_ntop(addr, sizeof(addr), &route->addr);
-        fprintf(out, "    \"%s\" [label=\"%s\", color=grey, style=solid];\n", addr, addr);
+        fprintf(out, "    \"%s/%u\" [label=\"%s/%u%s\", color=grey, style=solid];\n",
+            addr, route->prefixlen, addr, route->prefixlen,
+            route->can_expire ? "" : " (static)");
     }
 
     // We defined all nodes on the graph, now we just need to connect them all
@@ -381,13 +391,20 @@ static void node_tree_dump_digraph_to(FILE *out)
 
     // We connect all nodes to their routes
     foreach_netroute_const(route, oshd.local_routes, i) {
-        netaddr_ntop(addr, sizeof(addr), &route->addr);
-        fprintf(out, "    \"%s\" -> \"%s\";\n", netroute_owner_name(route), addr);
-    }
+        if (!route->owner)
+            continue;
 
-    foreach_netroute_const(route, oshd.remote_routes, i) {
         netaddr_ntop(addr, sizeof(addr), &route->addr);
-        fprintf(out, "    \"%s\" -> \"%s\";\n", netroute_owner_name(route), addr);
+        fprintf(out, "    \"%s\" -> \"%s/%u\";\n", netroute_owner_name(route),
+            addr, route->prefixlen);
+    }
+    foreach_netroute_const(route, oshd.remote_routes, i) {
+        if (!route->owner)
+            continue;
+
+        netaddr_ntop(addr, sizeof(addr), &route->addr);
+        fprintf(out, "    \"%s\" -> \"%s/%u\";\n", netroute_owner_name(route),
+            addr, route->prefixlen);
     }
 
     fprintf(out, "}\n");
