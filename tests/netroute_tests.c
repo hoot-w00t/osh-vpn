@@ -1,4 +1,5 @@
 #include "netroute.h"
+#include "xalloc.h"
 #include <criterion/criterion.h>
 
 #define fuzz_seed (0)
@@ -117,4 +118,83 @@ Test(netroute_table_t, fuzz_table_size_1024_with_16384_addr)
 Test(netroute_table_t, fuzz_table_size_4096_with_16384_addr)
 {
     fuzz_netroute_table(4096, 16384, fuzz_seed);
+}
+
+Test(netroute_table_t, route_masks_order)
+{
+    netroute_table_t *table = netroute_table_create(4096);
+    netaddr_t nets[32];
+    netaddr_t addr;
+
+    cr_assert_not_null(table);
+    netroute_add_broadcasts(table);
+
+    for (netaddr_prefixlen_t i = 0; i < 32; ++i) {
+        addr.type = IP4;
+        addr.data.ip4.s_addr = htonl(0xC0A85500 | i);
+        netaddr_mask_from_prefix(&nets[i], addr.type, i + 1);
+        cr_assert_not_null(netroute_add(table, &addr, i + 1, NULL, false));
+    }
+
+    netaddr_prefixlen_t i = 32;
+
+    foreach_netroute_mask_head(rmask, table->masks_ip4) {
+        cr_assert_gt(i, 0);
+        cr_assert_eq(rmask->prefixlen, i);
+        cr_assert_eq(netaddr_eq(&rmask->mask, &nets[i - 1]), true);
+        i -= 1;
+    }
+    netroute_table_free(table);
+}
+
+Test(netroute_table_t, lookup_ipv4_networks)
+{
+    netroute_table_t *table = netroute_table_create(4096);
+    node_id_t *owners[3];
+    netaddr_t nets[3];
+    netaddr_t addr;
+    const netroute_t *route;
+
+    cr_assert_not_null(table);
+    netroute_add_broadcasts(table);
+
+    owners[0] = xzalloc(sizeof(node_id_t));
+    cr_assert_eq(netaddr_pton(&nets[0], "192.168.0.0"), true);
+    cr_assert_not_null(netroute_add(table, &nets[0], 16, owners[0], false));
+
+    owners[1] = xzalloc(sizeof(node_id_t));
+    cr_assert_eq(netaddr_pton(&nets[1], "172.16.0.0"), true);
+    cr_assert_not_null(netroute_add(table, &nets[1], 12, owners[1], false));
+
+    owners[2] = xzalloc(sizeof(node_id_t));
+    cr_assert_eq(netaddr_pton(&nets[2], "10.0.0.0"), true);
+    cr_assert_not_null(netroute_add(table, &nets[2],  8, owners[2], false));
+
+    addr.type = IP4;
+
+    // 192.168.0.0/16
+    for (in_addr_t i = 0; i <= 0x0000ffff; ++i) {
+        addr.data.ip4.s_addr = htonl(0xC0A80000 | i);
+        route = netroute_lookup(table, &addr);
+        cr_assert_not_null(route);
+        cr_assert_eq(route->owner, owners[0]);
+    }
+
+    // 172.16.0.0/12
+    for (in_addr_t i = 0; i <= 0x000fffff; ++i) {
+        addr.data.ip4.s_addr = htonl(0xAC100000 | i);
+        route = netroute_lookup(table, &addr);
+        cr_assert_not_null(route);
+        cr_assert_eq(route->owner, owners[1]);
+    }
+
+    // 10.0.0.0/8
+    for (in_addr_t i = 0; i <= 0x00ffffff; ++i) {
+        addr.data.ip4.s_addr = htonl(0x0A000000 | i);
+        route = netroute_lookup(table, &addr);
+        cr_assert_not_null(route);
+        cr_assert_eq(route->owner, owners[2]);
+    }
+
+    netroute_table_free(table);
 }
