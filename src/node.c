@@ -822,7 +822,7 @@ static bool data_packet_should_drop(node_t *node)
 // Queue a packet to the *node socket for *dest node
 // If payload is NULL and payload_size is greater than 0 the payload's bytes
 // will be uninitialized
-bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
+bool node_queue_packet(node_t *node, node_id_t *dest, oshpacket_type_t type,
     uint8_t *payload, uint16_t payload_size)
 {
     const size_t packet_size = OSHPACKET_HDR_SIZE + payload_size;
@@ -857,8 +857,11 @@ bool node_queue_packet(node_t *node, const char *dest, oshpacket_type_t type,
     hdr->type = type;
 
     memcpy(hdr->src_node, oshd.name, sizeof(hdr->src_node));
-    memset(hdr->dest_node, 0, sizeof(hdr->dest_node));
-    if (dest) memcpy(hdr->dest_node, dest, strlen(dest));
+    if (dest) {
+        memcpy(hdr->dest_node, dest->name, NODE_NAME_SIZE);
+    } else {
+        memset(hdr->dest_node, 0, sizeof(hdr->dest_node));
+    }
 
     // Copy the packet's payload to the buffer
     if (payload)
@@ -1003,7 +1006,7 @@ bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
                 oshd.node_tree[i]->next_hop->id->name,
                 oshd.node_tree[i]->next_hop->addrw,
                 payload_size);
-            node_queue_packet(oshd.node_tree[i]->next_hop, oshd.node_tree[i]->name,
+            node_queue_packet(oshd.node_tree[i]->next_hop, oshd.node_tree[i],
                 type, payload, payload_size);
         }
     }
@@ -1048,7 +1051,7 @@ static bool node_queue_packet_fragmented(node_t *node, oshpacket_type_t type,
         } else {
             logger_debug(DBG_SOCKETS, "%s: %s: Queuing fragmented %s packet with %zu entries (%zu bytes)",
                 node->addrw, node->id->name, oshpacket_type_name(type), entries, size);
-            if (!node_queue_packet(node, node->id->name, type, curr_buf, size))
+            if (!node_queue_packet(node, node->id, type, curr_buf, size))
                 return false;
         }
 
@@ -1139,14 +1142,14 @@ bool node_queue_handshake(node_t *node)
     if (node->authenticated)
         event_queue_handshake_timeout(node, HANDSHAKE_TIMEOUT);
 
-    return node_queue_packet(node, node->id ? node->id->name : NULL,
-        HANDSHAKE, (uint8_t *) &packet, sizeof(packet));
+    return node_queue_packet(node, node->id, HANDSHAKE,
+        (uint8_t *) &packet, sizeof(packet));
 }
 
 // Queue HANDSHAKE_END packet
 bool node_queue_handshake_end(node_t *node)
 {
-    return node_queue_packet_empty(node, node->id ? node->id->name : NULL, HANDSHAKE_END);
+    return node_queue_packet_empty(node, node->id, HANDSHAKE_END);
 }
 
 // Queue a HANDSHAKE packet to renew the encryption keys
@@ -1198,21 +1201,21 @@ bool node_queue_devmode(node_t *node)
     oshpacket_devmode_t packet;
 
     packet.devmode = oshd.device_mode;
-    return node_queue_packet(node, node->id->name, DEVMODE,
+    return node_queue_packet(node, node->id, DEVMODE,
         (uint8_t *) &packet, sizeof(packet));
 }
 
 // Queue STATEEXG_END packet
 bool node_queue_stateexg_end(node_t *node)
 {
-    return node_queue_packet_empty(node, node->id->name, STATEEXG_END);
+    return node_queue_packet_empty(node, node->id, STATEEXG_END);
 }
 
 // Queue GOODBYE request
 bool node_queue_goodbye(node_t *node)
 {
     node_graceful_disconnect(node);
-    return node_queue_packet_empty(node, node->id->name, GOODBYE);
+    return node_queue_packet_empty(node, node->id, GOODBYE);
 }
 
 // Queue PING request
@@ -1226,13 +1229,13 @@ bool node_queue_ping(node_t *node)
 
     oshd_gettime(&node->rtt_ping);
     node->rtt_await = true;
-    return node_queue_packet_empty(node, node->id->name, PING);
+    return node_queue_packet_empty(node, node->id, PING);
 }
 
 // Queue PONG request
 bool node_queue_pong(node_t *node)
 {
-    return node_queue_packet_empty(node, node->id->name, PONG);
+    return node_queue_packet_empty(node, node->id, PONG);
 }
 
 // Broadcast a node's public key
@@ -1347,7 +1350,7 @@ static bool node_queue_endpoint(node_t *node, const endpoint_t *endpoint,
 
     logger_debug(DBG_ENDPOINTS, "%s: Queuing endpoint %s:%u owned by %s",
         node->addrw, endpoint->hostname, endpoint->port, group->owner_name);
-    return node_queue_packet(node, node->id->name, ENDPOINT, (uint8_t *) &pkt, sizeof(pkt));
+    return node_queue_packet(node, node->id, ENDPOINT, (uint8_t *) &pkt, sizeof(pkt));
 }
 
 // Queue ENDPOINT exchange packets
@@ -1383,7 +1386,7 @@ bool node_queue_edge(node_t *node, oshpacket_type_t type,
         case EDGE_DEL:
             memcpy(buf.src_node, src,  NODE_NAME_SIZE);
             memcpy(buf.dest_node, dest, NODE_NAME_SIZE);
-            return node_queue_packet(node, node->id->name, type,
+            return node_queue_packet(node, node->id, type,
                         (uint8_t *) &buf, sizeof(oshpacket_edge_t));
 
         default:

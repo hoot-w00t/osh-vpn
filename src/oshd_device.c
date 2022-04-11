@@ -83,7 +83,7 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
 
     if (route->owner) {
         // We have a node to send this packet to
-        node_queue_packet(route->owner->next_hop, route->owner->name, DATA,
+        node_queue_packet(route->owner->next_hop, route->owner, DATA,
             pkt, (uint16_t) pkt_size);
     } else {
         // This route is a broadcast
