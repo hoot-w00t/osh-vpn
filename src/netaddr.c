@@ -280,17 +280,6 @@ void netaddr_mask(netaddr_t *dest, const netaddr_t *addr, const netaddr_t *mask)
     }
 }
 
-static const netaddr_prefixlen_t mask_table[8] = {
-    0b10000000,
-    0b11000000,
-    0b11100000,
-    0b11110000,
-    0b11111000,
-    0b11111100,
-    0b11111110,
-    0b11111111
-};
-
 // Create a network mask from prefixlen
 bool netaddr_mask_from_prefix(netaddr_t *mask, netaddr_type_t type,
     netaddr_prefixlen_t prefixlen)
@@ -307,7 +296,7 @@ bool netaddr_mask_from_prefix(netaddr_t *mask, netaddr_type_t type,
 
     mask->type = type;
     for (netaddr_prefixlen_t i = 0; i < prefixlen; ++i)
-        ((uint8_t *) &mask->data)[i / 8] |= mask_table[i % 8];
+        ((uint8_t *) &mask->data)[i / 8] |= 0x80 >> (i % 8);
 
     return true;
 }
