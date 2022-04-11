@@ -29,6 +29,7 @@ struct netroute {
     node_id_t *owner;
 
     // Timestamp of the last time that this route was advertised
+    bool can_expire;
     struct timespec last_refresh;
 
     // Next item in the linked list
@@ -74,7 +75,7 @@ const netroute_t *netroute_lookup(netroute_table_t *table, const netaddr_t *addr
 
 netroute_t *netroute_add(netroute_table_t *table,
     const netaddr_t *addr, netaddr_prefixlen_t prefixlen,
-    node_id_t *owner, bool refresh);
+    node_id_t *owner, bool can_expire);
 
 void netroute_add_broadcasts(netroute_table_t *table);
 

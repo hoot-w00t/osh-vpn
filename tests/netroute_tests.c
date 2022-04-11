@@ -60,14 +60,23 @@ static void fuzz_netroute_table(const size_t size, const size_t addr_count,
     cr_assert_eq(table->total_owned_routes, 0);
 
     for (size_t i = 0; i < addr_count; ++i) {
+        const bool can_expire = (rand() % 2) == 0;
+
         rand_addr(&addr);
-        route = netroute_add(table, &addr, netaddr_max_prefixlen(addr.type), NULL, false);
+        route = netroute_add(table, &addr, netaddr_max_prefixlen(addr.type),
+            NULL, can_expire);
 
         cr_assert_not_null(route);
         cr_assert_eq(netaddr_eq(&route->addr, &addr), true);
         cr_assert_eq(route->addr_hash, netroute_hash(table, &addr));
-        cr_assert_eq(route->last_refresh.tv_sec, zero_ts.tv_sec);
-        cr_assert_eq(route->last_refresh.tv_nsec, zero_ts.tv_nsec);
+        if (can_expire) {
+            cr_assert_neq(route->last_refresh.tv_sec, zero_ts.tv_sec);
+            cr_assert_neq(route->last_refresh.tv_nsec, zero_ts.tv_nsec);
+        } else {
+            cr_assert_eq(route->last_refresh.tv_sec, zero_ts.tv_sec);
+            cr_assert_eq(route->last_refresh.tv_nsec, zero_ts.tv_nsec);
+        }
+        cr_assert_eq(route->can_expire, can_expire);
         cr_assert_null(route->owner);
 
         cr_assert_eq(table->total_routes, i + 1);

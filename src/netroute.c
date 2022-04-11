@@ -289,16 +289,14 @@ static netroute_t *netroute_insert(netroute_table_t *table,
 // The prefix length is used to create and add the corresponding network mask to
 // the table
 //
-// If refresh is true the route's last_refresh timestamp will be updated to the
-// current time
-// If the network address already exists its owner will be updated to this one
-// (only if there was an owner and there is still one, owner cannot be updated
-//  to NULL or from NULL)
+// If the network address already exists:
+// - owner will be updated if both are not NULL
+// - can_expire will keep its initial value
 //
 // Returns a pointer to the netroute_t from the table
 netroute_t *netroute_add(netroute_table_t *table,
     const netaddr_t *addr, netaddr_prefixlen_t prefixlen,
-    node_id_t *owner, bool refresh)
+    node_id_t *owner, bool can_expire)
 {
     const netroute_hash_t hash = netroute_hash(table, addr);
     netroute_t *route = netroute_find_head(table->heads[hash], addr);
@@ -306,29 +304,31 @@ netroute_t *netroute_add(netroute_table_t *table,
     if (!route) {
         // The route doesn't exist, create it and append it to the list
         route = netroute_insert(table, addr, prefixlen, hash, owner);
+        route->can_expire = can_expire;
     }
 
     // Update the owner if none of the two are NULL
     if (route->owner && owner)
         route->owner = owner;
 
-    if (refresh) {
-        // Update the last_refresh timestamp
+    // Update the last_refresh timestamp if this route can expire
+    if (route->can_expire)
         oshd_gettime(&route->last_refresh);
-    }
 
     if (logger_is_debugged(DBG_NETROUTE)) {
         char addrw[INET6_ADDRSTRLEN];
 
         netaddr_ntop(addrw, sizeof(addrw), addr);
-        logger_debug(DBG_NETROUTE, "Added %s/%u owned by %s (refreshed: %i) to %p",
-            addrw, route->prefixlen, netroute_owner_name(route), refresh, table);
+        logger_debug(DBG_NETROUTE, "Added %s/%u owned by %s (%s expire) to %p",
+            addrw, route->prefixlen, netroute_owner_name(route),
+            route->can_expire ? "can" : "cannot", table);
     }
 
     return route;
 }
 
 // Add standard broadcast routes to the table (MAC, IPv4 and IPv6)
+// These routes do not expire
 void netroute_add_broadcasts(netroute_table_t *table)
 {
     netaddr_t mac_broadcast;
@@ -430,8 +430,8 @@ void netroute_del_owner(netroute_table_t *table, node_id_t *owner)
 }
 
 // Delete all expired routes from the table
-// Routes expire if expire_secs seconds or more have elapsed since last_refresh
-// Routes without an owner do not expire
+// Routes expire if expire_secs seconds or more have elapsed since last_refresh,
+// and can_expire is true
 // next_expire will contain the delay in seconds of the next route expiry
 // Returns true if routes were deleted, false otherwise
 bool netroute_del_expired(netroute_table_t *table, const time_t expire_secs,
@@ -453,7 +453,7 @@ bool netroute_del_expired(netroute_table_t *table, const time_t expire_secs,
 
             timespecsub(&now, &route->last_refresh, &delta);
             if (delta.tv_sec >= expire_secs) {
-                if (route->owner) {
+                if (route->can_expire) {
                     netroute_del(table, route);
                     deleted = true;
                 }
