@@ -607,6 +607,13 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
             return false;
         }
 
+        // Verify that the prefix length is valid
+        if (payload[i].prefixlen > netaddr_max_prefixlen(addr.type)) {
+            logger(LOG_ERR, "%s: %s: Add route: Invalid prefix length",
+                node->addrw, node->id->name);
+            return false;
+        }
+
         // Extract and verify the node's name
         memcpy(node_name, payload[i].owner_name, NODE_NAME_SIZE);
         if (!node_valid_name(node_name)) {
