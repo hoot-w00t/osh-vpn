@@ -164,8 +164,18 @@ static bool oshd_param_automaticconnections(__attribute__((unused)) ecp_t *ecp)
 // AutomaticConnectionsInterval
 static bool oshd_param_automaticconnectionsinterval(ecp_t *ecp)
 {
-    oshd.automatic_connections_interval = (time_t) atoi(ecp_value(ecp));
-    logger_debug(DBG_CONF, "Set AutomaticConnectionsInterval to %li seconds",
+    int interval;
+
+    if (sscanf(ecp_value(ecp), "%i", &interval) != 1) {
+        set_error("Invalid %s value", ecp_name(ecp));
+        return false;
+    }
+    if (interval <= 0) {
+        set_error("%s must be a positive value", ecp_name(ecp));
+        return false;
+    }
+    oshd.automatic_connections_interval = interval;
+    logger_debug(DBG_CONF, "Set %s to %li seconds", ecp_name(ecp),
         oshd.automatic_connections_interval);
     return true;
 }
@@ -173,14 +183,18 @@ static bool oshd_param_automaticconnectionsinterval(ecp_t *ecp)
 // AutomaticConnectionsPercent
 static bool oshd_param_automaticconnectionspercent(ecp_t *ecp)
 {
-    const size_t percent = (size_t) atoi(ecp_value(ecp));
+    int percent;
 
-    if (percent == 0 || percent > 100) {
-        set_error("Invalid AutomaticConnectionsPercent: %s", ecp_value(ecp));
+    if (sscanf(ecp_value(ecp), "%i", &percent) != 1) {
+        set_error("Invalid %s value", ecp_name(ecp));
+        return false;
+    }
+    if (percent <= 0 || percent > 100) {
+        set_error("%s must be a value between 0 and 100 (excluded)", ecp_name(ecp));
         return false;
     }
     oshd.automatic_connections_percent = percent;
-    logger_debug(DBG_CONF, "Set AutomaticConnectionsPercent to %zu%%",
+    logger_debug(DBG_CONF, "Set %s to %zu%%", ecp_name(ecp),
         oshd.automatic_connections_percent);
     return true;
 }
@@ -188,11 +202,17 @@ static bool oshd_param_automaticconnectionspercent(ecp_t *ecp)
 // Port
 static bool oshd_param_port(ecp_t *ecp)
 {
-    oshd.server_port = (uint16_t) atoi(ecp_value(ecp));
-    if (oshd.server_port == 0) {
-        set_error("Invalid port: %s", ecp_value(ecp));
+    int port;
+
+    if (sscanf(ecp_value(ecp), "%i", &port) != 1) {
+        set_error("Invalid port value");
         return false;
     }
+    if (port <= 0 || port > 65535) {
+        set_error("Invalid port: %i", port);
+        return false;
+    }
+    oshd.server_port = port;
     logger_debug(DBG_CONF, "Set server port to %u", oshd.server_port);
     return true;
 }
@@ -207,7 +227,7 @@ static bool oshd_param_mode(ecp_t *ecp)
     } else if (!strcasecmp(ecp_value(ecp), "TUN")) {
         oshd.device_mode = MODE_TUN;
     } else {
-        set_error( "Unknown mode");
+        set_error("Unknown mode");
         return false;
     }
 
@@ -314,32 +334,52 @@ static bool oshd_param_remote(ecp_t *ecp)
 // ReconnectDelayMin
 static bool oshd_param_reconnectdelaymin(ecp_t *ecp)
 {
-    oshd.reconnect_delay_min = (time_t) atoi(ecp_value(ecp));
-    if (oshd.reconnect_delay_min <= 0) {
-        set_error("ReconnectDelayMin cannot be of 0 seconds or less");
+    int delay;
+
+    if (sscanf(ecp_value(ecp), "%i", &delay) != 1) {
+        set_error("Invalid %s value", ecp_name(ecp));
         return false;
     }
-    logger_debug(DBG_CONF, "Set ReconnectDelayMin to %li", oshd.reconnect_delay_min);
+    if (oshd.reconnect_delay_min <= 0) {
+        set_error("%s cannot be of 0 seconds or less", ecp_name(ecp));
+        return false;
+    }
+    oshd.reconnect_delay_min = delay;
+    logger_debug(DBG_CONF, "Set %s to %li", ecp_name(ecp),
+        oshd.reconnect_delay_min);
     return true;
 }
 
 // ReconnectDelayMax
 static bool oshd_param_reconnectdelaymax(ecp_t *ecp)
 {
-    oshd.reconnect_delay_max = (time_t) atoi(ecp_value(ecp));
-    if (oshd.reconnect_delay_max <= 0) {
-        set_error("ReconnectDelayMax cannot be of 0 seconds or less");
+    int delay;
+
+    if (sscanf(ecp_value(ecp), "%i", &delay) != 1) {
+        set_error("Invalid %s value", ecp_name(ecp));
         return false;
     }
-    logger_debug(DBG_CONF, "Set ReconnectDelayMax to %li", oshd.reconnect_delay_max);
+    if (oshd.reconnect_delay_max <= 0) {
+        set_error("%s cannot be of 0 seconds or less", ecp_name(ecp));
+        return false;
+    }
+    oshd.reconnect_delay_max = delay;
+    logger_debug(DBG_CONF, "Set %s to %li", ecp_name(ecp),
+        oshd.reconnect_delay_max);
     return true;
 }
 
 // ConnectionsLimit
 static bool oshd_param_connectionslimit(ecp_t *ecp)
 {
-    oshd.nodes_count_max = (size_t) atoi(ecp_value(ecp));
-    logger_debug(DBG_CONF, "Set ConnectionsLimit to %zu%s", oshd.nodes_count_max,
+    unsigned int limit;
+
+    if (sscanf(ecp_value(ecp), "%u", &limit) != 1) {
+        set_error("Invalid %s value", ecp_name(ecp));
+        return false;
+    }
+    oshd.nodes_count_max = limit;
+    logger_debug(DBG_CONF, "Set %s to %zu%s", ecp_name(ecp), oshd.nodes_count_max,
         (oshd.nodes_count_max == 0) ? " (unlimited)" : "");
     return true;
 }
