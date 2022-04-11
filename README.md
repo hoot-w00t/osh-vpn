@@ -46,22 +46,14 @@ You can use different build types with `-DCMAKE_BUILD_TYPE=<build_type>` when ru
 | NativeRelease  | Same as Release with optimizations specific to the host CPU                                  |
 | Hardened       | Same as RelWithDebInfo but also enables stack protection (https://wiki.debian.org/Hardening) |
 
-### Unit tests
-You can also build unit tests by configuring CMake with `-DENABLE_UNIT_TESTS=ON`.
-They are built using [Criterion](https://github.com/Snaipe/Criterion), which you'll have to install in order to compile and execute the tests.
-```
-cmake .. -DENABLE_UNIT_TESTS=ON
-make
-ctest
-```
-It's also possible to run the unit tests alone with `./oshd_tests`.
+### Other build options
+You can change those options by running `cmake .. -D<option>=<value>`
 
-### Other compilation options
-#### Disabling epoll
-`epoll` will be used instead of `poll` when it is available, but you can disable it if you want by configuring the build with `-DDISABLE_EPOLL=ON`.
-
-#### Systemd service
-You can use `-DENABLE_SYSTEMD=ON` to configure a systemd service file for running Osh.
+| Option              | Default value | Description |
+|---------------------|---------------|-------------|
+| `ENABLE_UNIT_TESTS` | `OFF`         | Build unit tests, they can be run with `ctest --output-on-failure` or directly with `./oshd_tests`. These unit tests are made using [Criterion](https://github.com/Snaipe/Criterion) |
+| `DISABLE_EPOLL`     | `OFF`         | Disable the use of `epoll` even when it is available, falls back to `poll` |
+| `ENABLE_SYSTEMD`    | `OFF`         | Configure systemd service files |
 
 ## Installing
 It is possible to install Osh with `sudo make install` after compiling.
