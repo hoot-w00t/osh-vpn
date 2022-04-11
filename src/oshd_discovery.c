@@ -59,7 +59,7 @@ void oshd_discover_local_routes(void)
                 || (oshd.tuntap->dev_id   && !strcmp(ifa->ifa_name, oshd.tuntap->dev_id))))
         {
             if (!netroute_lookup(oshd.local_routes, &addr)) {
-                netroute_t *route;
+                const netroute_t *route;
 
                 logger_debug(DBG_ROUTING, "Discovered local route %s (%s)",
                     addrw, oshd.tuntap->dev_name);

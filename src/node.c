@@ -358,11 +358,11 @@ static void node_tree_dump_digraph_to(FILE *out)
     }
 
     // We define and label all routes
-    foreach_netroute(route, oshd.local_routes, i) {
+    foreach_netroute_const(route, oshd.local_routes, i) {
         netaddr_ntop(addr, sizeof(addr), &route->addr);
         fprintf(out, "    \"%s\" [label=\"%s\", color=grey, style=solid];\n", addr, addr);
     }
-    foreach_netroute(route, oshd.remote_routes, i) {
+    foreach_netroute_const(route, oshd.remote_routes, i) {
         netaddr_ntop(addr, sizeof(addr), &route->addr);
         fprintf(out, "    \"%s\" [label=\"%s\", color=grey, style=solid];\n", addr, addr);
     }
@@ -380,12 +380,12 @@ static void node_tree_dump_digraph_to(FILE *out)
     }
 
     // We connect all nodes to their routes
-    foreach_netroute(route, oshd.local_routes, i) {
+    foreach_netroute_const(route, oshd.local_routes, i) {
         netaddr_ntop(addr, sizeof(addr), &route->addr);
         fprintf(out, "    \"%s\" -> \"%s\";\n", netroute_owner_name(route), addr);
     }
 
-    foreach_netroute(route, oshd.remote_routes, i) {
+    foreach_netroute_const(route, oshd.remote_routes, i) {
         netaddr_ntop(addr, sizeof(addr), &route->addr);
         fprintf(out, "    \"%s\" -> \"%s\";\n", netroute_owner_name(route), addr);
     }
@@ -1537,7 +1537,7 @@ bool node_queue_route_exg(node_t *node)
     // Format all routes' addresses into buf
     size_t i = 0;
 
-    foreach_netroute(route, oshd.local_routes, route_iter) {
+    foreach_netroute_const(route, oshd.local_routes, route_iter) {
         if (route->owner) {
             memcpy(buf[i].node_name, route->owner->name, NODE_NAME_SIZE);
             buf[i].addr_type = route->addr.type;
@@ -1545,7 +1545,7 @@ bool node_queue_route_exg(node_t *node)
             ++i;
         }
     }
-    foreach_netroute(route, oshd.remote_routes, route_iter) {
+    foreach_netroute_const(route, oshd.remote_routes, route_iter) {
         if (route->owner) {
             memcpy(buf[i].node_name, route->owner->name, NODE_NAME_SIZE);
             buf[i].addr_type = route->addr.type;

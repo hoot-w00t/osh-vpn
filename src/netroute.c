@@ -294,7 +294,7 @@ static netroute_t *netroute_insert(netroute_table_t *table,
 // - can_expire will keep its initial value
 //
 // Returns a pointer to the netroute_t from the table
-netroute_t *netroute_add(netroute_table_t *table,
+const netroute_t *netroute_add(netroute_table_t *table,
     const netaddr_t *addr, netaddr_prefixlen_t prefixlen,
     node_id_t *owner, bool can_expire)
 {
@@ -477,7 +477,7 @@ void netroute_dump_to(netroute_table_t *table, FILE *outfile)
 {
     char addrw[INET6_ADDRSTRLEN];
 
-    foreach_netroute(route, table, i) {
+    foreach_netroute_const(route, table, i) {
         netaddr_ntop(addrw, sizeof(addrw), &route->addr);
         fprintf(outfile, "\t%s owned by %s\n",
             addrw, netroute_owner_name(route));

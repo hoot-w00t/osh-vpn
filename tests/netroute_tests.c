@@ -41,7 +41,7 @@ static void fuzz_netroute_table(const size_t size, const size_t addr_count,
     const uint32_t seed)
 {
     netroute_table_t *table;
-    netroute_t *route;
+    const netroute_t *route;
     netaddr_t addr;
     struct timespec zero_ts;
 

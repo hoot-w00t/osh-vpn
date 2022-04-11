@@ -73,7 +73,7 @@ void netroute_table_clear(netroute_table_t *table);
 
 const netroute_t *netroute_lookup(netroute_table_t *table, const netaddr_t *addr);
 
-netroute_t *netroute_add(netroute_table_t *table,
+const netroute_t *netroute_add(netroute_table_t *table,
     const netaddr_t *addr, netaddr_prefixlen_t prefixlen,
     node_id_t *owner, bool can_expire);
 
@@ -90,11 +90,16 @@ void netroute_dump(netroute_table_t *table);
 // Iterate through all netroutes in a linked list
 #define foreach_netroute_head(route, head) \
     for (netroute_t *route = (head); route; route = route->next)
+#define foreach_netroute_head_const(route, head) \
+    for (const netroute_t *route = (head); route; route = route->next)
 
 // Iterate through all netrutes in a netroute_table
 #define foreach_netroute(route, table, iter)                   \
     for (size_t iter = 0; iter < (table)->heads_count; ++iter) \
         foreach_netroute_head(route, (table)->heads[iter])
+#define foreach_netroute_const(route, table, iter)                   \
+    for (size_t iter = 0; iter < (table)->heads_count; ++iter) \
+        foreach_netroute_head_const(route, (table)->heads[iter])
 
 // Iterate through all netroute masks in a linked list
 #define foreach_netroute_mask_head(rmask, head) \
