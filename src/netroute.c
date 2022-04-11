@@ -215,7 +215,8 @@ netroute_mask_t *netroute_add_mask(netroute_table_t *table,
             char addrw[INET6_ADDRSTRLEN];
 
             netaddr_ntop(addrw, sizeof(addrw), &rmask->mask);
-            logger_debug(DBG_NETROUTE, "Added mask %s to %p", addrw, table);
+            logger_debug(DBG_NETROUTE, "Added mask %s/%u to %p",
+                addrw, rmask->prefixlen, table);
         }
     }
 
@@ -245,7 +246,8 @@ static bool netroute_del_mask(netroute_table_t *table, netroute_mask_t *rmask)
                 char addrw[INET6_ADDRSTRLEN];
 
                 netaddr_ntop(addrw, sizeof(addrw), &rmask->mask);
-                logger_debug(DBG_NETROUTE, "Deleted mask %s from %p", addrw, table);
+                logger_debug(DBG_NETROUTE, "Deleted mask %s/%u from %p",
+                    addrw, rmask->prefixlen, table);
             }
 
             netroute_mask_free(rmask);
@@ -319,8 +321,8 @@ netroute_t *netroute_add(netroute_table_t *table,
         char addrw[INET6_ADDRSTRLEN];
 
         netaddr_ntop(addrw, sizeof(addrw), addr);
-        logger_debug(DBG_NETROUTE, "Added %s owned by %s (refreshed: %i) to %p",
-            addrw, netroute_owner_name(route), refresh, table);
+        logger_debug(DBG_NETROUTE, "Added %s/%u owned by %s (refreshed: %i) to %p",
+            addrw, route->prefixlen, netroute_owner_name(route), refresh, table);
     }
 
     return route;
@@ -381,8 +383,8 @@ static bool netroute_del(netroute_table_t *table, netroute_t *route)
                 char addrw[INET6_ADDRSTRLEN];
 
                 netaddr_ntop(addrw, sizeof(addrw), &route->addr);
-                logger_debug(DBG_NETROUTE, "Deleted %s owned by %s from %p",
-                    addrw, netroute_owner_name(route), table);
+                logger_debug(DBG_NETROUTE, "Deleted %s/%u owned by %s from %p",
+                    addrw, route->prefixlen, netroute_owner_name(route), table);
             }
 
             netroute_free(route);
