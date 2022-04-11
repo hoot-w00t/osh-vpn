@@ -323,6 +323,34 @@ netroute_t *netroute_add(netroute_table_t *table,
     return route;
 }
 
+// Add standard broadcast routes to the table (MAC, IPv4 and IPv6)
+void netroute_add_broadcasts(netroute_table_t *table)
+{
+    netaddr_t mac_broadcast;
+    netaddr_t ip4_broadcast;
+    netaddr_t ip6_broadcast;
+
+    // This address must also be explicitly added as a mask to the table,
+    // because the generated /48 mask will not match this address
+    // x1:xx:xx:xx:xx:xx
+    mac_broadcast.type = MAC;
+    memset(&mac_broadcast.data.mac, 0, sizeof(mac_broadcast.data.mac));
+    mac_broadcast.data.mac.addr[0] = 0x01;
+    netroute_add(table, &mac_broadcast, 48, NULL, false);
+    netroute_add_mask(table, &mac_broadcast, 48);
+
+    // 224.0.0.0/4
+    ip4_broadcast.type = IP4;
+    ip4_broadcast.data.ip4.s_addr = htonl(0xe0000000);
+    netroute_add(table, &ip4_broadcast, 4, NULL, false);
+
+    // ff00::/8
+    ip6_broadcast.type = IP6;
+    memset(&ip6_broadcast.data.ip6, 0, sizeof(ip6_broadcast.data.ip6));
+    ((uint8_t *) &ip6_broadcast.data.ip6)[0] = 0xff;
+    netroute_add(table, &ip6_broadcast, 8, NULL, false);
+}
+
 // Delete route from the table
 static bool netroute_del(netroute_table_t *table, netroute_t *route)
 {

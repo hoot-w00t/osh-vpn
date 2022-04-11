@@ -78,6 +78,8 @@ netroute_t *netroute_add(netroute_table_t *table,
     const netaddr_t *addr, netaddr_prefixlen_t prefixlen,
     node_id_t *owner, bool refresh);
 
+void netroute_add_broadcasts(netroute_table_t *table);
+
 void netroute_del_addr(netroute_table_t *table, const netaddr_t *addr);
 void netroute_del_owner(netroute_table_t *table, node_id_t *owner);
 bool netroute_del_expired(netroute_table_t *table, const time_t expire_secs,

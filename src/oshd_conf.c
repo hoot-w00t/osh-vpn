@@ -621,6 +621,7 @@ void oshd_init_conf(void)
 
     oshd.local_routes = netroute_table_create(4096);
     oshd.remote_routes = netroute_table_create(4096);
+    netroute_add_broadcasts(oshd.remote_routes);
 
     oshd.run = true;
 }
