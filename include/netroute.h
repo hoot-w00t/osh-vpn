@@ -70,7 +70,7 @@ netroute_table_t *netroute_table_create(size_t hash_table_size);
 void netroute_table_free(netroute_table_t *table);
 void netroute_table_clear(netroute_table_t *table);
 
-netroute_t *netroute_find(netroute_table_t *table, const netaddr_t *addr);
+const netroute_t *netroute_lookup(netroute_table_t *table, const netaddr_t *addr);
 
 netroute_mask_t *netroute_add_mask(netroute_table_t *table,
     const netaddr_t *mask, netaddr_prefixlen_t prefixlen);

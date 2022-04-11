@@ -54,7 +54,7 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
     size_t pkt_size;
     uint8_t pkt[OSHPACKET_PAYLOAD_MAXSIZE];
     netpacket_t pkt_hdr;
-    netroute_t *route;
+    const netroute_t *route;
 
     if (!tuntap_read(oshd.tuntap, pkt, sizeof(pkt), &pkt_size)) {
         oshd_stop();
@@ -71,13 +71,13 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
 
     // If the source address was not in our local routes, broadcast the new
     // route to the network
-    if (!netroute_find(oshd.local_routes, &pkt_hdr.src)) {
+    if (!netroute_lookup(oshd.local_routes, &pkt_hdr.src)) {
         netroute_add(oshd.local_routes, &pkt_hdr.src,
             netaddr_max_prefixlen(pkt_hdr.src.type), node_id_find_local(), true);
         node_queue_route_add_local(NULL, &pkt_hdr.src, 1);
     }
 
-    if ((route = netroute_find(oshd.remote_routes, &pkt_hdr.dest))) {
+    if ((route = netroute_lookup(oshd.remote_routes, &pkt_hdr.dest))) {
         // We have a route for this network destination
         if (route->owner) {
             node_queue_packet(route->owner->next_hop, route->owner->name,

@@ -142,11 +142,35 @@ static inline netroute_t *netroute_find_head(
 
 // Returns a pointer to the netroute_t with the given network address
 // Returns NULL if no routes match
-netroute_t *netroute_find(netroute_table_t *table, const netaddr_t *addr)
+static netroute_t *netroute_find(netroute_table_t *table, const netaddr_t *addr)
 {
     const netroute_hash_t hash = netroute_hash(table, addr);
 
     return netroute_find_head(table->heads[hash], addr);
+}
+
+// Looks up addr in the table, returns a netroute_t pointer if it is found
+// Returns NULL otherwise
+const netroute_t *netroute_lookup(netroute_table_t *table, const netaddr_t *addr)
+{
+    netroute_mask_t *head;
+    netaddr_t result;
+    netroute_t *route;
+
+    switch (addr->type) {
+        case MAC: head = table->masks_mac; break;
+        case IP4: head = table->masks_ip4; break;
+        case IP6: head = table->masks_ip6; break;
+         default: return NULL;
+    }
+
+    foreach_netroute_mask_head(rmask, head) {
+        netaddr_mask(&result, addr, &rmask->mask);
+        route = netroute_find(table, &result);
+        if (route)
+            return route;
+    }
+    return NULL;
 }
 
 // Add a network mask to the table
