@@ -630,11 +630,11 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
             // we can ignore those silently
             netaddr_ntop(addr_str, sizeof(addr_str), &addr);
             if (id->local_node) {
-                logger_debug(DBG_ROUTING, "%s: %s: Add route: Skipping local route %s",
-                    node->addrw, node->id->name, addr_str);
+                logger_debug(DBG_ROUTING, "%s: %s: Add route: Skipping local route %s/%u",
+                    node->addrw, node->id->name, addr_str, payload[i].prefixlen);
             } else {
-                logger(LOG_WARN, "%s: %s: Add route: %s -> %s: No route",
-                    node->addrw, node->id->name, addr_str, node_name);
+                logger(LOG_WARN, "%s: %s: Add route: %s/%u -> %s: No route",
+                    node->addrw, node->id->name, addr_str, payload[i].prefixlen, node_name);
             }
             continue;
         }
@@ -643,16 +643,16 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
         route = netroute_lookup(oshd.remote_routes, &addr);
         if (route && !route->owner) {
             netaddr_ntop(addr_str, sizeof(addr_str), &addr);
-            logger(LOG_WARN, "%s: %s: Ignoring broadcast route: %s -> %s",
-                node->addrw, node->id->name, addr_str, id->name);
+            logger(LOG_WARN, "%s: %s: Ignoring broadcast route: %s/%u -> %s",
+                node->addrw, node->id->name, addr_str, payload[i].prefixlen, id->name);
             continue;
         }
 
         // Add a route to node_name for the network address
         if (logger_is_debugged(DBG_ROUTING)) {
             netaddr_ntop(addr_str, sizeof(addr_str), &addr);
-            logger_debug(DBG_ROUTING, "%s: %s: Add route: %s -> %s", node->addrw,
-                node->id->name, addr_str, id->name);
+            logger_debug(DBG_ROUTING, "%s: %s: Add route: %s/%u -> %s", node->addrw,
+                node->id->name, addr_str, payload[i].prefixlen, id->name);
         }
 
         netroute_add(oshd.remote_routes, &addr, payload[i].prefixlen, id,
