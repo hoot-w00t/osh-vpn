@@ -15,9 +15,12 @@ static netroute_t *netroute_create(
     netaddr_cpy(&route->addr, addr);
     route->addr_hash = addr_hash;
 
-    if (prefixlen > netaddr_max_prefixlen(addr->type))
-        prefixlen = netaddr_max_prefixlen(addr->type);
-    netaddr_mask_from_prefix(&route->mask, addr->type, prefixlen);
+    if (prefixlen > netaddr_max_prefixlen(addr->type)) {
+        route->prefixlen = netaddr_max_prefixlen(addr->type);
+    } else {
+        route->prefixlen = prefixlen;
+    }
+    netaddr_mask_from_prefix(&route->mask, addr->type, route->prefixlen);
 
     route->owner = owner;
     return route;
