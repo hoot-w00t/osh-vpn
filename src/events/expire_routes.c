@@ -8,7 +8,7 @@ static time_t expire_routes_event_handler(__attribute__((unused)) void *data)
 {
     time_t next_expire;
 
-    if (netroute_del_expired(oshd.route_table, &next_expire, ROUTE_REMOTE_EXPIRY))
+    if (netroute_del_expired(oshd.route_table, &next_expire, ROUTE_LOCAL_EXPIRY))
         oshd_discover_local_routes();
     return EVENT_QUEUE_IN_S(next_expire);
 }
