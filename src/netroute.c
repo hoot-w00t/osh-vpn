@@ -105,6 +105,8 @@ netroute_table_t *netroute_table_create(size_t hash_table_size)
         table->heads_count = 1;
 
     table->heads = xzalloc(sizeof(netroute_t *) * table->heads_count);
+    logger_debug(DBG_NETROUTE, "Created table %p (size %zu)",
+        table, table->heads_count);
     return table;
 }
 
@@ -112,6 +114,7 @@ netroute_table_t *netroute_table_create(size_t hash_table_size)
 void netroute_table_free(netroute_table_t *table)
 {
     if (table) {
+        logger_debug(DBG_NETROUTE, "Freeing table %p", table);
         netroute_table_clear(table);
         netroute_mask_free_all(table->masks_mac);
         netroute_mask_free_all(table->masks_ip4);
@@ -124,6 +127,7 @@ void netroute_table_free(netroute_table_t *table)
 // Delete all routes from the table
 void netroute_table_clear(netroute_table_t *table)
 {
+    logger_debug(DBG_NETROUTE, "Clearing table %p", table);
     for (size_t i = 0; i < table->heads_count; ++i) {
         netroute_free_all(table->heads[i]);
         table->heads[i] = NULL;
