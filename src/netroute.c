@@ -294,10 +294,12 @@ static netroute_t *netroute_insert(netroute_table_t *table,
 // - owner will be updated if both are not NULL
 // - can_expire will keep its initial value
 //
+// The route will expire after expire_in seconds if this value is positive
+// If expire_in if <= 0 the route never expires
 // Returns a pointer to the netroute_t from the table
 const netroute_t *netroute_add(netroute_table_t *table,
     const netaddr_t *addr, netaddr_prefixlen_t prefixlen,
-    node_id_t *owner, bool can_expire)
+    node_id_t *owner, time_t expire_in)
 {
     const netroute_hash_t hash = netroute_hash(table, addr);
     netroute_t *route = netroute_find_head(table->heads[hash], addr);
@@ -305,16 +307,19 @@ const netroute_t *netroute_add(netroute_table_t *table,
     if (!route) {
         // The route doesn't exist, create it and append it to the list
         route = netroute_insert(table, addr, prefixlen, hash, owner);
-        route->can_expire = can_expire;
+        route->can_expire = expire_in > 0;
     }
 
     // Update the owner if none of the two are NULL
     if (route->owner && owner)
         route->owner = owner;
 
-    // Update the last_refresh timestamp if this route can expire
-    if (route->can_expire)
-        oshd_gettime(&route->last_refresh);
+    // Update the expire_after timestamp if this route can expire
+    if (route->can_expire) {
+        oshd_gettime(&route->expire_after);
+        if (expire_in > 0)
+            route->expire_after.tv_sec += expire_in;
+    }
 
     if (logger_is_debugged(DBG_NETROUTE)) {
         char addrw[INET6_ADDRSTRLEN];
@@ -342,23 +347,23 @@ void netroute_add_broadcasts(netroute_table_t *table)
     mac_broadcast.type = MAC;
     memset(&mac_broadcast.data.mac, 0, sizeof(mac_broadcast.data.mac));
     mac_broadcast.data.mac.addr[0] = 0x01;
-    netroute_add(table, &mac_broadcast, 48, NULL, false);
+    netroute_add(table, &mac_broadcast, 48, NULL, ROUTE_NEVER_EXPIRE);
     netroute_add_mask(table, &mac_broadcast, 48);
 
     // 224.0.0.0/4
     ip4_broadcast.type = IP4;
     ip4_broadcast.data.ip4.s_addr = htonl(0xe0000000);
-    netroute_add(table, &ip4_broadcast, 4, NULL, false);
+    netroute_add(table, &ip4_broadcast, 4, NULL, ROUTE_NEVER_EXPIRE);
 
     // 255.255.255.255/32
     ip4_broadcast.data.ip4.s_addr = htonl(0xffffffff);
-    netroute_add(table, &ip4_broadcast, 32, NULL, false);
+    netroute_add(table, &ip4_broadcast, 32, NULL, ROUTE_NEVER_EXPIRE);
 
     // ff00::/8
     ip6_broadcast.type = IP6;
     memset(&ip6_broadcast.data.ip6, 0, sizeof(ip6_broadcast.data.ip6));
     ((uint8_t *) &ip6_broadcast.data.ip6)[0] = 0xff;
-    netroute_add(table, &ip6_broadcast, 8, NULL, false);
+    netroute_add(table, &ip6_broadcast, 8, NULL, ROUTE_NEVER_EXPIRE);
 }
 
 // Delete route from the table
@@ -435,44 +440,45 @@ void netroute_del_owner(netroute_table_t *table, node_id_t *owner)
 }
 
 // Delete all expired routes from the table
-// Routes expire if expire_secs seconds or more have elapsed since last_refresh,
-// and can_expire is true
 // next_expire will contain the delay in seconds of the next route expiry
+// next_expire will be limited to next_expire_max seconds
 // Returns true if routes were deleted, false otherwise
-bool netroute_del_expired(netroute_table_t *table, const time_t expire_secs,
-    time_t *next_expire)
+bool netroute_del_expired(netroute_table_t *table, time_t *next_expire,
+    time_t next_expire_max)
 {
     struct timespec now;
-    struct timespec delta;
+    time_t delta;
     netroute_t *route;
     netroute_t *next;
     bool deleted = false;
 
     oshd_gettime(&now);
-    *next_expire = expire_secs;
+    *next_expire = next_expire_max;
     for (size_t i = 0; i < table->heads_count; ++i) {
         route = table->heads[i];
 
         while (route) {
             next = route->next;
 
-            timespecsub(&now, &route->last_refresh, &delta);
-            if (delta.tv_sec >= expire_secs) {
+            if (   now.tv_sec >= route->expire_after.tv_sec
+                && now.tv_nsec >= route->expire_after.tv_nsec)
+            {
                 if (route->can_expire) {
                     netroute_del(table, route);
                     deleted = true;
                 }
             } else {
-                if ((expire_secs - delta.tv_sec) < *next_expire)
-                    *next_expire = (expire_secs - delta.tv_sec) + 1;
+                delta = (route->expire_after.tv_sec - now.tv_sec) + 1;
+                if (delta < *next_expire)
+                    *next_expire = delta;
             }
 
             route = next;
         }
     }
 
-    if (*next_expire <= 0 || *next_expire > expire_secs)
-        *next_expire = expire_secs;
+    if (*next_expire <= 0 || *next_expire > next_expire_max)
+        *next_expire = next_expire_max;
 
     return deleted;
 }

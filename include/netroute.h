@@ -12,6 +12,7 @@
 // Local routes expire after 4 minutes
 #define ROUTE_REMOTE_EXPIRY (300)
 #define ROUTE_LOCAL_EXPIRY (240)
+#define ROUTE_NEVER_EXPIRE (0)
 
 typedef struct netroute netroute_t;
 typedef struct netroute_mask netroute_mask_t;
@@ -28,9 +29,9 @@ struct netroute {
     // The node owning this network address
     node_id_t *owner;
 
-    // Timestamp of the last time that this route was advertised
+    // Time after which this route will expire (if it should)
     bool can_expire;
-    struct timespec last_refresh;
+    struct timespec expire_after;
 
     // Next item in the linked list
     netroute_t *next;
@@ -75,14 +76,14 @@ const netroute_t *netroute_lookup(netroute_table_t *table, const netaddr_t *addr
 
 const netroute_t *netroute_add(netroute_table_t *table,
     const netaddr_t *addr, netaddr_prefixlen_t prefixlen,
-    node_id_t *owner, bool can_expire);
+    node_id_t *owner, time_t expire_in);
 
 void netroute_add_broadcasts(netroute_table_t *table);
 
 void netroute_del_addr(netroute_table_t *table, const netaddr_t *addr);
 void netroute_del_owner(netroute_table_t *table, node_id_t *owner);
-bool netroute_del_expired(netroute_table_t *table, const time_t expire_secs,
-    time_t *next_expire);
+bool netroute_del_expired(netroute_table_t *table, time_t *next_expire,
+    time_t next_expire_max);
 
 void netroute_dump_to(netroute_table_t *table, FILE *outfile);
 void netroute_dump(netroute_table_t *table);

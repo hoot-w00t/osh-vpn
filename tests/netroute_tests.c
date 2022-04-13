@@ -65,17 +65,17 @@ static void fuzz_netroute_table(const size_t size, const size_t addr_count,
 
         rand_addr(&addr);
         route = netroute_add(table, &addr, netaddr_max_prefixlen(addr.type),
-            NULL, can_expire);
+            NULL, can_expire ? ROUTE_REMOTE_EXPIRY : ROUTE_NEVER_EXPIRE);
 
         cr_assert_not_null(route);
         cr_assert_eq(netaddr_eq(&route->addr, &addr), true);
         cr_assert_eq(route->addr_hash, netroute_hash(table, &addr));
         if (can_expire) {
-            cr_assert_neq(route->last_refresh.tv_sec, zero_ts.tv_sec);
-            cr_assert_neq(route->last_refresh.tv_nsec, zero_ts.tv_nsec);
+            cr_assert_neq(route->expire_after.tv_sec, zero_ts.tv_sec);
+            cr_assert_neq(route->expire_after.tv_nsec, zero_ts.tv_nsec);
         } else {
-            cr_assert_eq(route->last_refresh.tv_sec, zero_ts.tv_sec);
-            cr_assert_eq(route->last_refresh.tv_nsec, zero_ts.tv_nsec);
+            cr_assert_eq(route->expire_after.tv_sec, zero_ts.tv_sec);
+            cr_assert_eq(route->expire_after.tv_nsec, zero_ts.tv_nsec);
         }
         cr_assert_eq(route->can_expire, can_expire);
         cr_assert_null(route->owner);
@@ -133,7 +133,8 @@ Test(netroute_table_t, route_masks_order)
         addr.type = IP4;
         addr.data.ip4.s_addr = htonl(0xC0A85500 | i);
         netaddr_mask_from_prefix(&nets[i], addr.type, i + 1);
-        cr_assert_not_null(netroute_add(table, &addr, i + 1, NULL, false));
+        cr_assert_not_null(netroute_add(table, &addr, i + 1, NULL,
+            ROUTE_NEVER_EXPIRE));
     }
 
     netaddr_prefixlen_t i = 32;
@@ -160,15 +161,18 @@ Test(netroute_table_t, lookup_ipv4_networks)
 
     owners[0] = xzalloc(sizeof(node_id_t));
     cr_assert_eq(netaddr_pton(&nets[0], "192.168.0.0"), true);
-    cr_assert_not_null(netroute_add(table, &nets[0], 16, owners[0], false));
+    cr_assert_not_null(netroute_add(table, &nets[0], 16, owners[0],
+        ROUTE_NEVER_EXPIRE));
 
     owners[1] = xzalloc(sizeof(node_id_t));
     cr_assert_eq(netaddr_pton(&nets[1], "172.16.0.0"), true);
-    cr_assert_not_null(netroute_add(table, &nets[1], 12, owners[1], false));
+    cr_assert_not_null(netroute_add(table, &nets[1], 12, owners[1],
+        ROUTE_NEVER_EXPIRE));
 
     owners[2] = xzalloc(sizeof(node_id_t));
     cr_assert_eq(netaddr_pton(&nets[2], "10.0.0.0"), true);
-    cr_assert_not_null(netroute_add(table, &nets[2],  8, owners[2], false));
+    cr_assert_not_null(netroute_add(table, &nets[2],  8, owners[2],
+        ROUTE_NEVER_EXPIRE));
 
     addr.type = IP4;
 

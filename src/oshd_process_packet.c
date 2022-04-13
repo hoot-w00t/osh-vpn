@@ -663,7 +663,7 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
         }
 
         netroute_add(oshd.route_table, &addr, payload[i].prefixlen, id,
-            payload[i].can_expire);
+            payload[i].can_expire ? ROUTE_REMOTE_EXPIRY : ROUTE_NEVER_EXPIRE);
     }
 
     if (logger_is_debugged(DBG_ROUTING)) {

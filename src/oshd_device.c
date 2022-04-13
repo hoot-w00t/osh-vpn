@@ -75,7 +75,7 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
     route = netroute_lookup(oshd.route_table, &pkt_hdr.src);
     if (!route || (route->owner != me && route->owner != NULL)) {
         netroute_add(oshd.route_table, &pkt_hdr.src,
-            netaddr_max_prefixlen(pkt_hdr.src.type), me, true);
+            netaddr_max_prefixlen(pkt_hdr.src.type), me, ROUTE_LOCAL_EXPIRY);
         node_queue_route_add_local(NULL, &pkt_hdr.src, 1);
     }
 

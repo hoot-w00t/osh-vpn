@@ -150,7 +150,7 @@ bool oshd_init(void)
     // Add manually configured local routes
     for (size_t i = 0; i < oshd.conf_routes_size; ++i) {
         netroute_add(oshd.route_table, &oshd.conf_routes[i].addr,
-            oshd.conf_routes[i].prefixlen, me, false);
+            oshd.conf_routes[i].prefixlen, me, ROUTE_NEVER_EXPIRE);
     }
 
     signal(SIGINT, oshd_signal_exit);
