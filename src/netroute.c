@@ -451,7 +451,7 @@ bool netroute_del_expired(netroute_table_t *table, time_t *next_expire,
     time_t next_expire_max)
 {
     struct timespec now;
-    time_t delta;
+    struct timespec delta;
     netroute_t *route;
     netroute_t *next;
     bool deleted = false;
@@ -464,17 +464,15 @@ bool netroute_del_expired(netroute_table_t *table, time_t *next_expire,
         while (route) {
             next = route->next;
 
-            if (   now.tv_sec >= route->expire_after.tv_sec
-                && now.tv_nsec >= route->expire_after.tv_nsec)
-            {
+            timespecsub(&route->expire_after, &now, &delta);
+            if (delta.tv_sec < 0) {
                 if (route->can_expire) {
                     netroute_del(table, route);
                     deleted = true;
                 }
             } else {
-                delta = (route->expire_after.tv_sec - now.tv_sec) + 1;
-                if (delta < *next_expire)
-                    *next_expire = delta;
+                if (delta.tv_sec < *next_expire)
+                    *next_expire = delta.tv_sec + 1;
             }
 
             route = next;
