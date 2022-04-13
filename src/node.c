@@ -358,16 +358,7 @@ static void node_tree_dump_digraph_to(FILE *out)
     }
 
     // We define and label all routes
-    foreach_netroute_const(route, oshd.local_routes, i) {
-        if (!route->owner)
-            continue;
-
-        netaddr_ntop(addr, sizeof(addr), &route->addr);
-        fprintf(out, "    \"%s/%u\" [label=\"%s/%u%s\", color=grey, style=solid];\n",
-            addr, route->prefixlen, addr, route->prefixlen,
-            route->can_expire ? "" : " (static)");
-    }
-    foreach_netroute_const(route, oshd.remote_routes, i) {
+    foreach_netroute_const(route, oshd.route_table, i) {
         if (!route->owner)
             continue;
 
@@ -390,15 +381,7 @@ static void node_tree_dump_digraph_to(FILE *out)
     }
 
     // We connect all nodes to their routes
-    foreach_netroute_const(route, oshd.local_routes, i) {
-        if (!route->owner)
-            continue;
-
-        netaddr_ntop(addr, sizeof(addr), &route->addr);
-        fprintf(out, "    \"%s\" -> \"%s/%u\";\n", netroute_owner_name(route),
-            addr, route->prefixlen);
-    }
-    foreach_netroute_const(route, oshd.remote_routes, i) {
+    foreach_netroute_const(route, oshd.route_table, i) {
         if (!route->owner)
             continue;
 
@@ -584,10 +567,10 @@ void node_tree_update(void)
     node_tree_calc_hops_count();
 
     // We also need to delete all routes to orphan nodes
-    if (netroute_del_orphan(oshd.remote_routes)) {
+    if (netroute_del_orphan(oshd.route_table)) {
         if (logger_is_debugged(DBG_ROUTING)) {
-            printf("Remote routes (%zu):\n", oshd.remote_routes->total_routes);
-            netroute_dump(oshd.remote_routes);
+            printf("Routing table (%zu):\n", oshd.route_table->total_routes);
+            netroute_dump(oshd.route_table);
         }
     }
 
@@ -1548,7 +1531,7 @@ bool node_queue_route_add_local(node_t *exclude, const netaddr_t *addrs,
 // Queue ROUTE_ADD request with all our known routes
 bool node_queue_route_exg(node_t *node)
 {
-    const size_t total_count = oshd.local_routes->total_owned_routes + oshd.remote_routes->total_owned_routes;
+    const size_t total_count = oshd.route_table->total_owned_routes;
 
     if (total_count == 0)
         return true;
@@ -1559,17 +1542,7 @@ bool node_queue_route_exg(node_t *node)
     // Format all routes' addresses into buf
     size_t i = 0;
 
-    foreach_netroute_const(route, oshd.local_routes, route_iter) {
-        if (route->owner) {
-            memcpy(buf[i].owner_name, route->owner->name, NODE_NAME_SIZE);
-            buf[i].type = route->addr.type;
-            buf[i].prefixlen = route->prefixlen;
-            netaddr_cpy_data(&buf[i].addr, &route->addr);
-            buf[i].can_expire = route->can_expire;
-            ++i;
-        }
-    }
-    foreach_netroute_const(route, oshd.remote_routes, route_iter) {
+    foreach_netroute_const(route, oshd.route_table, route_iter) {
         if (route->owner) {
             memcpy(buf[i].owner_name, route->owner->name, NODE_NAME_SIZE);
             buf[i].type = route->addr.type;

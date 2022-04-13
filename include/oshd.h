@@ -77,11 +77,8 @@ typedef struct oshd {
     // Node ID tree sorted by hops_count (highest to lowest)
     node_id_t **node_tree_ordered_hops;
 
-    // Routing tables
-    // The local routing table contains the routes which we own
-    // The remote routing table contain all the other routes owned by other nodes
-    netroute_table_t *local_routes;
-    netroute_table_t *remote_routes;
+    // Routing table
+    netroute_table_t *route_table;
 
     // Manually configured local routes
     conf_route_t *conf_routes;

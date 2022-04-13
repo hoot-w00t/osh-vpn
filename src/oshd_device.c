@@ -55,6 +55,7 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
     uint8_t pkt[OSHPACKET_PAYLOAD_MAXSIZE];
     netpacket_t pkt_hdr;
     const netroute_t *route;
+    node_id_t *me = node_id_find_local();
 
     if (!tuntap_read(oshd.tuntap, pkt, sizeof(pkt), &pkt_size)) {
         oshd_stop();
@@ -69,25 +70,29 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
         return;
     }
 
-    // If the source address was not in our local routes, broadcast the new
-    // route to the network
-    if (!netroute_lookup(oshd.local_routes, &pkt_hdr.src)) {
-        netroute_add(oshd.local_routes, &pkt_hdr.src,
-            netaddr_max_prefixlen(pkt_hdr.src.type), node_id_find_local(), true);
+    // Lookup the source address in the routing table, if it doesn't exist or
+    // another node owns it, take ownership and advertise it
+    route = netroute_lookup(oshd.route_table, &pkt_hdr.src);
+    if (!route || (route->owner != me && route->owner != NULL)) {
+        netroute_add(oshd.route_table, &pkt_hdr.src,
+            netaddr_max_prefixlen(pkt_hdr.src.type), me, true);
         node_queue_route_add_local(NULL, &pkt_hdr.src, 1);
     }
 
-    route = netroute_lookup(oshd.remote_routes, &pkt_hdr.dest);
-    if (!route)
+    // Lookup the destination address, if there is no route or we own it, drop
+    // the packet
+    route = netroute_lookup(oshd.route_table, &pkt_hdr.dest);
+    if (!route || route->owner == me)
         return;
 
     if (route->owner) {
         // We have a node to send this packet to
+        // next_hop should always be a valid node_t
         node_queue_packet(route->owner->next_hop, route->owner, DATA,
-            pkt, (uint16_t) pkt_size);
+            pkt, pkt_size);
     } else {
         // This route is a broadcast
-        node_queue_packet_broadcast(NULL, DATA, pkt, (uint16_t) pkt_size);
+        node_queue_packet_broadcast(NULL, DATA, pkt, pkt_size);
     }
 
     if (logger_is_debugged(DBG_TUNTAP)) {
@@ -97,14 +102,9 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
         netaddr_ntop(pkt_src, sizeof(pkt_src), &pkt_hdr.src);
         netaddr_ntop(pkt_dest, sizeof(pkt_dest), &pkt_hdr.dest);
 
-        if (route->owner) {
-            logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zu bytes, to %s)",
-                oshd.tuntap->dev_name, oshd.name, pkt_src, pkt_dest, pkt_size,
-                route->owner->name);
-        } else {
-            logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zu bytes, broadcast)",
-                oshd.tuntap->dev_name, oshd.name, pkt_src, pkt_dest, pkt_size);
-        }
+        logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zu bytes, to %s)",
+            oshd.tuntap->dev_name, oshd.name, pkt_src, pkt_dest, pkt_size,
+            netroute_owner_name(route));
     }
 }
 

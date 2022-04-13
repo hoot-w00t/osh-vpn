@@ -84,8 +84,7 @@ set(OSHD_SOURCES
     src/events/automatic_connections.c
     src/events/connect.c
     src/events/expire_endpoints.c
-    src/events/expire_local_routes.c
-    src/events/expire_remote_routes.c
+    src/events/expire_routes.c
     src/events/handshake_renew.c
     src/events/handshake_timeout.c
     src/events/node_auth_timeout.c

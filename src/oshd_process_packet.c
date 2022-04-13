@@ -647,7 +647,7 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
         }
 
         // Prevent adding broadcast routes
-        route = netroute_lookup(oshd.remote_routes, &addr);
+        route = netroute_lookup(oshd.route_table, &addr);
         if (route && !route->owner) {
             netaddr_ntop(addr_str, sizeof(addr_str), &addr);
             logger(LOG_WARN, "%s: %s: Ignoring broadcast route: %s/%u -> %s",
@@ -662,13 +662,13 @@ static bool oshd_process_route(node_t *node, oshpacket_hdr_t *pkt,
                 node->id->name, addr_str, payload[i].prefixlen, id->name);
         }
 
-        netroute_add(oshd.remote_routes, &addr, payload[i].prefixlen, id,
+        netroute_add(oshd.route_table, &addr, payload[i].prefixlen, id,
             payload[i].can_expire);
     }
 
     if (logger_is_debugged(DBG_ROUTING)) {
-        printf("Remote routes (%zu routes):\n", oshd.remote_routes->total_routes);
-        netroute_dump(oshd.remote_routes);
+        printf("Routing table (%zu routes):\n", oshd.route_table->total_routes);
+        netroute_dump(oshd.route_table);
     }
     return true;
 }

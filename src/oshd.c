@@ -149,7 +149,7 @@ bool oshd_init(void)
 
     // Add manually configured local routes
     for (size_t i = 0; i < oshd.conf_routes_size; ++i) {
-        netroute_add(oshd.local_routes, &oshd.conf_routes[i].addr,
+        netroute_add(oshd.route_table, &oshd.conf_routes[i].addr,
             oshd.conf_routes[i].prefixlen, me, false);
     }
 
@@ -175,8 +175,7 @@ void oshd_free(void)
     free(oshd.nodes);
 
     // Free routing tables
-    netroute_table_free(oshd.local_routes);
-    netroute_table_free(oshd.remote_routes);
+    netroute_table_free(oshd.route_table);
 
     // We have to reset those in case the event queue tries to remove nodes
     // This is to safely cancel these events
@@ -228,8 +227,7 @@ void oshd_loop(void)
     // Osh actually starts
     event_queue_periodic_ping();
     event_queue_expire_endpoints();
-    event_queue_expire_local_routes();
-    event_queue_expire_remote_routes();
+    event_queue_expire_routes();
     if (oshd.automatic_connections)
         event_queue_automatic_connections();
 
