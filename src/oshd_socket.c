@@ -4,6 +4,7 @@
 #include "xalloc.h"
 #include "tcp.h"
 #include "logger.h"
+#include "macros.h"
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -100,7 +101,7 @@ static void node_aio_read(aio_event_t *event)
         logger_debug(DBG_SOCKETS, "%s: Received %zi bytes", node->addrw, recvd_size);
         node->io.recvbuf_size += recvd_size;
     } else if (recvd_size < 0) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
+        if (IO_WOULDBLOCK(errno)) {
             logger(LOG_ERR, "%s: recv: %s", node->addrw, strerror(errno));
             aio_event_del(node->aio_event);
             return;
@@ -195,7 +196,7 @@ static void node_aio_write(aio_event_t *event)
 
     if (sent_size < 0) {
         // send() would block, this is a safe error
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
+        if (IO_WOULDBLOCK(errno))
             return;
 
         // Other errors probably mean that the connection is broken

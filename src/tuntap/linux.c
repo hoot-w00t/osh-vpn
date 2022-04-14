@@ -1,6 +1,7 @@
 #include "logger.h"
 #include "xalloc.h"
 #include "tuntap.h"
+#include "macros.h"
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -74,7 +75,7 @@ bool tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
     ssize_t n = read(tuntap->data.fd, buf, buf_size);
 
     if (n < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (IO_WOULDBLOCK(errno)) {
             *pkt_size = 0;
             return true;
         }

@@ -1,6 +1,7 @@
 #include "logger.h"
 #include "xalloc.h"
 #include "tuntap.h"
+#include "macros.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -144,7 +145,7 @@ retry_write:
         }
 
         if (wb < 0 || (size_t) wb != total_size) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (IO_WOULDBLOCK(errno)) {
                 // If write() will block we have to wait until tuntap_read is called
                 // This will happen when the pipe is full, after enough calls from
                 // tuntap_read the pipe won't be full anymore so we can retry to write
@@ -474,7 +475,7 @@ bool tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
     n = read(data->pollfd_read, &size, pollfd_hdr_size);
     if (n < 0) {
         // If the read would block, no more data is ready to be read on the pipe
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (IO_WOULDBLOCK(errno)) {
             *pkt_size = 0;
             success = true;
             goto end;
