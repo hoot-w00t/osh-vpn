@@ -1,0 +1,28 @@
+// @GIT_CACHE_STR@
+
+#include <stddef.h>
+
+#define OSH_VERSION_HAS_COMMENT (@OSH_VERSION_HAS_COMMENT@)
+
+const unsigned int osh_version_major = @OSH_VERSION_MAJOR@;
+const unsigned int osh_version_minor = @OSH_VERSION_MINOR@;
+const unsigned int osh_version_patch = @OSH_VERSION_PATCH@;
+
+const char *osh_version_str = "@OSH_VERSION_STR@";
+
+#if (OSH_VERSION_HAS_COMMENT == 1)
+    // If OSH_VERSION_COMMENT is defined, use it
+    const char *osh_version_comment = "@OSH_VERSION_COMMENT@";
+#else
+    #include "version_git.h"
+
+    #if (GIT_UNKNOWN == 0)
+        // Otherwise if we have git revision information, use it as the comment
+        #define GIT_VERSION_COMMENT "git-" GIT_BRANCH "." GIT_REV_COUNT "." GIT_COMMIT_HASH
+
+        const char *osh_version_comment = GIT_VERSION_COMMENT;
+    #else
+        // If we don't, don't use any comment
+        const char *osh_version_comment = NULL;
+    #endif
+#endif

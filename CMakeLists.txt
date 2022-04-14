@@ -13,6 +13,17 @@ include(GNUInstallDirs)
 
 enable_testing()
 
+# Source/header files configured by CMake
+set(OSH_BINARY_SOURCEDIR "${CMAKE_CURRENT_BINARY_DIR}/src")
+set(OSH_BINARY_INCLUDEDIR "${CMAKE_CURRENT_BINARY_DIR}/include")
+include_directories(${OSH_BINARY_INCLUDEDIR})
+
+# Osh version files
+set(OSH_VERSION_FILE_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/version.c.in")
+set(OSH_VERSION_FILE_DEST "${OSH_BINARY_SOURCEDIR}/version.c")
+set(VERSION_GIT_FILE_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/include/version_git.h.in")
+set(VERSION_GIT_FILE_DEST "${OSH_BINARY_INCLUDEDIR}/version_git.h")
+
 # Package variables
 set(CPACK_PACKAGE_VENDOR "akrocynova")
 set(CPACK_VERBATIM_VARIABLES TRUE)
@@ -113,6 +124,7 @@ set(OSHD_SOURCES
     src/random.c
     src/tcp.c
     src/xalloc.c
+    ${OSH_VERSION_FILE_DEST}
 )
 
 # All sources for oshd_tests
@@ -136,6 +148,33 @@ set(OSHD_TESTS_SOURCES
 add_executable(oshd ${OSHD_SOURCES})
 target_link_libraries(oshd easyconf ${OPENSSL_CRYPTO_LIBRARIES})
 
+# Git revision information
+add_custom_target(version_git
+    COMMAND ${CMAKE_COMMAND} -Droot_dir=${CMAKE_CURRENT_SOURCE_DIR}
+                             -Dsrc_file=${VERSION_GIT_FILE_SOURCE}
+                             -Ddest_file=${VERSION_GIT_FILE_DEST}
+                             -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/version_git.cmake
+    DEPENDS ${VERSION_GIT_FILE_SOURCE}
+    BYPRODUCTS ${VERSION_GIT_FILE_DEST}
+    VERBATIM)
+add_dependencies(oshd version_git)
+
+# Osh version definitions and configuration
+set(OSH_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(OSH_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(OSH_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+
+set(OSH_VERSION_STR "${OSH_VERSION_MAJOR}.${OSH_VERSION_MINOR}.${OSH_VERSION_PATCH}")
+
+if (OSH_VERSION_COMMENT)
+    set(OSH_VERSION_HAS_COMMENT 1)
+else()
+    set(OSH_VERSION_HAS_COMMENT 0)
+endif()
+
+message(STATUS "Configuring ${OSH_VERSION_FILE_DEST} with version ${OSH_VERSION_STR} ${OSH_VERSION_COMMENT}")
+configure_file("${OSH_VERSION_FILE_SOURCE}" "${OSH_VERSION_FILE_DEST}" @ONLY)
+
 # Criterion unit tests
 option(ENABLE_UNIT_TESTS "Enable unit testing with Criterion" OFF)
 if (ENABLE_UNIT_TESTS)
@@ -152,17 +191,6 @@ if (ENABLE_UNIT_TESTS)
 else()
     message(STATUS "Unit tests disabled")
 endif()
-
-# Always keep the git version up to date
-set(VERSION_GIT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/include/version_git.h")
-add_custom_target(version_git
-    COMMAND ${CMAKE_COMMAND} -Droot_dir=${CMAKE_CURRENT_SOURCE_DIR}
-                             -Ddest_file=${VERSION_GIT_FILE}
-                             -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/version_git.cmake
-    DEPENDS ${VERSION_GIT_FILE}.in
-    BYPRODUCTS ${VERSION_GIT_FILE}
-    VERBATIM)
-add_dependencies(oshd version_git)
 
 # Installation rules
 install(TARGETS oshd RUNTIME)

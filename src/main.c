@@ -244,7 +244,10 @@ static void parse_opt(int opt)
             exit(EXIT_SUCCESS);
 
         case 'V':
-            printf(OSH_VERSION_FMT "\n", OSH_VERSION_FMT_ARGS);
+            printf("Osh daemon %s", osh_version_str);
+            if (osh_version_has_comment())
+                printf(" (%s)", osh_version_comment);
+            printf("\n");
             exit(EXIT_SUCCESS);
 
         case 'C':

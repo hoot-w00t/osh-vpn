@@ -6,6 +6,7 @@ find_package(Git QUIET)
 set(GIT_COMMIT_HASH "unknown")
 set(GIT_REV_COUNT "unknown")
 set(GIT_BRANCH "unknown")
+set(GIT_UNKNOWN 1)
 
 # Fetch revision information from git
 if (GIT_FOUND AND EXISTS "${root_dir}/.git")
@@ -29,6 +30,9 @@ if (GIT_FOUND AND EXISTS "${root_dir}/.git")
         WORKING_DIRECTORY "${root_dir}"
         OUTPUT_VARIABLE GIT_BRANCH
         OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+    # Git revision information is not unknown
+    set(GIT_UNKNOWN 0)
 endif()
 
 # Define the cache string
@@ -65,5 +69,5 @@ endif ()
 
 if (${GIT_UPDATE_FILE} EQUAL 1)
     message(STATUS "Updating ${dest_file} with commit ${GIT_COMMIT_HASH}")
-    configure_file(${dest_file}.in ${dest_file} @ONLY)
+    configure_file(${src_file} ${dest_file} @ONLY)
 endif ()
