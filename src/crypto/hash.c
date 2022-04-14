@@ -8,7 +8,7 @@
 // Calculate the SHA3-512 hash of *in and put in into *hash
 // *hash must have a size of EVP_MAX_MD_SIZE bytes at least, the actual size of
 // the written hash will be stored in *hash_size
-bool hash_sha3_512(const uint8_t *in, unsigned int in_size, uint8_t *hash,
+bool hash_sha3_512(const void *in, unsigned int in_size, uint8_t *hash,
     unsigned int *hash_size)
 {
     EVP_MD_CTX *ctx = EVP_MD_CTX_new();

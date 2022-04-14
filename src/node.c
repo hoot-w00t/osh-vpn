@@ -84,9 +84,7 @@ static void node_id_update_edges_hash(node_id_t *nid)
     free(ordered_edges);
 
     // Compute the SHA3-512 hash of this checksum
-    if (!hash_sha3_512((uint8_t *) buf, strlen(buf),
-            nid->edges_hash, &nid->edges_hash_size))
-    {
+    if (!hash_sha3_512(buf, strlen(buf), nid->edges_hash, &nid->edges_hash_size)) {
         logger(LOG_CRIT, "Edges hash could not be computed for %s", nid->name);
         memset(nid->edges_hash, 0, sizeof(nid->edges_hash));
         nid->edges_hash_size = 0;
