@@ -115,6 +115,7 @@ void cipher_free(cipher_t *cipher)
 // Encrypt in_size bytes from in to out and write the size of the encrypted data
 // in *out_size
 // Write authentication tag to tag
+_cipher_attr
 bool cipher_encrypt(cipher_t *cipher, uint8_t *out, size_t *out_size,
     const uint8_t *in, size_t in_size, void *tag)
 {
@@ -150,6 +151,7 @@ bool cipher_encrypt(cipher_t *cipher, uint8_t *out, size_t *out_size,
 // Decrypt in_size bytes from in to out and write the size of the decrypted data
 // in *out_size
 // Verifies the authenticity of the cipher text using tag
+_cipher_attr
 bool cipher_decrypt(cipher_t *cipher, uint8_t *out, size_t *out_size,
     const uint8_t *in, size_t in_size, void *tag)
 {

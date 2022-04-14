@@ -37,14 +37,19 @@ typedef struct cipher {
     cipher_seqno_t seqno;
 } cipher_t;
 
+#define _cipher_attr __attribute__((warn_unused_result))
+
 cipher_t *cipher_create_aes_256_gcm(bool encrypts,
     const uint8_t *key, size_t key_size,
     const uint8_t *iv, size_t iv_size);
 
 void cipher_free(cipher_t *cipher);
 
+_cipher_attr
 bool cipher_encrypt(cipher_t *cipher, uint8_t *out, size_t *out_size,
     const uint8_t *in, size_t in_size, void *tag);
+
+_cipher_attr
 bool cipher_decrypt(cipher_t *cipher, uint8_t *out, size_t *out_size,
     const uint8_t *in, size_t in_size, void *tag);
 
