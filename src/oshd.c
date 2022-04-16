@@ -97,18 +97,17 @@ bool oshd_init(void)
     }
 
     if (oshd.server_enabled) {
-        oshd.server_fd = tcp4_bind(NULL, oshd.server_port, OSHD_TCP_SERVER_BACKLOG);
-        oshd.server_fd6 = tcp6_bind(NULL, oshd.server_port, OSHD_TCP_SERVER_BACKLOG);
+        int fd4 = tcp4_bind(NULL, oshd.server_port, OSHD_TCP_SERVER_BACKLOG);
+        int fd6 = tcp6_bind(NULL, oshd.server_port, OSHD_TCP_SERVER_BACKLOG);
 
         // If no server was opened, stop here
-        if (oshd.server_fd < 0 && oshd.server_fd6 < 0)
+        if (fd4 < 0 && fd6 < 0)
             return false;
 
-        if (oshd.server_fd >= 0)
-            oshd_server_add(oshd.server_fd);
-
-        if (oshd.server_fd6 >= 0)
-            oshd_server_add(oshd.server_fd6);
+        if (fd4 >= 0)
+            oshd_server_add(fd4);
+        if (fd6 >= 0)
+            oshd_server_add(fd6);
     }
 
     // Create our local node's ID in the tree

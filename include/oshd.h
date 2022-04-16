@@ -54,8 +54,6 @@ typedef struct oshd {
     tuntap_t *tuntap;          // The TUN/TAP device
     char *tuntap_devname;       // The requested TUN/TAP device name
 
-    int server_fd;        // TCP server socket
-    int server_fd6;       // TCP6 server socket
     uint16_t server_port; // TCP server port
     bool server_enabled;  // true if the TCP server will be opened and used
 

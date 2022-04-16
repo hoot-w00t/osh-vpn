@@ -693,8 +693,6 @@ void oshd_init_conf(void)
     memset(&oshd, 0, sizeof(oshd_t));
 
     // Everything that should not be zero by default is set
-    oshd.server_fd = -1;
-    oshd.server_fd6 = -1;
     oshd.server_port = OSHD_DEFAULT_PORT;
     oshd.server_enabled = true;
 
