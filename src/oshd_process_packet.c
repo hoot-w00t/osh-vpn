@@ -91,7 +91,7 @@ bool oshd_process_packet(node_t *node, uint8_t *packet)
 
     // If this packet was forwarded but shouldn't have been, drop it
     if (!def->can_be_forwarded && src->node_socket != node) {
-        logger(LOG_ERR, "%s: %s: Forwarded an unauthorized packet type (%s, from %s)",
+        logger(LOG_ERR, "%s: %s: Rejecting forwarded %s packet (from %s)",
             node->addrw, node->id->name, def->name, src->name);
         return false;
     }
