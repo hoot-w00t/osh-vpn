@@ -78,13 +78,14 @@ typedef enum oshpacket_payload_size {
 // For a total of 36 bytes
 typedef struct __attribute__((__packed__)) oshpacket_hdr {
     // Public header (never encrypted)
-    // 3 bytes, if it changes OSHPACKET_PUBLIC_HDR_SIZE needs to be updated
+    // 3 + CIPHER_TAG_SIZE bytes
+    // If it changes OSHPACKET_PUBLIC_HDR_SIZE needs to be updated
     uint8_t          magic;
     uint16_t         payload_size;
     uint8_t          tag[CIPHER_TAG_SIZE];
 
     // Private header (after the handshake is done, this is always encrypted)
-    // 33 bytes, if it changes OSHPACKET_HDR_SIZE needs to be updated
+    // 33 bytes, if it changes OSHPACKET_PRIVATE_HDR_SIZE needs to be updated
     oshpacket_type_t type : 8;
     char             src_node[NODE_NAME_SIZE];
     char             dest_node[NODE_NAME_SIZE];

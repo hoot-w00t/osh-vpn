@@ -59,7 +59,7 @@ struct netroute_table {
     // Total number of routes in the table
     size_t total_routes;
 
-    // Total number of routes wuth an owner in the table
+    // Total number of routes with an owner in the table
     size_t total_owned_routes;
 
     // Masks used in the table
@@ -94,7 +94,7 @@ void netroute_dump(netroute_table_t *table);
 #define foreach_netroute_head_const(route, head) \
     for (const netroute_t *route = (head); route; route = route->next)
 
-// Iterate through all netrutes in a netroute_table
+// Iterate through all netroutes in a netroute_table
 #define foreach_netroute(route, table, iter)                   \
     for (size_t iter = 0; iter < (table)->heads_count; ++iter) \
         foreach_netroute_head(route, (table)->heads[iter])

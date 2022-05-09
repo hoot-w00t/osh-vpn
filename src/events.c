@@ -218,7 +218,7 @@ static bool event_unqueue(event_t *event)
         i = &(*i)->next;
     }
 
-    // The event was not found in the queue, return NULL
+    // The event was not found in the queue, return false
     return false;
 }
 

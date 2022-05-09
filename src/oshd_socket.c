@@ -301,7 +301,7 @@ static void oshd_add_node(node_t *node)
     }
 
     // The node needs to keep track of its aio event
-    node->aio_event = aio_event_add(oshd.aio, &base_event);;
+    node->aio_event = aio_event_add(oshd.aio, &base_event);
 }
 
 // Queue node connection (non-blocking connect)
