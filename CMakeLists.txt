@@ -100,6 +100,17 @@ set(OSHD_SOURCES
     src/events/handshake_timeout.c
     src/events/node_auth_timeout.c
     src/events/periodic_ping.c
+    src/oshpacket_handlers/data.c
+    src/oshpacket_handlers/devmode.c
+    src/oshpacket_handlers/edge.c
+    src/oshpacket_handlers/endpoint.c
+    src/oshpacket_handlers/goodbye.c
+    src/oshpacket_handlers/handshake.c
+    src/oshpacket_handlers/hello.c
+    src/oshpacket_handlers/ping_pong.c
+    src/oshpacket_handlers/pubkey.c
+    src/oshpacket_handlers/route.c
+    src/oshpacket_handlers/stateexg_end.c
     ${OSH_TUNTAP_SOURCES}
     src/base64.c
     src/endpoints.c

@@ -1,24 +1,209 @@
 #include "oshpacket.h"
+#include "oshpacket_handlers.h"
+#include "logger.h"
+#include "node.h"
+
+// Generic default handlers for invalid packet types
+static bool unauth_handler_reject(node_t *node, oshpacket_hdr_t *hdr,
+    __attribute__((unused)) void *payload)
+{
+    logger(LOG_ERR, "%s: Rejecting %s packet",
+        node->addrw, oshpacket_type_name(hdr->type));
+    return false;
+}
+
+static bool handler_reject(node_t *node, node_id_t *src, oshpacket_hdr_t *hdr,
+    __attribute__((unused)) void *payload)
+{
+    logger(LOG_ERR, "%s: %s: Rejecting %s packet from %s",
+        node->addrw, node->id->name, oshpacket_type_name(hdr->type), src->name);
+    return false;
+}
+
+// The packet types must be in the same order as the enumeration, otherwise the
+// lookup will return an invalid definition
+// The name and both handlers must never be NULL, as those will be used without
+// checking their values first
+static const oshpacket_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
+    {
+        .type = HANDSHAKE,
+        .name = "HANDSHAKE",
+        .handler_unauth = oshpacket_handler_handshake,
+        .handler = oshpacket_handler_handshake_auth,
+        .can_be_forwarded = false,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
+        .payload_size = sizeof(oshpacket_handshake_t)
+    },
+    {
+        .type = HANDSHAKE_END,
+        .name = "HANDSHAKE_END",
+        .handler_unauth = unauth_handler_reject,
+        .handler = oshd_process_handshake_end,
+        .can_be_forwarded = false,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
+        .payload_size = 0
+    },
+    {
+        .type = HELLO_CHALLENGE,
+        .name = "HELLO_CHALLENGE",
+        .handler_unauth = oshpacket_handler_hello_challenge,
+        .handler = handler_reject,
+        .can_be_forwarded = false,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
+        .payload_size = sizeof(oshpacket_hello_challenge_t)
+    },
+    {
+        .type = HELLO_RESPONSE,
+        .name = "HELLO_RESPONSE",
+        .handler_unauth = oshpacket_handler_hello_response,
+        .handler = handler_reject,
+        .can_be_forwarded = false,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
+        .payload_size = sizeof(oshpacket_hello_response_t)
+    },
+    {
+        .type = HELLO_END,
+        .name = "HELLO_END",
+        .handler_unauth = oshpacket_handler_hello_end,
+        .handler = handler_reject,
+        .can_be_forwarded = false,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
+        .payload_size = sizeof(oshpacket_hello_end_t)
+    },
+    {
+        .type = DEVMODE,
+        .name = "DEVMODE",
+        .handler_unauth = unauth_handler_reject,
+        .handler = oshpacket_handler_devmode,
+        .can_be_forwarded = false,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
+        .payload_size = sizeof(oshpacket_devmode_t)
+    },
+    {
+        .type = STATEEXG_END,
+        .name = "STATEEXG_END",
+        .handler_unauth = unauth_handler_reject,
+        .handler = oshpacket_handler_stateexg_end,
+        .can_be_forwarded = false,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
+        .payload_size = 0
+    },
+    {
+        .type = GOODBYE,
+        .name = "GOODBYE",
+        .handler_unauth = oshpacket_handler_goodbye_unauth,
+        .handler = oshpacket_handler_goodbye,
+        .can_be_forwarded = false,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
+        .payload_size = 0
+    },
+    {
+        .type = PING,
+        .name = "PING",
+        .handler_unauth = unauth_handler_reject,
+        .handler = oshpacket_handler_ping,
+        .can_be_forwarded = false,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
+        .payload_size = 0
+    },
+    {
+        .type = PONG,
+        .name = "PONG",
+        .handler_unauth = unauth_handler_reject,
+        .handler = oshpacket_handler_pong,
+        .can_be_forwarded = false,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
+        .payload_size = 0
+    },
+    {
+        .type = DATA,
+        .name = "DATA",
+        .handler_unauth = unauth_handler_reject,
+        .handler = oshpacket_handler_data,
+        .can_be_forwarded = true,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_VARIABLE,
+        .payload_size = 0
+    },
+    {
+        .type = PUBKEY,
+        .name = "PUBKEY",
+        .handler_unauth = unauth_handler_reject,
+        .handler = oshpacket_handler_pubkey,
+        .can_be_forwarded = true,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FRAGMENTED,
+        .payload_size = sizeof(oshpacket_pubkey_t)
+    },
+    {
+        .type = ENDPOINT,
+        .name = "ENDPOINT",
+        .handler_unauth = unauth_handler_reject,
+        .handler = oshpacket_handler_endpoint,
+        .can_be_forwarded = true,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FRAGMENTED,
+        .payload_size = sizeof(oshpacket_endpoint_t)
+    },
+    {
+        .type = EDGE_ADD,
+        .name = "EDGE_ADD",
+        .handler_unauth = unauth_handler_reject,
+        .handler = oshpacket_handler_edge_add,
+        .can_be_forwarded = true,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FRAGMENTED,
+        .payload_size = sizeof(oshpacket_edge_t)
+    },
+    {
+        .type = EDGE_DEL,
+        .name = "EDGE_DEL",
+        .handler_unauth = unauth_handler_reject,
+        .handler = oshpacket_handler_edge_del,
+        .can_be_forwarded = true,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FRAGMENTED,
+        .payload_size = sizeof(oshpacket_edge_t)
+    },
+    {
+        .type = ROUTE_ADD,
+        .name = "ROUTE_ADD",
+        .handler_unauth = unauth_handler_reject,
+        .handler = oshpacket_handler_route,
+        .can_be_forwarded = true,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FRAGMENTED,
+        .payload_size = sizeof(oshpacket_route_t)
+    }
+};
 
 const char *oshpacket_type_name(oshpacket_type_t type)
 {
-    switch (type) {
-        case HANDSHAKE      : return "HANDSHAKE";
-        case HANDSHAKE_END  : return "HANDSHAKE_END";
-        case HELLO_CHALLENGE: return "HELLO_CHALLENGE";
-        case HELLO_RESPONSE : return "HELLO_RESPONSE";
-        case HELLO_END      : return "HELLO_END";
-        case DEVMODE        : return "DEVMODE";
-        case STATEEXG_END   : return "STATEEXG_END";
-        case GOODBYE        : return "GOODBYE";
-        case PING           : return "PING";
-        case PONG           : return "PONG";
-        case DATA           : return "DATA";
-        case PUBKEY         : return "PUBKEY";
-        case ENDPOINT       : return "ENDPOINT";
-        case EDGE_ADD       : return "EDGE_ADD";
-        case EDGE_DEL       : return "EDGE_DEL";
-        case ROUTE_ADD      : return "ROUTE_ADD";
-             default        : return "UNKNOWN";
+    if (oshpacket_type_valid(type))
+        return oshpacket_table[type].name;
+    return "UNKNOWN";
+}
+
+const oshpacket_t *oshpacket_lookup(oshpacket_type_t type)
+{
+    if (oshpacket_type_valid(type))
+        return &oshpacket_table[type];
+    return NULL;
+}
+
+// Returns true if the given payload size is valid for this packet type
+bool oshpacket_payload_size_valid(const oshpacket_t *def,
+    const size_t payload_size)
+{
+    // Verify the payload size
+    switch (def->payload_size_type) {
+        // A variable size means that the handler will verify the size
+        case OSHPACKET_PAYLOAD_SIZE_VARIABLE: return true;
+
+        // The payload size must match the expected size
+        case OSHPACKET_PAYLOAD_SIZE_FIXED:
+            return payload_size == def->payload_size;
+
+        // The payload size must be a multiple of the expected size
+        case OSHPACKET_PAYLOAD_SIZE_FRAGMENTED:
+            return  payload_size >= def->payload_size
+                && (payload_size  % def->payload_size) == 0;
+
+        // The default case should never occur
+        default: return false;
     }
 }

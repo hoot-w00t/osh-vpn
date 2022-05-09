@@ -5,6 +5,7 @@
 #include "netaddr.h"
 #include "oshd_device_mode.h"
 #include <stdint.h>
+#include <stddef.h>
 
 #ifndef OSHPACKET_MAGIC
 #define OSHPACKET_MAGIC (0x1)
@@ -68,6 +69,12 @@ typedef enum oshpacket_type {
 } oshpacket_type_t;
 #define OSHPACKET_TYPE_COUNT (_LAST_OSHPACKET_TYPE_ENTRY)
 
+typedef enum oshpacket_payload_size {
+    OSHPACKET_PAYLOAD_SIZE_VARIABLE = 0, // Let the handler check the size
+    OSHPACKET_PAYLOAD_SIZE_FIXED, // Only accept one payload size
+    OSHPACKET_PAYLOAD_SIZE_FRAGMENTED // Accept the payload size or a multiple
+} oshpacket_payload_size_t;
+
 // For a total of 36 bytes
 typedef struct __attribute__((__packed__)) oshpacket_hdr {
     // Public header (never encrypted)
@@ -82,6 +89,29 @@ typedef struct __attribute__((__packed__)) oshpacket_hdr {
     char             src_node[NODE_NAME_SIZE];
     char             dest_node[NODE_NAME_SIZE];
 } oshpacket_hdr_t;
+
+typedef struct node node_t;
+typedef struct node_id node_id_t;
+
+// Unauthenticated handler is called with the node_t socket which received the
+// packet, its header and the payload
+// Closes the socket if the return value is false
+typedef bool (*oshpacket_unauth_handler_t)(node_t *, oshpacket_hdr_t *, void *);
+
+// Authenticated handler is called with the node_t socket which received the
+// packet, the node that sent it, the packet header and the payload
+// Closes the socket if the return value is false
+typedef bool (*oshpacket_handler_t)(node_t *, node_id_t *, oshpacket_hdr_t *, void *);
+
+typedef struct oshpacket {
+    oshpacket_type_t type;
+    const char *name;
+    oshpacket_unauth_handler_t handler_unauth;
+    oshpacket_handler_t handler;
+    bool can_be_forwarded;
+    oshpacket_payload_size_t payload_size_type;
+    size_t payload_size;
+} oshpacket_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_hello_challenge {
     uint8_t challenge[OSHPACKET_PAYLOAD_MAXSIZE];
@@ -154,11 +184,14 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 #define OSHPACKET_PRIVATE_HDR(pkt) _OSHPACKET_OFFSET(pkt, OSHPACKET_PUBLIC_HDR_SIZE)
 #define OSHPACKET_PAYLOAD(pkt) _OSHPACKET_OFFSET(pkt, OSHPACKET_HDR_SIZE)
 
-const char *oshpacket_type_name(oshpacket_type_t type);
-
 static inline bool oshpacket_type_valid(oshpacket_type_t type)
 {
-    return type >= 0 && type < _LAST_OSHPACKET_TYPE_ENTRY;
+    return (type >= 0) && (type < _LAST_OSHPACKET_TYPE_ENTRY);
 }
+
+const char *oshpacket_type_name(oshpacket_type_t type);
+const oshpacket_t *oshpacket_lookup(oshpacket_type_t type);
+bool oshpacket_payload_size_valid(const oshpacket_t *def,
+    const size_t payload_size);
 
 #endif
