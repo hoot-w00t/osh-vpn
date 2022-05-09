@@ -94,7 +94,6 @@ set(OSHD_SOURCES
     src/endpoints.c
     src/events.c
     src/logger.c
-    src/main.c
     src/netaddr.c
     src/netbuffer.c
     src/netpacket.c
@@ -118,14 +117,7 @@ set(OSHD_SOURCES
 
 # All sources for oshd_tests
 set(OSHD_TESTS_SOURCES
-    src/base64.c
-    src/logger.c
-    src/xalloc.c
-    src/netaddr.c
-    src/netbuffer.c
-    src/oshd_device_mode.c
-    src/oshpacket.c
-    src/random.c
+    ${OSHD_SOURCES}
     tests/base64_tests.c
     tests/netaddr_tests.c
     tests/netbuffer_tests.c
@@ -133,9 +125,15 @@ set(OSHD_TESTS_SOURCES
     tests/oshpacket_tests.c
     tests/random_tests.c)
 
+
+# Libraries to link to oshd
+set(OSHD_LINK_LIBRARIES
+    easyconf
+    ${OPENSSL_CRYPTO_LIBRARIES})
+
 # Osh daemon
-add_executable(oshd ${OSHD_SOURCES})
-target_link_libraries(oshd easyconf ${OPENSSL_CRYPTO_LIBRARIES})
+add_executable(oshd ${OSHD_SOURCES} src/main.c)
+target_link_libraries(oshd ${OSHD_LINK_LIBRARIES})
 
 # Criterion unit tests
 option(ENABLE_UNIT_TESTS "Enable unit testing with Criterion" OFF)
@@ -143,8 +141,8 @@ if (ENABLE_UNIT_TESTS)
     message(STATUS "Unit tests enabled")
 
     find_library(CRITERION_FOUND criterion REQUIRED)
-    add_executable(oshd_tests ${OSHD_TESTS_SOURCES})
-    target_link_libraries(oshd_tests criterion)
+    add_executable(oshd_tests ${OSHD_SOURCES} ${OSHD_TESTS_SOURCES})
+    target_link_libraries(oshd_tests ${OSHD_LINK_LIBRARIES} criterion)
 
     add_test(NAME unit_tests COMMAND ./oshd_tests)
 
