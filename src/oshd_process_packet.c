@@ -1,13 +1,5 @@
 #include "node.h"
-#include "events.h"
-#include "oshd_device.h"
-#include "oshd.h"
-#include "crypto/hash.h"
-#include "netpacket.h"
 #include "logger.h"
-#include "xalloc.h"
-#include <stdlib.h>
-#include <string.h>
 
 // Returns true if packet was processed without an error
 // Returns false if node should be disconnected
