@@ -1,14 +1,15 @@
 #include "oshd.h"
 #include "logger.h"
+#include "macros.h"
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <netdb.h>
 #include <ifaddrs.h>
 
-#if !(defined(_WIN32) || defined(__CYGWIN__))
-// Contains the definitions for the interface flags
-#include <linux/if.h>
+#if PLATFORM_IS_LINUX
+    // Contains the definitions for the interface flags
+    #include <linux/if.h>
 #endif
 
 // Discover all addresses on the TUN/TAP device and add them to our local routes

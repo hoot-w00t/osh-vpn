@@ -1,5 +1,6 @@
 #include "logger.h"
 #include "xalloc.h"
+#include "macros.h"
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -65,7 +66,7 @@ void oshd_cmd_unset_all(void)
     }
 }
 
-#if defined(_WIN32) || defined(__CYGWIN__)
+#if PLATFORM_IS_WINDOWS
 #define shell_filename "cmd.exe"
 #define shell_fullpath "C:\\Windows\\System32\\" shell_filename
 
