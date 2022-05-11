@@ -16,9 +16,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <signal.h>
-#include <dirent.h>
 
 // Global variable
 oshd_t oshd;
