@@ -1,4 +1,4 @@
-name: Run tests (Linux)
+name: Run tests
 on:
   push:
     branches: [ '**' ]
@@ -6,7 +6,7 @@ on:
     branches: [ '**' ]
 
 jobs:
-  tests_linux:
+  linux:
     runs-on: ubuntu-latest
     steps:
       - name: Install requirements
