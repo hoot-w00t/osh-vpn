@@ -1,0 +1,58 @@
+name: Build (MSYS2)
+on:
+  push:
+    branches: [ '**' ]
+  pull_request:
+    branches: [ '**' ]
+
+jobs:
+  build_msys2:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Set up MSYS2 and install requirements
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          update: true
+          install: >-
+            base-devel
+            gcc
+            pkgconf
+            openssl-devel
+            cmake
+            python3
+
+      - name: Clone main repository
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          path: osh-vpn
+
+      - name: Clone mpreisler/mingw-bundledlls repository
+        uses: actions/checkout@v3
+        with:
+          repository: mpreisler/mingw-bundledlls
+          path: mingw-bundledlls
+
+      - name: Build project
+        run: |
+          cd "$GITHUB_WORKSPACE/osh-vpn"
+          cmake -B build -G "Unix Makefiles" -DCMAKE_C_FLAGS="-Werror" -DCMAKE_BUILD_TYPE=Hardened .
+          make -C build
+
+      - name: Copy the required DLLs
+        run: |
+          cd "$GITHUB_WORKSPACE/osh-vpn/build"
+          python3 ../../mingw-bundledlls/mingw-bundledlls --copy oshd.exe
+
+      - name: Upload binaries and DLLs artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: osh-vpn-msys2
+          path: |
+            ${{ github.workspace }}/osh-vpn/build/*.exe
+            ${{ github.workspace }}/osh-vpn/build/*.dll
