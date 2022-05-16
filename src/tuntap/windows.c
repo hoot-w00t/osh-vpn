@@ -537,7 +537,7 @@ end:
     return success;
 }
 
-bool tuntap_write(tuntap_t *tuntap, void *packet, size_t packet_size)
+bool tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size)
 {
     OVERLAPPED *ol = (OVERLAPPED *) tuntap_data(tuntap)->write_ol;
     DWORD written_bytes;

@@ -87,7 +87,7 @@ bool tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
     return true;
 }
 
-bool tuntap_write(tuntap_t *tuntap, void *packet, size_t packet_size)
+bool tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size)
 {
     ssize_t n = write(tuntap->data.fd, packet, packet_size);
 

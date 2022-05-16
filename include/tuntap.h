@@ -49,7 +49,7 @@ bool tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
 
 // Write a packet to the TUN/TAP device
 // Returns false on error
-bool tuntap_write(tuntap_t *tuntap, void *packet, size_t packet_size);
+bool tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size);
 
 // Returns a non-blocking file descriptor that can be used by poll()
 int tuntap_pollfd(tuntap_t *tuntap);
