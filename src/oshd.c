@@ -87,7 +87,9 @@ bool oshd_init(void)
         if (!oshd.tuntap)
             return false;
 
-        setenv("OSHD_DEVICE", oshd.tuntap->dev_name, 1);
+        if (!oshd_cmd_setenv("OSHD_DEVICE", oshd.tuntap->dev_name))
+            return false;
+
         if (!oshd_cmd_execute("DevUp"))
             return false;
 

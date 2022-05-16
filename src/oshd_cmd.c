@@ -66,6 +66,33 @@ void oshd_cmd_unset_all(void)
     }
 }
 
+// Set environment variable
+bool oshd_cmd_setenv(const char *variable, const char *value)
+{
+    logger_debug(DBG_CMD, "Setting environment variable %s to '%s'",
+        variable, value);
+    if (setenv(variable, value, 1) < 0) {
+        logger(LOG_ERR, "Failed to set environment variable %s to '%s': %s",
+            variable, value, strerror(errno));
+        return false;
+    }
+
+    return true;
+}
+
+// Unset environment variable
+bool oshd_cmd_unsetenv(const char *variable)
+{
+    logger_debug(DBG_CMD, "Unsetting environment variable %s", variable);
+    if (unsetenv(variable) < 0) {
+        logger(LOG_ERR, "Failed to unset environment variable %s: %s",
+            variable, strerror(errno));
+        return false;
+    }
+
+    return true;
+}
+
 #if PLATFORM_IS_WINDOWS
 #define shell_filename "cmd.exe"
 #define shell_fullpath "C:\\Windows\\System32\\" shell_filename
