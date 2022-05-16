@@ -315,8 +315,18 @@ const netroute_t *netroute_add(netroute_table_t *table,
     }
 
     // Update the owner if none of the two are NULL
-    if (route->owner && owner)
+    if (route->owner && owner) {
+        // If the route's owner changes two nodes may be using the same
+        // address/route, log a warning just in case
+        if (route->owner != owner) {
+            char addrw[INET6_ADDRSTRLEN];
+
+            netaddr_ntop(addrw, sizeof(addrw), &route->addr);
+            logger(LOG_WARN, "Conflicting route %s/%u owned by both %s and %s",
+                addrw, route->prefixlen, route->owner->name, owner->name);
+        }
         route->owner = owner;
+    }
 
     // Update the expire_after timestamp if this route can expire
     if (route->can_expire) {
@@ -328,7 +338,7 @@ const netroute_t *netroute_add(netroute_table_t *table,
     if (logger_is_debugged(DBG_NETROUTE)) {
         char addrw[INET6_ADDRSTRLEN];
 
-        netaddr_ntop(addrw, sizeof(addrw), addr);
+        netaddr_ntop(addrw, sizeof(addrw), &route->addr);
         logger_debug(DBG_NETROUTE, "Added %s/%u owned by %s (%s expire) to %p",
             addrw, route->prefixlen, netroute_owner_name(route),
             route->can_expire ? "can" : "cannot", table);
