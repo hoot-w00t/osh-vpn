@@ -317,14 +317,18 @@ const netroute_t *netroute_add(netroute_table_t *table,
     // Update the owner if none of the two are NULL
     if (route->owner && owner) {
         // If the route's owner changes two nodes may be using the same
-        // address/route, log a warning just in case
-        if (route->owner != owner) {
+        // address/route, log a warning just in case (only for our own routes)
+        if (   route->owner != owner
+            && (route->owner->local_node || owner->local_node))
+        {
             char addrw[INET6_ADDRSTRLEN];
 
             netaddr_ntop(addrw, sizeof(addrw), &route->addr);
-            logger(LOG_WARN, "Conflicting route %s/%u owned by both %s and %s",
+            logger(LOG_WARN,
+                "Conflicting local route %s/%u previously owned by %s, now %s",
                 addrw, route->prefixlen, route->owner->name, owner->name);
         }
+
         route->owner = owner;
     }
 
