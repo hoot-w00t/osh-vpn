@@ -170,7 +170,7 @@ void netaddr_cpy_data(void *dest, const netaddr_t *src)
 }
 
 // Returns an allocated copy of *src
-netaddr_t *netaddr_dup(netaddr_t *src)
+netaddr_t *netaddr_dup(const netaddr_t *src)
 {
     netaddr_t *dup = xalloc(sizeof(netaddr_t));
 
