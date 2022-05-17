@@ -3,7 +3,7 @@
 
 #include "crypto/cipher.h"
 #include "netaddr.h"
-#include "oshd_device_mode.h"
+#include "device_mode.h"
 #include <stdint.h>
 #include <stddef.h>
 

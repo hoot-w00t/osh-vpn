@@ -1,11 +1,11 @@
 #define _OSH_OSHD_C
 
 #include "oshd_cmd.h"
-#include "oshd_device.h"
 #include "oshd_discovery.h"
 #include "oshd_socket.h"
 #include "oshd.h"
 
+#include "device.h"
 #include "events.h"
 #include "tcp.h"
 #include "tuntap.h"
@@ -91,7 +91,7 @@ bool oshd_init(void)
         if (!oshd_cmd_setenv("OSHD_DEVICE", oshd.tuntap->dev_name))
             return false;
 
-        oshd_device_add(oshd.tuntap);
+        device_add(oshd.tuntap);
     }
 
     if (oshd.server_enabled) {

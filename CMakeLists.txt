@@ -119,6 +119,8 @@ set(OSHD_SOURCES
     src/oshpacket_handlers/stateexg_end.c
     ${OSH_TUNTAP_SOURCES}
     src/base64.c
+    src/device_mode.c
+    src/device.c
     src/endpoints.c
     src/events.c
     src/logger.c
@@ -131,8 +133,6 @@ set(OSHD_SOURCES
     src/oshd_clock.c
     src/oshd_cmd.c
     src/oshd_conf.c
-    src/oshd_device_mode.c
-    src/oshd_device.c
     src/oshd_discovery.c
     src/oshd_process_packet.c
     src/oshd_socket.c
@@ -148,10 +148,10 @@ set(OSHD_SOURCES
 set(OSHD_TESTS_SOURCES
     ${OSHD_SOURCES}
     tests/base64_tests.c
+    tests/device_mode_tests.c
     tests/netaddr_tests.c
     tests/netbuffer_tests.c
     tests/netroute_tests.c
-    tests/oshd_device_mode_tests.c
     tests/oshpacket_tests.c
     tests/random_tests.c)
 

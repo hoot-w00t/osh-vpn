@@ -5,7 +5,7 @@
 #include "node.h"
 #include "tuntap.h"
 #include "netroute.h"
-#include "oshd_device_mode.h"
+#include "device_mode.h"
 #include "crypto/pkey.h"
 #include <stdbool.h>
 #include <stdint.h>

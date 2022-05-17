@@ -1,12 +1,12 @@
-#ifndef _OSH_OSHD_DEVICE_H
-#define _OSH_OSHD_DEVICE_H
+#ifndef _OSH_DEVICE_H
+#define _OSH_DEVICE_H
 
 #include "tuntap.h"
 #include <stddef.h>
 
 typedef struct dynamic_addr dynamic_addr_t;
 
-void oshd_device_add(tuntap_t *tuntap);
+void device_add(tuntap_t *tuntap);
 
 // Dynamic device mode functions
 void device_dynamic_gen_prefix6(void);

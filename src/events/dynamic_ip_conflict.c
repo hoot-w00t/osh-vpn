@@ -1,5 +1,5 @@
 #include "oshd.h"
-#include "oshd_device.h"
+#include "device.h"
 #include "netroute.h"
 #include "events.h"
 #include "logger.h"

@@ -1,4 +1,4 @@
-#include "oshd_device_mode.h"
+#include "device_mode.h"
 
 // Return the name of the device mode
 const char *device_mode_name(device_mode_t devmode)

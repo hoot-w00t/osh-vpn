@@ -1,4 +1,4 @@
-#include "oshd_device_mode.h"
+#include "device_mode.h"
 #include <criterion/criterion.h>
 
 Test(device_mode_name, device_mode_has_name)

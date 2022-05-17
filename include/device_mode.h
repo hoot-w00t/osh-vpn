@@ -1,5 +1,5 @@
-#ifndef _OSH_OSHD_DEVICE_MODE
-#define _OSH_OSHD_DEVICE_MODE
+#ifndef _OSH_DEVICE_MODE_H
+#define _OSH_DEVICE_MODE_H
 
 #include <stdbool.h>
 
@@ -18,7 +18,6 @@ typedef enum device_mode {
 
 #define device_mode_name_unknown "Unknown mode"
 
-// Defined in oshd_device.c
 const char *device_mode_name(device_mode_t devmode);
 bool device_mode_is_tap(device_mode_t devmode);
 

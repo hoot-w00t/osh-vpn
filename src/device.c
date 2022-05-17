@@ -1,6 +1,6 @@
 #include "oshd.h"
 #include "oshd_cmd.h"
-#include "oshd_device_mode.h"
+#include "device_mode.h"
 #include "netpacket.h"
 #include "random.h"
 #include "logger.h"
@@ -90,7 +90,7 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
 }
 
 // Add an aio event for the TUN/TAP device
-void oshd_device_add(tuntap_t *tuntap)
+void device_add(tuntap_t *tuntap)
 {
     aio_event_add_inl(oshd.aio,
         tuntap_pollfd(tuntap),
