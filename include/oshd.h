@@ -26,9 +26,41 @@ typedef struct conf_route {
     netaddr_prefixlen_t prefixlen;
 } conf_route_t;
 
+typedef struct dynamic_addr {
+    netaddr_t addr;                      // Dynamic IP address
+    netaddr_prefixlen_t prefixlen;       // Prefix length of its network
+    netaddr_prefixlen_t route_prefixlen; // Prefix length of the single address
+                                         // used for the routing table
+    char addr_str[INET6_ADDRSTRLEN];     // Formatted string of the IP address
+    char prefixlen_str[8];               // Formatted string of the prefix length
+
+    bool handling_conflict; // set to true while a conflict is in the process
+                            // of being solved to prevent queuing more than one
+                            // dynamic_ip_conflict event
+} dynamic_addr_t;
+#define dynamic_addr_count (2)
+
 typedef struct oshd {
     // Name of the local node
     char name[NODE_NAME_SIZE + 1];
+
+    // Name of the mesh (shares the same properties as node names)
+    char network_name[NODE_NAME_SIZE + 1];
+
+    // Dynamic addresses of the mesh when using dynamic device mode
+    // The IPv6 prefix is a pseudo-random ULA generated using the network name
+    // The IPv4 prefix is always 169.254.0.0/16
+    bool dynamic_addr_stable;
+
+    netaddr_t dynamic_prefix6;
+    netaddr_prefixlen_t dynamic_prefixlen6;
+    char dynamic_prefix6_str[INET6_ADDRSTRLEN];
+
+    netaddr_t dynamic_prefix4;
+    netaddr_prefixlen_t dynamic_prefixlen4;
+    char dynamic_prefix4_str[INET6_ADDRSTRLEN];
+
+    dynamic_addr_t dynamic_addrs[dynamic_addr_count];
 
     // true if authenticating nodes using remote keys is allowed, otherwise only
     // local keys will be used

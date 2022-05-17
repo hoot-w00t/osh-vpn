@@ -1196,11 +1196,25 @@ bool node_queue_hello_end(node_t *node)
 // Queue DEVMODE packet
 bool node_queue_devmode(node_t *node)
 {
-    oshpacket_devmode_t packet;
+    if (oshd.device_mode == MODE_DYNAMIC) {
+        oshpacket_devmode_dynamic_t packet;
 
-    packet.devmode = oshd.device_mode;
-    return node_queue_packet(node, node->id, DEVMODE,
-        (uint8_t *) &packet, sizeof(packet));
+        packet.devmode_pkt.devmode = oshd.device_mode;
+        memcpy(packet.network_name, oshd.network_name, NODE_NAME_SIZE);
+        netaddr_cpy_data(&packet.prefix6, &oshd.dynamic_prefix6);
+        packet.prefixlen6 = oshd.dynamic_prefixlen6;
+        netaddr_cpy_data(&packet.prefix4, &oshd.dynamic_prefix4);
+        packet.prefixlen4 = oshd.dynamic_prefixlen4;
+
+        return node_queue_packet(node, node->id, DEVMODE,
+            (uint8_t *) &packet, sizeof(packet));
+    } else {
+        oshpacket_devmode_t packet;
+
+        packet.devmode = oshd.device_mode;
+        return node_queue_packet(node, node->id, DEVMODE,
+            (uint8_t *) &packet, sizeof(packet));
+    }
 }
 
 // Queue STATEEXG_END packet
@@ -1501,7 +1515,7 @@ bool node_queue_edge_exg(node_t *node)
 
 // Broadcast ROUTE_ADD request with one or more local routes
 bool node_queue_route_add_local(node_t *exclude, const netaddr_t *addrs,
-    size_t count)
+    size_t count, bool can_expire)
 {
     if (count == 0)
         return true;
@@ -1515,7 +1529,7 @@ bool node_queue_route_add_local(node_t *exclude, const netaddr_t *addrs,
         buf[i].type = addrs[i].type;
         buf[i].prefixlen = netaddr_max_prefixlen(addrs[i].type);
         netaddr_cpy_data(&buf[i].addr, &addrs[i]);
-        buf[i].can_expire = true;
+        buf[i].can_expire = can_expire;
     }
 
     bool success = node_queue_packet_fragmented(exclude, ROUTE_ADD, buf, buf_size,

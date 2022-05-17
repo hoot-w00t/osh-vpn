@@ -110,13 +110,43 @@ static bool oshd_param_name(ecp_t *ecp)
 {
     if (!node_valid_name(ecp_value(ecp))) {
         // TODO: Print the invalid character in the error
-        set_error(
-            "Invalid node name");
+        set_error("Invalid node name");
         return false;
     }
     memset(oshd.name, 0, sizeof(oshd.name));
     strncpy(oshd.name, ecp_value(ecp), NODE_NAME_SIZE);
     logger_debug(DBG_CONF, "Set daemon name to '%s'", oshd.name);
+    return true;
+}
+
+// NetworkName
+static bool oshd_param_networkname(ecp_t *ecp)
+{
+    if (!node_valid_name(ecp_value(ecp))) {
+        // TODO: Print the invalid character in the error
+        set_error("Invalid network name");
+        return false;
+    }
+    memset(oshd.network_name, 0, sizeof(oshd.network_name));
+    strncpy(oshd.network_name, ecp_value(ecp), NODE_NAME_SIZE);
+    logger_debug(DBG_CONF, "Set network name to '%s'", oshd.network_name);
+    return true;
+}
+
+// DynamicAddr
+static bool oshd_param_dynamicaddr(ecp_t *ecp)
+{
+    if (!strcasecmp(ecp_value(ecp), "stable")) {
+        oshd.dynamic_addr_stable = true;
+    } else if (!strcasecmp(ecp_value(ecp), "random")) {
+        oshd.dynamic_addr_stable = false;
+    } else {
+        set_error("Invalid DynamicAddr option");
+        return false;
+    }
+
+    logger_debug(DBG_CONF, "Set DynamicAddr to %s",
+        oshd.dynamic_addr_stable ? "stable" : "random");
     return true;
 }
 
@@ -226,6 +256,8 @@ static bool oshd_param_mode(ecp_t *ecp)
         oshd.device_mode = MODE_TAP;
     } else if (!strcasecmp(ecp_value(ecp), "TUN")) {
         oshd.device_mode = MODE_TUN;
+    } else if (!strcasecmp(ecp_value(ecp), "Dynamic")) {
+        oshd.device_mode = MODE_DYNAMIC;
     } else {
         set_error("Unknown mode");
         return false;
@@ -652,6 +684,8 @@ static bool oshd_param_command(ecp_t *ecp)
 static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "NoServer", .type = VALUE_NONE, &oshd_param_noserver },
     { .name = "Name", .type = VALUE_REQUIRED, &oshd_param_name },
+    { .name = "NetworkName", .type = VALUE_REQUIRED, &oshd_param_networkname },
+    { .name = "DynamicAddr", .type = VALUE_REQUIRED, &oshd_param_dynamicaddr },
     { .name = "KeysTrust", .type = VALUE_REQUIRED, &oshd_param_keystrust },
     { .name = "ShareRemotes", .type = VALUE_NONE, &oshd_param_shareremotes },
     { .name = "DiscoverEndpoints", .type = VALUE_NONE, &oshd_param_discoverendpoints },
@@ -704,6 +738,10 @@ void oshd_init_conf(void)
 
     oshd.route_table = netroute_table_create(4096);
     netroute_add_broadcasts(oshd.route_table);
+
+    oshd.dynamic_addr_stable = true;
+    for (size_t i = 0; i < dynamic_addr_count; ++i)
+        memset(&oshd.dynamic_addrs[i], 0, sizeof(dynamic_addr_t));
 
     oshd.run = true;
 }
@@ -810,6 +848,13 @@ bool oshd_load_conf(const char *filename)
     if (oshd.reconnect_delay_max < oshd.reconnect_delay_min) {
         logger(LOG_ERR, "ReconnectDelayMax (%lis) cannot be smaller than ReconnectDelayMin (%lis)",
             oshd.reconnect_delay_max, oshd.reconnect_delay_min);
+        return false;
+    }
+
+    if (   oshd.device_mode == MODE_DYNAMIC
+        && strlen(oshd.network_name) == 0)
+    {
+        logger(LOG_ERR, "NetworkName must be set when using the dynamic device mode");
         return false;
     }
 

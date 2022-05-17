@@ -3,6 +3,7 @@
 
 #include "node.h"
 #include "oshd_clock.h"
+#include "netaddr.h"
 
 // Corresponds to the delays an event can return
 // < 0 : the event is finished (it is freed right after)
@@ -66,6 +67,8 @@ void event_cancel_queue(void);
 void event_queue_automatic_connections(void);
 void event_queue_connect(endpoint_group_t *endpoints, time_t delay,
     time_t event_delay);
+void event_queue_dynamic_ip_conflict(node_id_t *s1, node_id_t *s2,
+    const netaddr_t *addr);
 void event_queue_expire_endpoints(void);
 void event_queue_expire_routes(void);
 void event_queue_handshake_renew(node_t *node);

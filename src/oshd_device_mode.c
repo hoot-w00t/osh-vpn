@@ -7,6 +7,7 @@ const char *device_mode_name(device_mode_t devmode)
         case MODE_NODEVICE: return "NoDevice";
         case MODE_TAP     : return "TAP";
         case MODE_TUN     : return "TUN";
+        case MODE_DYNAMIC : return "Dynamic";
              default      : return device_mode_name_unknown;
     }
 }

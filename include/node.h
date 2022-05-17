@@ -270,7 +270,7 @@ bool node_queue_edge_broadcast(node_t *exclude, oshpacket_type_t type,
     const char *src, const char *dest);
 bool node_queue_edge_exg(node_t *node);
 bool node_queue_route_add_local(node_t *exclude, const netaddr_t *addrs,
-    size_t count);
+    size_t count, bool can_expire);
 bool node_queue_route_exg(node_t *node);
 
 // This is the function called to send the initial packet when an initiator

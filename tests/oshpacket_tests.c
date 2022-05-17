@@ -153,3 +153,13 @@ Test(oshpacket_payload_size_valid, invalid_payload_size_type)
     for (size_t i = 0; i < OSHPACKET_PAYLOAD_MAXSIZE; ++i)
         cr_assert_eq(oshpacket_payload_size_valid(&def, i), false);
 }
+
+Test(oshpacket_devmode_t, check_dynamic_devmode_packet_struct)
+{
+    uint8_t buf[sizeof(oshpacket_devmode_dynamic_t)];
+    oshpacket_devmode_t *regular = (oshpacket_devmode_t *) buf;
+    oshpacket_devmode_dynamic_t *dyn = (oshpacket_devmode_dynamic_t *) buf;
+
+    cr_assert_eq(sizeof(*regular), sizeof(dyn->devmode_pkt));
+    cr_assert_eq(&dyn->network_name, ((void *) regular) + sizeof(*regular));
+}

@@ -10,6 +10,9 @@ typedef enum device_mode {
     MODE_TAP,          // Open the device in TAP mode (Layer 2)
     MODE_TUN,          // Open the device in TUN mode (Layer 3)
 
+    MODE_DYNAMIC,      // Open the device in TUN mode, handles IP attributions
+                       // automatically
+
     _LAST_DEVICE_MODE_ENTRY // must always be the last entry
 } device_mode_t;
 

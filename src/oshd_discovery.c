@@ -67,7 +67,7 @@ void oshd_discover_local_routes(void)
                 route = netroute_add(oshd.route_table, &addr,
                     netaddr_max_prefixlen(addr.type), node_id_find_local(),
                         ROUTE_LOCAL_EXPIRY);
-                node_queue_route_add_local(NULL, &route->addr, 1);
+                node_queue_route_add_local(NULL, &route->addr, 1, true);
             }
         }
     }

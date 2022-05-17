@@ -76,8 +76,8 @@ static const oshpacket_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_devmode,
         .can_be_forwarded = false,
-        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
-        .payload_size = sizeof(oshpacket_devmode_t)
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_VARIABLE,
+        .payload_size = 0
     },
     {
         .type = STATEEXG_END,

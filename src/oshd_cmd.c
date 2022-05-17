@@ -17,6 +17,15 @@ typedef struct command {
 static command_t commands[] = {
     { .name = "DevUp"  , .cmdline = NULL },
     { .name = "DevDown", .cmdline = NULL },
+
+    // Dynamic device mode commands to configure the TUN/TAP device
+    { .name = "DynamicEnableDev" , .cmdline = NULL },
+    { .name = "DynamicDisableDev", .cmdline = NULL },
+    { .name = "DynamicAddIP6"    , .cmdline = NULL },
+    { .name = "DynamicAddIP4"    , .cmdline = NULL },
+    { .name = "DynamicDelIP6"    , .cmdline = NULL },
+    { .name = "DynamicDelIP4"    , .cmdline = NULL },
+
     { NULL, NULL }
 };
 
@@ -43,6 +52,16 @@ void oshd_cmd_set(const char *name, const char *cmdline)
         free(cmd->cmdline);
         cmd->cmdline = xstrdup(cmdline);
     }
+}
+
+// Set the command to execute if it is currently not set
+// If the command is already set, this is ignored
+void oshd_cmd_tryset(const char *name, const char *cmdline)
+{
+    const command_t *cmd = find_command(name);
+
+    if (cmd && !cmd->cmdline)
+        oshd_cmd_set(name, cmdline);
 }
 
 // Disable the command line, free the allocated memory

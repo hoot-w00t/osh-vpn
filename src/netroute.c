@@ -1,4 +1,5 @@
 #include "netroute.h"
+#include "events.h"
 #include "xalloc.h"
 #include "logger.h"
 #include <stdio.h>
@@ -327,6 +328,9 @@ const netroute_t *netroute_add(netroute_table_t *table,
             logger(LOG_WARN,
                 "Conflicting local route %s/%u previously owned by %s, now %s",
                 addrw, route->prefixlen, route->owner->name, owner->name);
+
+            // When the device mode is dynamic Osh will try to fix conflicts
+            event_queue_dynamic_ip_conflict(route->owner, owner, &route->addr);
         }
 
         route->owner = owner;

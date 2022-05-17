@@ -87,10 +87,8 @@ bool oshd_init(void)
         if (!oshd.tuntap)
             return false;
 
+        // Set the OSHD_DEVICE environment variable to the TUN/TAP device name
         if (!oshd_cmd_setenv("OSHD_DEVICE", oshd.tuntap->dev_name))
-            return false;
-
-        if (!oshd_cmd_execute("DevUp"))
             return false;
 
         oshd_device_add(oshd.tuntap);
@@ -152,6 +150,52 @@ bool oshd_init(void)
             oshd.conf_routes[i].prefixlen, me, ROUTE_NEVER_EXPIRE);
     }
 
+    // When using the dynamic device mode we automatically find and assign IP
+    // addresses to the TUN/TAP device
+    if (oshd.device_mode == MODE_DYNAMIC) {
+        // Initialize device configuration commands
+        device_dynamic_init_commands();
+
+        // Generate IPv4/IPv6 prefixes and addresses
+        device_dynamic_gen_prefix6();
+        device_dynamic_gen_prefix4();
+        if (oshd.dynamic_addr_stable) {
+            device_dynamic_gen_addr6_stable(&oshd.dynamic_addrs[0], 0);
+            device_dynamic_gen_addr4_stable(&oshd.dynamic_addrs[1], 0);
+        } else {
+            device_dynamic_gen_addr6_random(&oshd.dynamic_addrs[0]);
+            device_dynamic_gen_addr4_random(&oshd.dynamic_addrs[1]);
+        }
+
+        // Make sure to enable the TUN/TAP device
+        if (!oshd_cmd_execute("DynamicEnableDev"))
+            return false;
+
+        logger(LOG_INFO, "Dynamic IPv6 prefix: %s/%u",
+            oshd.dynamic_prefix6_str, oshd.dynamic_prefixlen6);
+        logger(LOG_INFO, "Dynamic IPv4 prefix: %s/%u",
+            oshd.dynamic_prefix4_str, oshd.dynamic_prefixlen4);
+
+        // Add our dynamic addresses to the routing table and configure them on
+        // the TUN/TAP device (exit if this fails)
+        for (size_t i = 0; i < dynamic_addr_count; ++i) {
+            const dynamic_addr_t *daddr = &oshd.dynamic_addrs[i];
+
+            logger(LOG_INFO, "Dynamic address: %s/%s", daddr->addr_str,
+                daddr->prefixlen_str);
+
+            netroute_add(oshd.route_table, &daddr->addr, daddr->route_prefixlen,
+                me, ROUTE_NEVER_EXPIRE);
+
+            if (!device_dynamic_add(daddr))
+                return false;
+        }
+    }
+
+    // Execute the DevUp command after all TUN/TAP environment variables were set
+    if (oshd.tuntap && !oshd_cmd_execute("DevUp"))
+        return false;
+
     signal(SIGINT, oshd_signal_exit);
     signal(SIGTERM, oshd_signal_exit);
     signal(SIGUSR1, oshd_signal_digraph);
@@ -166,7 +210,19 @@ void oshd_free(void)
     aio_free(oshd.aio);
     free(oshd.tuntap_devname);
     if (oshd.tuntap) {
+        // Execute the DevDown command before cleaning up dynamic addresses
+        // If the device mode is dynamic
         oshd_cmd_execute("DevDown");
+
+        if (oshd.device_mode == MODE_DYNAMIC) {
+            // Delete our dynamic addresses from the TUN/TAP device
+            for (size_t i = 0; i < dynamic_addr_count; ++i)
+                device_dynamic_del(&oshd.dynamic_addrs[i]);
+
+            // Disable the TUN/TAP device
+            oshd_cmd_execute("DynamicDisableDev");
+        }
+
         tuntap_close(oshd.tuntap);
     }
     for (size_t i = 0; i < oshd.nodes_count; ++i)

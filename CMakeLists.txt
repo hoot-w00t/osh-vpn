@@ -99,6 +99,7 @@ set(OSHD_SOURCES
     src/crypto/pkey.c
     src/events/automatic_connections.c
     src/events/connect.c
+    src/events/dynamic_ip_conflict.c
     src/events/expire_endpoints.c
     src/events/expire_routes.c
     src/events/handshake_renew.c

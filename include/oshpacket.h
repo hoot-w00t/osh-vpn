@@ -130,6 +130,15 @@ typedef struct __attribute__((__packed__)) oshpacket_devmode {
     device_mode_t devmode : 8;
 } oshpacket_devmode_t;
 
+typedef struct __attribute__((__packed__)) oshpacket_devmode_dynamic {
+    oshpacket_devmode_t devmode_pkt;
+    char network_name[NODE_NAME_SIZE];
+    netaddr_data_t prefix6;
+    netaddr_prefixlen_t prefixlen6;
+    netaddr_data_t prefix4;
+    netaddr_prefixlen_t prefixlen4;
+} oshpacket_devmode_dynamic_t;
+
 typedef struct __attribute__((__packed__)) oshpacket_handshake {
     // Public X25519 keys to compute a shared secret
     union {

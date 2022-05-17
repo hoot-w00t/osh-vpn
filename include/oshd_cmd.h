@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 void oshd_cmd_set(const char *name, const char *cmdline);
+void oshd_cmd_tryset(const char *name, const char *cmdline);
 void oshd_cmd_unset(const char *name);
 void oshd_cmd_unset_all(void);
 
