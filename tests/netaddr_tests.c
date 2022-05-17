@@ -13,6 +13,16 @@ Test(netaddr_data_t, netaddr_data_sizes)
     cr_assert_eq(sizeof(d.ip6), 16);
 }
 
+Test(netaddr_data_t, netaddr_data_union_pointers)
+{
+    netaddr_data_t d;
+
+    cr_assert_eq(&d, d.b);
+    cr_assert_eq(&d, &d.ip4);
+    cr_assert_eq(&d, &d.ip6);
+    cr_assert_eq(&d, &d.mac);
+}
+
 Test(netaddr_dton, test_netaddr_dton)
 {
     const uint8_t macaddr[6] = {0x1, 0x2, 0x3, 0x4, 0x5, 0x6};
