@@ -177,7 +177,7 @@ event_t *event_create(
     event_t *event = xzalloc(sizeof(event_t));
 
     logger_debug(DBG_EVENTS, "Creating %s event %p", name, event);
-    snprintf(event->name, sizeof(event->name), "%s", name);
+    strncpy(event->name, name, sizeof(event->name) - 1);
     event->handler = handler;
     event->freedata = freedata;
     event->userdata = userdata;
