@@ -213,7 +213,7 @@ endif()
 install(TARGETS oshd RUNTIME)
 
 # Compiler flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wshadow -Wformat-security")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wshadow -Wformat-security -Wcast-qual")
 
 check_c_compiler_flag("-Wformat-signedness" cc_warn_format_signedness)
 if (cc_warn_format_signedness)

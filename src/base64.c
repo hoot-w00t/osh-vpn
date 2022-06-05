@@ -62,9 +62,9 @@ void base64_encode(char *output, const void *input, size_t input_size)
     while (i < input_size) {
         // Copy the next 3 bytes (we don't need to check the index for the
         // first byte because it's tested in the loop condition)
-        b0 = ((uint8_t *) input)[i++];
-        b1 = (i < input_size) ? ((uint8_t *) input)[i++] : 0;
-        b2 = (i < input_size) ? ((uint8_t *) input)[i++] : 0;
+        b0 = ((const uint8_t *) input)[i++];
+        b1 = (i < input_size) ? ((const uint8_t *) input)[i++] : 0;
+        b2 = (i < input_size) ? ((const uint8_t *) input)[i++] : 0;
 
         // Merge the 3 bytes into a 24-bit word
         word = (b0 << 16) | (b1 << 8) | (b2 << 0);

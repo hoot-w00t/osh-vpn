@@ -126,15 +126,15 @@ bool netaddr_dton(netaddr_t *dest, netaddr_type_t type, const void *data)
     dest->type = type;
     switch (type) {
         case MAC:
-            dest->data.mac = *((struct netaddr_data_mac *) data);
+            dest->data.mac = *((const struct netaddr_data_mac *) data);
             return true;
 
         case IP4:
-            dest->data.ip4 = *((struct in_addr *) data);
+            dest->data.ip4 = *((const struct in_addr *) data);
             return true;
 
         case IP6:
-            dest->data.ip6 = *((struct in6_addr *) data);
+            dest->data.ip6 = *((const struct in6_addr *) data);
             return true;
 
         default:

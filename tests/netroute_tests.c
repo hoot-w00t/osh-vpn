@@ -13,7 +13,7 @@ Test(netroute_table_t, invalid_table_size)
     netroute_table_free(table);
 }
 
-static void rand_bytes(const void *ptr, size_t size)
+static void rand_bytes(void *ptr, size_t size)
 {
     for (size_t i = 0; i < size; ++i)
         *((uint8_t *) (ptr + i)) = rand() % 256;
