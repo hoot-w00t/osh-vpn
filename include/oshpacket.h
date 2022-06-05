@@ -7,14 +7,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#ifndef OSHPACKET_MAGIC
-#define OSHPACKET_MAGIC (0x1)
-#endif
-
-#if (OSHPACKET_MAGIC > 0xFF)
-#error "OSHPACKET_MAGIC is a 1 byte value"
-#endif
-
 #ifndef NODE_NAME_SIZE
 #define NODE_NAME_SIZE (16)
 #endif
@@ -77,16 +69,16 @@ typedef enum oshpacket_payload_size {
 
 // For a total of 36 bytes
 typedef struct __attribute__((__packed__)) oshpacket_hdr {
-    // Public header (never encrypted)
-    // 3 + CIPHER_TAG_SIZE bytes
+    // Public part of the header (never encrypted)
     // If it changes OSHPACKET_PUBLIC_HDR_SIZE needs to be updated
-    uint8_t          magic;
     uint16_t         payload_size;
     uint8_t          tag[CIPHER_TAG_SIZE];
 
-    // Private header (after the handshake is done, this is always encrypted)
-    // 33 bytes, if it changes OSHPACKET_PRIVATE_HDR_SIZE needs to be updated
+    // Private header (always encrypted except for HANDSHAKE packets)
+    // If it changes OSHPACKET_PRIVATE_HDR_SIZE needs to be updated
     oshpacket_type_t type : 8;
+    uint8_t          flags;
+
     char             src_node[NODE_NAME_SIZE];
     char             dest_node[NODE_NAME_SIZE];
 } oshpacket_hdr_t;
@@ -179,10 +171,10 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 } oshpacket_route_t;
 
 // Size of the public part of the header
-#define OSHPACKET_PUBLIC_HDR_SIZE (3 + CIPHER_TAG_SIZE)
+#define OSHPACKET_PUBLIC_HDR_SIZE (2 + CIPHER_TAG_SIZE)
 
 // Size of the private part of the header
-#define OSHPACKET_PRIVATE_HDR_SIZE (1 + (NODE_NAME_SIZE * 2))
+#define OSHPACKET_PRIVATE_HDR_SIZE (1 + 1 + (NODE_NAME_SIZE * 2))
 
 // Total size of the header
 #define OSHPACKET_HDR_SIZE (OSHPACKET_PUBLIC_HDR_SIZE + OSHPACKET_PRIVATE_HDR_SIZE)

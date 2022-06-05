@@ -121,14 +121,6 @@ static void node_aio_read(aio_event_t *event)
         if (!node->io.recvd_hdr) {
             // If we have enough data to decode the next header, we decode it
             if (remaining_size >= OSHPACKET_PUBLIC_HDR_SIZE) {
-                // If the magic number is invalid something is wrong
-                if (curr_hdr->magic != OSHPACKET_MAGIC) {
-                    logger(LOG_ERR, "%s: Received invalid magic number 0x%X",
-                        node->addrw, curr_hdr->magic);
-                    aio_event_del(node->aio_event);
-                    return;
-                }
-
                 // Switch payload size to host byte order
                 curr_hdr->payload_size = ntohs(curr_hdr->payload_size);
 

@@ -848,11 +848,11 @@ bool node_queue_packet(node_t *node, node_id_t *dest, oshpacket_type_t type,
     hdr = OSHPACKET_HDR(slot);
 
     // Public part of the header
-    hdr->magic = OSHPACKET_MAGIC;
     hdr->payload_size = htons(payload_size);
 
     // Private part of the header
     hdr->type = type;
+    hdr->flags = 0;
 
     memcpy(hdr->src_node, oshd.name, sizeof(hdr->src_node));
     if (dest) {
