@@ -101,7 +101,7 @@ static void node_aio_read(aio_event_t *event)
         logger_debug(DBG_SOCKETS, "%s: Received %zi bytes", node->addrw, recvd_size);
         node->io.recvbuf_size += recvd_size;
     } else if (recvd_size < 0) {
-        if (IO_WOULDBLOCK(errno)) {
+        if (!IO_WOULDBLOCK(errno)) {
             logger(LOG_ERR, "%s: recv: %s", node->addrw, strerror(errno));
             aio_event_del(node->aio_event);
             return;
