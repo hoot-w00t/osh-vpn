@@ -508,6 +508,12 @@ iterate_queue:
     return hops_count;
 }
 
+static void node_id_clear_seen_brd_id(node_id_t *id)
+{
+    memset(id->seen_brd_id, 0, sizeof(id->seen_brd_id));
+    id->seen_brd_id_count = 0;
+}
+
 static void node_tree_update_next_hops(void)
 {
     logger_debug(DBG_NODETREE, "Updating next hops");
@@ -529,6 +535,9 @@ static void node_tree_update_next_hops(void)
             free(oshd.node_tree[i]->edges);
             oshd.node_tree[i]->edges = NULL;
             oshd.node_tree[i]->edges_count = 0;
+
+            // Also clear the seen broadcast IDs
+            node_id_clear_seen_brd_id(oshd.node_tree[i]);
         }
     }
 }
@@ -793,6 +802,29 @@ bool node_valid_name(const char *name)
            && name_len == strspn(name, valid_charset);
 }
 
+// Returns true if the broadcast ID was seen already
+// The ID will be marked as seen if it was not
+bool node_has_seen_brd_id(node_id_t *nid, const oshpacket_brd_id_t brd_id)
+{
+    for (size_t i = 0; i < nid->seen_brd_id_count; ++i) {
+        // If any value in the seen_brd_id array is the same as brd_id it means
+        // that we have already seen and processed this packet
+        if (nid->seen_brd_id[i] == brd_id)
+            return true;
+    }
+
+    // Shift all values in the array and insert the new broadcast ID
+    memmove(nid->seen_brd_id + 1, nid->seen_brd_id + 0,
+        sizeof(nid->seen_brd_id) - sizeof(oshpacket_brd_id_t));
+
+    nid->seen_brd_id[0] = brd_id;
+
+    if (nid->seen_brd_id_count < seen_brd_id_maxsize)
+        nid->seen_brd_id_count += 1;
+
+    return false;
+}
+
 // Returns true if the DATA packet should be dropped (when the send queue is
 // full or filling up too fast)
 static bool data_packet_should_drop(node_t *node)
@@ -817,15 +849,30 @@ static bool data_packet_should_drop(node_t *node)
     return false;
 }
 
-// Queue a packet to the *node socket for *dest node
-// If payload is NULL and payload_size is greater than 0 the payload's bytes
-// will be uninitialized
-bool node_queue_packet(node_t *node, node_id_t *dest, oshpacket_type_t type,
-    uint8_t *payload, uint16_t payload_size)
+// Actually queue a packet
+// The private part of the header must be initialized before calling this
+// function, but not the public part as it will be initialized here
+// This function also takes care of dropping DATA packets when needed
+// Returns false if the packet was not queued (for any error/reason)
+//
+// Warning: If the payload is NULL but the payload size is different than 0
+//          there will be uninitialized bytes sent as the payload
+static bool node_queue_packet_internal(
+    node_t *node,
+    const oshpacket_hdr_t *hdr,
+    const void *payload,
+    const size_t payload_size)
 {
     const size_t packet_size = OSHPACKET_HDR_SIZE + payload_size;
     uint8_t *slot;
-    oshpacket_hdr_t *hdr;
+
+    // Drop packet if its size exceeds the limit
+    if (packet_size > OSHPACKET_MAXSIZE) {
+        logger(LOG_ERR,
+            "%s: Dropping %s packet of %zu bytes (exceeds size limit)",
+            node->addrw, oshpacket_type_name(hdr->type), packet_size);
+        return false;
+    }
 
     // Drop DATA packets if the send queue exceeds a limit
     // This is a very basic way to handle network congestion, but without it the
@@ -833,199 +880,193 @@ bool node_queue_packet(node_t *node, node_id_t *dest, oshpacket_type_t type,
     // create a denial of service between two nodes until we can catch up and
     // the send queue flushes all of its data (this could take days in the worst
     // cases)
-    if (   type == DATA
+    if (   hdr->type == DATA
         && data_packet_should_drop(node))
     {
-        logger_debug(DBG_TUNTAP,
-            "%s: Dropping %s packet of %u bytes",
-            node->addrw,
-            oshpacket_type_name(type),
-            payload_size);
+        logger_debug(DBG_TUNTAP, "%s: Dropping %s packet of %zu bytes",
+            node->addrw, oshpacket_type_name(hdr->type), payload_size);
         return false;
     }
 
     slot = netbuffer_reserve(node->io.sendq, packet_size);
-    hdr = OSHPACKET_HDR(slot);
 
-    // Public part of the header
-    hdr->payload_size = htons(payload_size);
+    // Initialize the public part of the header
+    OSHPACKET_HDR(slot)->payload_size = htons(((uint16_t) payload_size));
 
-    // Private part of the header
-    hdr->type = type;
-    hdr->flags = 0;
+    // Copy the private part of the header which was initialized by the caller
+    memcpy(OSHPACKET_PRIVATE_HDR(slot), OSHPACKET_PRIVATE_HDR_CONST(hdr),
+        OSHPACKET_PRIVATE_HDR_SIZE);
 
-    memcpy(hdr->src_node, oshd.name, sizeof(hdr->src_node));
-    if (dest) {
-        memcpy(hdr->dest_node, dest->name, NODE_NAME_SIZE);
-    } else {
-        memset(hdr->dest_node, 0, sizeof(hdr->dest_node));
-    }
-
-    // Copy the packet's payload to the buffer
+    // Copy the packet's payload to the buffer (if there is one)
     if (payload)
         memcpy(OSHPACKET_PAYLOAD(slot), payload, payload_size);
 
     if (node->send_cipher) {
-        // The node expects all traffic to be encrypted
-        size_t original_size = OSHPACKET_PRIVATE_HDR_SIZE + payload_size;
-        size_t out_size;
-        logger_debug(DBG_ENCRYPTION, "%s: Encrypting packet of %zu bytes",
-            node->addrw, original_size);
+        // The socket has a send_cipher, so the packet will be encrypted
 
-        // We encrypt the private header and the payload, the public header is
-        // never encrypted as it is required to properly receive and decode the
-        // packets
+        // We encrypt the private header and the payload but not the public
+        // header as it is required to properly receive and decode the packet
+        const size_t orig_size = OSHPACKET_PRIVATE_HDR_SIZE + payload_size;
+        size_t encr_size;
+
+        logger_debug(DBG_ENCRYPTION, "%s: Encrypting packet of %zu bytes",
+            node->addrw, orig_size);
+
         if (!cipher_encrypt(node->send_cipher,
-                OSHPACKET_PRIVATE_HDR(slot), &out_size,
-                OSHPACKET_PRIVATE_HDR(slot), original_size,
-                hdr->tag))
+                OSHPACKET_PRIVATE_HDR(slot), &encr_size,
+                OSHPACKET_PRIVATE_HDR(slot), orig_size,
+                OSHPACKET_HDR(slot)->tag))
         {
             logger(LOG_ERR, "%s: Failed to encrypt packet", node->addrw);
             netbuffer_cancel(node->io.sendq, packet_size);
             return false;
         }
 
-        if (out_size != original_size) {
-            logger(LOG_ERR, "%s: Encrypted packet has a different size (original: %zu, encrypted %zu)",
-                node->addrw, original_size, out_size);
+        // The encrypted data must have the same size as the original
+        if (encr_size != orig_size) {
+            logger(LOG_ERR,
+                "%s: Encrypted packet has a different size (original: %zu, encrypted %zu)",
+                node->addrw, orig_size, encr_size);
             netbuffer_cancel(node->io.sendq, packet_size);
             return false;
         }
-    } else if (type != HANDSHAKE) {
-        // The node does not have a cipher to encrypt traffic
-        // This should only happen when sending HANDSHAKE packets which will
-        // initialize the ciphers
-        // Otherwise drop the packet
-        // GOODBYE packets should close the connection so if there's no data
-        // queued after a failed GOODBYE we can remove the node
+
+    } else if (hdr->type == HANDSHAKE) {
+        // The socket does not have a send cipher yet but the packet is a
+        // HANDSHAKE, we only allow this type of packet to be sent unencrypted
+        // as it will initialize encryption ciphers
+
+        // Zero the source and destination as they will not be taken into
+        // account yet; this prevents leaking the nodes' names in plain text
+        memset(OSHPACKET_HDR(slot)->src_node, 0,
+            sizeof(OSHPACKET_HDR(slot)->src_node));
+        memset(&OSHPACKET_HDR(slot)->dest, 0,
+            sizeof(OSHPACKET_HDR(slot)->dest));
+
+        // Zero the authentication tag as there is no encryption
+        memset(OSHPACKET_HDR(slot)->tag, 0, sizeof(OSHPACKET_HDR(slot)->tag));
+
+    } else {
+        // The socket does not have a send cipher yet and it cannot be sent
+        // unencrypted, we drop it
+        // This should never happen, if it does there is a bug in the code
         logger(LOG_CRIT, "%s: Cannot queue unencrypted %s packet",
-            node->addrw, oshpacket_type_name(type));
+            node->addrw, oshpacket_type_name(hdr->type));
         netbuffer_cancel(node->io.sendq, packet_size);
 
-        if (type == GOODBYE) {
+        // GOODBYE packets should close the connection so if there's no data
+        // queued after a failed GOODBYE we can remove the node
+        if (hdr->type == GOODBYE) {
             if (netbuffer_data_size(node->io.sendq) == 0)
                 aio_event_del(node->aio_event);
         }
+
         return false;
-    } else {
-        // Unencrypted packets should only occur with the initial handshake,
-        // in this case both the src_node and dest_node fields will be ignored
-        // so we can zero them out to prevent leaking the nodes' names in plain
-        // text
-        memset(hdr->src_node, 0, sizeof(hdr->src_node));
-        memset(hdr->dest_node, 0, sizeof(hdr->dest_node));
-        memset(hdr->tag, 0, sizeof(hdr->tag));
     }
+
     aio_enable_poll_events(node->aio_event, AIO_WRITE);
     return true;
 }
 
-// Queue a forwarded packet without altering the source and destination nodes
-bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt)
+// Queue a packet to the *node socket for *dest node
+bool node_queue_packet(node_t *node, node_id_t *dest, oshpacket_type_t type,
+    const void *payload, size_t payload_size)
 {
-    const size_t packet_size = OSHPACKET_HDR_SIZE + pkt->payload_size;
-    uint8_t *slot;
-    oshpacket_hdr_t *hdr;
+    oshpacket_hdr_t hdr;
 
-    // Forwarded packets should never be unencrypted, so if we can't encrypt it,
-    // drop it
-    if (!node->send_cipher) {
-        logger(LOG_WARN, "%s: Dropping forwarded %s packet of %u bytes: No send_cipher",
-            node->addrw, oshpacket_type_name(pkt->type), pkt->payload_size);
-        return false;
+    hdr.type = type;
+    hdr.flags.u = 0;
+    memcpy(hdr.src_node, oshd.name, sizeof(hdr.src_node));
+    if (dest) {
+        memcpy(hdr.dest.unicast.dest_node, dest->name, NODE_NAME_SIZE);
+    } else {
+        memset(&hdr.dest.unicast, 0, sizeof(hdr.dest.unicast));
     }
-
-    // Same basic network congestion handling as in node_queue_packet
-    if (   pkt->type == DATA
-        && data_packet_should_drop(node))
-    {
-        logger_debug(DBG_TUNTAP,
-            "%s: Dropping forwarded %s packet of %u bytes",
-            node->addrw,
-            oshpacket_type_name(pkt->type),
-            pkt->payload_size);
-        return false;
-    }
-
-    slot = netbuffer_reserve(node->io.sendq, packet_size);
-    hdr = OSHPACKET_HDR(slot);
-
-    // Copy the packet's data to the slot
-    memcpy(slot, pkt, packet_size);
-
-    // Write the payload size in the correct order
-    hdr->payload_size = htons(pkt->payload_size);
-
-    // The node expects all traffic to be encrypted
-    size_t original_size = OSHPACKET_PRIVATE_HDR_SIZE + pkt->payload_size;
-    size_t out_size;
-    logger_debug(DBG_ENCRYPTION, "%s: Encrypting forwarded packet of %zu bytes",
-        node->addrw, original_size);
-
-    // We encrypt the private header and the payload, the public header is
-    // never encrypted as it is required to properly receive and decode the
-    // packets
-    if (!cipher_encrypt(node->send_cipher,
-            OSHPACKET_PRIVATE_HDR(slot), &out_size,
-            OSHPACKET_PRIVATE_HDR(slot), original_size,
-            hdr->tag))
-    {
-        logger(LOG_ERR, "%s: Failed to encrypt forwarded packet", node->addrw);
-        netbuffer_cancel(node->io.sendq, packet_size);
-        return false;
-    }
-
-    if (out_size != original_size) {
-        logger(LOG_ERR, "%s: Encrypted forwarded packet has a different size (original: %zu, encrypted %zu)",
-            node->addrw, original_size, out_size);
-        netbuffer_cancel(node->io.sendq, packet_size);
-        return false;
-    }
-    aio_enable_poll_events(node->aio_event, AIO_WRITE);
-    return true;
+    return node_queue_packet_internal(node, &hdr, payload, payload_size);
 }
 
-// Broadcast a packet to all nodes
+// Forward an existing packet to another socket
+bool node_queue_packet_forward(node_t *node, const oshpacket_hdr_t *hdr,
+    const void *payload, size_t payload_size)
+{
+    return node_queue_packet_internal(node, hdr, payload, payload_size);
+}
+
+// Broadcast a packet to all authenticated direct connections
 // If exclude is not NULL the packet will not be queued for the excluded node
 bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
-    uint8_t *payload, uint16_t payload_size)
+    const void *payload, size_t payload_size)
 {
-    // We will never broadcast a packet to the local node, so skip it by
-    // starting with the second element, the first one will always be our local
-    // node
-    for (size_t i = 1; i < oshd.node_tree_count; ++i) {
-        if (    oshd.node_tree[i]->next_hop
-            &&  oshd.node_tree[i]->next_hop != exclude)
+    oshpacket_hdr_t hdr;
+
+    hdr.type = type;
+    hdr.flags.u = 0;
+    hdr.flags.s.broadcast = 1;
+    memcpy(hdr.src_node, oshd.name, sizeof(hdr.src_node));
+    memset(&hdr.dest.broadcast, 0, sizeof(hdr.dest.broadcast));
+    hdr.dest.broadcast.id = random_xoshiro256();
+
+    logger_debug(DBG_SOCKETS,
+        "Broadcasting %s packet of %zu bytes (id: %" PRI_BRD_ID ")",
+        oshpacket_type_name(type), payload_size, hdr.dest.broadcast.id);
+
+    for (size_t i = 0; i < oshd.nodes_count; ++i) {
+        if (   !oshd.nodes[i]->authenticated
+            ||  oshd.nodes[i] == exclude)
         {
-            logger_debug(DBG_SOCKETS,
-                "Broadcasting %s packet for %s through %s (%s, %u bytes)",
-                oshpacket_type_name(type),
-                oshd.node_tree[i]->name,
-                oshd.node_tree[i]->next_hop->id->name,
-                oshd.node_tree[i]->next_hop->addrw,
-                payload_size);
-            node_queue_packet(oshd.node_tree[i]->next_hop, oshd.node_tree[i],
-                type, payload, payload_size);
+            continue;
         }
+
+        node_queue_packet_internal(oshd.nodes[i], &hdr, payload, payload_size);
     }
+
+    return true;
+}
+
+// Forward an existing broadcast packet to all authenticated direct connections
+// excluding the source socket
+// exclude must not be NULL
+bool node_queue_packet_broadcast_forward(node_t *exclude, const oshpacket_hdr_t *hdr,
+    const void *payload, size_t payload_size)
+{
+    logger_debug(DBG_SOCKETS,
+        "Broadcasting %s packet of %zu bytes (id: %" PRI_BRD_ID ", from %s)",
+        oshpacket_type_name(hdr->type), payload_size, hdr->dest.broadcast.id,
+        exclude->addrw);
+
+    for (size_t i = 0; i < oshd.nodes_count; ++i) {
+        if (   !oshd.nodes[i]->authenticated
+            ||  oshd.nodes[i] == exclude)
+        {
+            continue;
+        }
+
+        node_queue_packet_internal(oshd.nodes[i], hdr, payload, payload_size);
+    }
+
     return true;
 }
 
 // Queue packet with a fragmented payload
-// If the payload is too big for one packet it will be fragmented and sent with
-// as many packets as needed
+// If the payload size is bigger than OSHPACKET_PAYLOAD_MAXSIZE it will be
+// fragmented and sent with multiple packets (as many as needed)
 // This can only be used for repeating payloads, like edges and routes which
 // are processed as a flat array
 // If broadcast is true, *node is a node to exclude from the broadcast (can be
 // NULL)
-// Otherwise the fragmented packet will be sent to *node (should be
+// Otherwise the fragmented packet will be sent to *node (it is expected to be
 // authenticated)
-static bool node_queue_packet_fragmented(node_t *node, oshpacket_type_t type,
-    void *payload, size_t payload_size, size_t entry_size, bool broadcast)
+static bool node_queue_packet_fragmented(
+    node_t *node,
+    oshpacket_type_t type,
+    const void *payload,
+    const size_t payload_size,
+    const size_t entry_size,
+    bool broadcast)
 {
-    size_t max_entries = OSHPACKET_PAYLOAD_MAXSIZE / entry_size;
+    const size_t max_entries = OSHPACKET_PAYLOAD_MAXSIZE / entry_size;
     size_t remaining_entries = payload_size / entry_size;
-    uint8_t *curr_buf = (uint8_t *) payload;
+    const void *curr_buf = payload;
 
     while (remaining_entries > 0) {
         size_t entries;
@@ -1057,6 +1098,7 @@ static bool node_queue_packet_fragmented(node_t *node, oshpacket_type_t type,
         remaining_entries -= entries;
         curr_buf += size;
     }
+
     return true;
 }
 
@@ -1140,8 +1182,7 @@ bool node_queue_handshake(node_t *node)
     if (node->authenticated)
         event_queue_handshake_timeout(node, HANDSHAKE_TIMEOUT);
 
-    return node_queue_packet(node, node->id, HANDSHAKE,
-        (uint8_t *) &packet, sizeof(packet));
+    return node_queue_packet(node, node->id, HANDSHAKE, &packet, sizeof(packet));
 }
 
 // Queue HANDSHAKE_END packet
@@ -1170,7 +1211,7 @@ bool node_queue_hello_challenge(node_t *node)
     if (!random_bytes(node->hello_chall->challenge, sizeof(node->hello_chall->challenge)))
         return false;
 
-    return node_queue_packet(node, NULL, HELLO_CHALLENGE, (uint8_t *) node->hello_chall,
+    return node_queue_packet(node, NULL, HELLO_CHALLENGE, node->hello_chall,
         sizeof(oshpacket_hello_challenge_t));
 }
 
@@ -1189,8 +1230,7 @@ bool node_queue_hello_end(node_t *node)
         packet.hello_success = 0;
         node_graceful_disconnect(node);
     }
-    return node_queue_packet(node, NULL, HELLO_END,
-        (uint8_t *) &packet, sizeof(packet));
+    return node_queue_packet(node, NULL, HELLO_END, &packet, sizeof(packet));
 }
 
 // Queue DEVMODE packet
@@ -1206,14 +1246,12 @@ bool node_queue_devmode(node_t *node)
         netaddr_cpy_data(&packet.prefix4, &oshd.dynamic_prefix4);
         packet.prefixlen4 = oshd.dynamic_prefixlen4;
 
-        return node_queue_packet(node, node->id, DEVMODE,
-            (uint8_t *) &packet, sizeof(packet));
+        return node_queue_packet(node, node->id, DEVMODE, &packet, sizeof(packet));
     } else {
         oshpacket_devmode_t packet;
 
         packet.devmode = oshd.device_mode;
-        return node_queue_packet(node, node->id, DEVMODE,
-            (uint8_t *) &packet, sizeof(packet));
+        return node_queue_packet(node, node->id, DEVMODE, &packet, sizeof(packet));
     }
 }
 
@@ -1268,8 +1306,7 @@ bool node_queue_pubkey_broadcast(node_t *exclude, node_id_t *id)
     memcpy(packet.node_name, id->name, NODE_NAME_SIZE);
     memcpy(packet.node_pubkey, id->pubkey_raw, PUBLIC_KEY_SIZE);
 
-    return node_queue_packet_broadcast(exclude, PUBKEY, (uint8_t *) &packet,
-        sizeof(packet));
+    return node_queue_packet_broadcast(exclude, PUBKEY, &packet, sizeof(packet));
 }
 
 // Queue PUBKEY exchange packet
@@ -1330,8 +1367,7 @@ bool node_queue_endpoint_broadcast(node_t *exclude, const endpoint_t *endpoint,
 
     logger_debug(DBG_ENDPOINTS, "Broadcasting endpoint %s:%u owned by %s",
         endpoint->hostname, endpoint->port, group->owner_name);
-    return node_queue_packet_broadcast(exclude, ENDPOINT, (uint8_t *) &pkt,
-        sizeof(pkt));
+    return node_queue_packet_broadcast(exclude, ENDPOINT, &pkt, sizeof(pkt));
 }
 
 // Send an endpoint owned by group->owner_name to node
@@ -1362,7 +1398,7 @@ static bool node_queue_endpoint(node_t *node, const endpoint_t *endpoint,
 
     logger_debug(DBG_ENDPOINTS, "%s: Queuing endpoint %s:%u owned by %s",
         node->addrw, endpoint->hostname, endpoint->port, group->owner_name);
-    return node_queue_packet(node, node->id, ENDPOINT, (uint8_t *) &pkt, sizeof(pkt));
+    return node_queue_packet(node, node->id, ENDPOINT, &pkt, sizeof(pkt));
 }
 
 // Queue ENDPOINT exchange packets
@@ -1399,7 +1435,7 @@ bool node_queue_edge(node_t *node, oshpacket_type_t type,
             memcpy(buf.src_node, src,  NODE_NAME_SIZE);
             memcpy(buf.dest_node, dest, NODE_NAME_SIZE);
             return node_queue_packet(node, node->id, type,
-                        (uint8_t *) &buf, sizeof(oshpacket_edge_t));
+                &buf, sizeof(oshpacket_edge_t));
 
         default:
             logger(LOG_ERR, "node_queue_edge: Invalid type %s",
@@ -1420,7 +1456,7 @@ bool node_queue_edge_broadcast(node_t *exclude, oshpacket_type_t type,
             memcpy(buf.src_node, src,  NODE_NAME_SIZE);
             memcpy(buf.dest_node, dest, NODE_NAME_SIZE);
             return node_queue_packet_broadcast(exclude, type,
-                    (uint8_t *) &buf, sizeof(oshpacket_edge_t));
+                    &buf, sizeof(oshpacket_edge_t));
 
         default:
             logger(LOG_ERR, "node_queue_edge: Invalid type %s",

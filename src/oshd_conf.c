@@ -2,6 +2,7 @@
 #include "oshd_cmd.h"
 #include "oshd_conf.h"
 #include "base64.h"
+#include "random.h"
 #include "xalloc.h"
 #include "logger.h"
 #include <stdio.h>
@@ -722,6 +723,8 @@ void oshd_init_conf(void)
 {
     // Seed the PRNG
     srand(time(NULL));
+    if (!random_xoshiro256_seed())
+        abort();
 
     // Everything should be at zero, including pointers and counts
     memset(&oshd, 0, sizeof(oshd_t));

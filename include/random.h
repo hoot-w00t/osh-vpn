@@ -7,4 +7,7 @@
 
 bool random_bytes(void *buf, size_t buf_size);
 
+bool random_xoshiro256_seed(void);
+uint64_t random_xoshiro256(void);
+
 #endif

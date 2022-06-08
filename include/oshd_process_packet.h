@@ -3,6 +3,6 @@
 
 #include "node.h"
 
-bool oshd_process_packet(node_t *node, uint8_t *packet);
+bool oshd_process_packet(node_t *node, void *packet);
 
 #endif

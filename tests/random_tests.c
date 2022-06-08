@@ -39,3 +39,25 @@ Test(random_bytes, test_randomness)
         free(buf[i]);
     free(buf);
 }
+
+Test(random_xoshiro256, test_seeding_and_generating)
+{
+    const size_t n = 512;
+    uint64_t v[n];
+
+    memset(v, 0, sizeof(v));
+
+    cr_assert_eq(random_xoshiro256_seed(), true);
+
+    for (size_t i = 0; i < n; ++i)
+        v[i] = random_xoshiro256();
+
+    for (size_t i = 0; i < n; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            if (i == j)
+                continue;
+
+            cr_assert_neq(v[i], v[j]);
+        }
+    }
+}

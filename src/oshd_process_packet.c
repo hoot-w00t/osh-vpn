@@ -3,7 +3,7 @@
 
 // Returns true if packet was processed without an error
 // Returns false if node should be disconnected
-bool oshd_process_packet(node_t *node, uint8_t *packet)
+bool oshd_process_packet(node_t *node, void *packet)
 {
     oshpacket_hdr_t *hdr = OSHPACKET_HDR(packet);
     uint8_t *payload = OSHPACKET_PAYLOAD(packet);
@@ -56,37 +56,72 @@ bool oshd_process_packet(node_t *node, uint8_t *packet)
     if (!node->authenticated)
         return def->handler_unauth(node, hdr, payload);
 
-    // If the source or destination nodes don't exist in the tree the remote
-    // node sent us invalid data, we drop the connection
     node_id_t *src = node_id_find(hdr->src_node);
+
+    // If the source node doesn't exist the remote node sent us invalid data,
+    // we drop the connection
     if (!src) {
         logger(LOG_ERR, "%s: %s: Unknown source node", node->addrw, node->id->name);
         return false;
     }
 
-    node_id_t *dest = node_id_find(hdr->dest_node);
-    if (!dest) {
-        logger(LOG_ERR, "%s: %s: Unknown destination node", node->addrw, node->id->name);
-        return false;
+    // If the source node is our local node, ignore the packet (it is likely a
+    // broadcast looping back, but it could also be a routing error)
+    if (src->local_node) {
+        if (hdr->flags.s.broadcast) {
+            logger_debug(DBG_SOCKETS,
+                "%s: %s: Ignoring %s broadcast %" PRI_BRD_ID " looping back ",
+                node->addrw, node->id->name, def->name, hdr->dest.broadcast.id);
+        } else {
+            logger(LOG_WARN, "%s: %s: Ignoring %s packet looping back",
+                node->addrw, node->id->name, def->name);
+        }
+        return true;
     }
 
-    // If the destination node is not the local node we'll forward this packet
-    if (!dest->local_node) {
-        if (!def->can_be_forwarded) {
-            logger(LOG_WARN, "Dropping %s packet from %s to %s: This type of packet cannot be forwarded",
-                def->name, src->name, dest->name);
+    if (hdr->flags.s.broadcast) {
+        // If the packet is a broadcast we will check if we have seen it
+        // before and drop it if that's the case
+        if (node_has_seen_brd_id(src, hdr->dest.broadcast.id)) {
+            logger_debug(DBG_SOCKETS,
+                "%s: %s: Ignoring duplicated %s broadcast %" PRI_BRD_ID " from %s",
+                node->addrw, node->id->name, def->name, hdr->dest.broadcast.id,
+                src->name);
             return true;
         }
 
-        if (dest->next_hop) {
-            logger_debug(DBG_ROUTING, "Forwarding %s packet from %s to %s through %s",
-                def->name, src->name, dest->name, dest->next_hop->id->name);
-            node_queue_packet_forward(dest->next_hop, hdr);
-        } else {
-            logger(LOG_INFO, "Dropping %s packet from %s to %s: No route",
-                def->name, src->name, dest->name);
+        // This is the first time we see this packet, before processing it we
+        // will re-broadcast it
+        node_queue_packet_broadcast_forward(node, hdr, payload, hdr->payload_size);
+    } else {
+        // If this packet is a unicast, we will check its destination
+
+        const node_id_t *dest = node_id_find(hdr->dest.unicast.dest_node);
+
+        if (!dest) {
+            logger(LOG_ERR, "%s: %s: Unknown destination node", node->addrw, node->id->name);
+            return false;
         }
-        return true;
+
+        // If the destination node is not the local node we'll forward this packet
+        if (!dest->local_node) {
+            if (!def->can_be_forwarded) {
+                logger(LOG_WARN,
+                    "Dropping %s packet from %s to %s: This type of packet cannot be forwarded",
+                    def->name, src->name, dest->name);
+                return true;
+            }
+
+            if (dest->next_hop) {
+                logger_debug(DBG_ROUTING, "Forwarding %s packet from %s to %s through %s",
+                    def->name, src->name, dest->name, dest->next_hop->id->name);
+                node_queue_packet_forward(dest->next_hop, hdr, payload, hdr->payload_size);
+            } else {
+                logger(LOG_INFO, "Dropping %s packet from %s to %s: No route",
+                    def->name, src->name, dest->name);
+            }
+            return true;
+        }
     }
 
     // If this packet was forwarded but shouldn't have been, drop it

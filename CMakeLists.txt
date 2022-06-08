@@ -138,6 +138,7 @@ set(OSHD_SOURCES
     src/oshd_socket.c
     src/oshd.c
     src/oshpacket.c
+    src/random_xoshiro256.c
     src/random.c
     src/tcp.c
     src/xalloc.c
@@ -152,6 +153,7 @@ set(OSHD_TESTS_SOURCES
     tests/netaddr_tests.c
     tests/netbuffer_tests.c
     tests/netroute_tests.c
+    tests/node_id_tests.c
     tests/oshpacket_tests.c
     tests/random_tests.c)
 

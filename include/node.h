@@ -82,6 +82,14 @@ struct node_io {
     netbuffer_t *sendq;   // Network buffer for queuing packets
 };
 
+#ifndef seen_brd_id_maxsize
+#define seen_brd_id_maxsize (256)
+#endif
+
+#if (seen_brd_id_maxsize < 1)
+#error "seen_brd_id_maxsize must be a positive value"
+#endif
+
 struct node_id {
     // Node name (which serves as its unique ID)
     char name[NODE_NAME_SIZE + 1];
@@ -124,6 +132,11 @@ struct node_id {
     // connect to
     endpoint_group_t *endpoints;
     struct timespec endpoints_next_retry;
+
+    // Array of the most recently received broadcast IDs
+    // This is used to ignore broadcast packets which we already processed
+    oshpacket_brd_id_t seen_brd_id[seen_brd_id_maxsize];
+    size_t seen_brd_id_count;
 
     // true if the node ID is our ID (name == oshd.name)
     bool local_node;
@@ -241,13 +254,19 @@ void node_reconnect_endpoints_next(endpoint_group_t *reconnect_endpoints, time_t
 void node_reconnect(node_t *node);
 
 bool node_valid_name(const char *name);
+bool node_has_seen_brd_id(node_id_t *nid, const oshpacket_brd_id_t brd_id);
 
+// TODO: Rename node_queue_* functions
 bool node_queue_packet(node_t *node, node_id_t *dest, oshpacket_type_t type,
-    uint8_t *payload, uint16_t payload_size);
-#define node_queue_packet_empty(node, dest, type) node_queue_packet(node, dest, type, NULL, 0)
-bool node_queue_packet_forward(node_t *node, oshpacket_hdr_t *pkt);
+    const void *payload, size_t payload_size);
+bool node_queue_packet_forward(node_t *node, const oshpacket_hdr_t *hdr,
+    const void *payload, size_t payload_size);
 bool node_queue_packet_broadcast(node_t *exclude, oshpacket_type_t type,
-    uint8_t *payload, uint16_t payload_size);
+    const void *payload, size_t payload_size);
+bool node_queue_packet_broadcast_forward(node_t *exclude, const oshpacket_hdr_t *hdr,
+    const void *payload, size_t payload_size);
+
+#define node_queue_packet_empty(node, dest, type) node_queue_packet(node, dest, type, NULL, 0)
 
 bool node_queue_handshake(node_t *node);
 bool node_queue_handshake_end(node_t *node);

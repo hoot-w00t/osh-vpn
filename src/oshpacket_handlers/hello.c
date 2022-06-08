@@ -61,7 +61,7 @@ bool oshpacket_handler_hello_challenge(node_t *node, oshpacket_hdr_t *hdr,
     memcpy(response.sig, sig, sizeof(response.sig));
     free(sig);
 
-    return node_queue_packet(node, NULL, HELLO_RESPONSE, (uint8_t *) &response,
+    return node_queue_packet(node, NULL, HELLO_RESPONSE, &response,
         sizeof(oshpacket_hello_response_t));
 }
 

@@ -67,6 +67,9 @@ typedef enum oshpacket_payload_size {
     OSHPACKET_PAYLOAD_SIZE_FRAGMENTED // Accept the payload size or a multiple
 } oshpacket_payload_size_t;
 
+typedef uint64_t oshpacket_brd_id_t;
+#define PRI_BRD_ID "016" PRIx64
+
 // For a total of 36 bytes
 typedef struct __attribute__((__packed__)) oshpacket_hdr {
     // Public part of the header (never encrypted)
@@ -77,10 +80,36 @@ typedef struct __attribute__((__packed__)) oshpacket_hdr {
     // Private header (always encrypted except for HANDSHAKE packets)
     // If it changes OSHPACKET_PRIVATE_HDR_SIZE needs to be updated
     oshpacket_type_t type : 8;
-    uint8_t          flags;
+    union {
+        uint8_t u;
+
+        struct __attribute__((__packed__)) {
+            uint8_t broadcast : 1;
+            uint8_t _reserved : 7;
+        } s;
+    } flags;
 
     char             src_node[NODE_NAME_SIZE];
-    char             dest_node[NODE_NAME_SIZE];
+
+    // This field contains information about the destination of the packet
+    // Both structures are of the same size, but the one used will depend on
+    // the broadcast flag of the packet
+    union {
+        // This structure is used when the broadcast flag is 1
+        // It contains a random ID used to prevent duplicated packets
+        struct __attribute__((__packed__)) {
+            oshpacket_brd_id_t id;      // The endianness of this ID should not
+                                        // matter as we only compare and store
+                                        // the value
+            uint64_t           _unused;
+        } broadcast;
+
+        // This structure is used when the broadcast flag is 0
+        // It only contains the destination node's name
+        struct __attribute__((__packed__)) {
+            char dest_node[NODE_NAME_SIZE];
+        } unicast;
+    } dest;
 } oshpacket_hdr_t;
 
 typedef struct node node_t;
@@ -171,7 +200,7 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 } oshpacket_route_t;
 
 // Size of the public part of the header
-#define OSHPACKET_PUBLIC_HDR_SIZE (2 + CIPHER_TAG_SIZE)
+#define OSHPACKET_PUBLIC_HDR_SIZE  (2 + CIPHER_TAG_SIZE)
 
 // Size of the private part of the header
 #define OSHPACKET_PRIVATE_HDR_SIZE (1 + 1 + (NODE_NAME_SIZE * 2))
@@ -179,12 +208,19 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 // Total size of the header
 #define OSHPACKET_HDR_SIZE (OSHPACKET_PUBLIC_HDR_SIZE + OSHPACKET_PRIVATE_HDR_SIZE)
 
-#define OSHPACKET_MAXSIZE (OSHPACKET_HDR_SIZE + OSHPACKET_PAYLOAD_MAXSIZE)
+// Maximum size of a packet (including the header)
+#define OSHPACKET_MAXSIZE  (OSHPACKET_HDR_SIZE + OSHPACKET_PAYLOAD_MAXSIZE)
 
-#define _OSHPACKET_OFFSET(pkt, offset) (((uint8_t *) (pkt)) + (offset))
-#define OSHPACKET_HDR(pkt) ((oshpacket_hdr_t *) (pkt))
+#define _OSHPACKET_OFFSET(pkt, offset)      (((void *) (pkt)) + (offset))
+#define _OSHPACKET_OFFSET_CONST(pkt, offset) (((const void *) (pkt)) + (offset))
+
+#define OSHPACKET_HDR(pkt)         ((oshpacket_hdr_t *) (pkt))
 #define OSHPACKET_PRIVATE_HDR(pkt) _OSHPACKET_OFFSET(pkt, OSHPACKET_PUBLIC_HDR_SIZE)
-#define OSHPACKET_PAYLOAD(pkt) _OSHPACKET_OFFSET(pkt, OSHPACKET_HDR_SIZE)
+#define OSHPACKET_PAYLOAD(pkt)     _OSHPACKET_OFFSET(pkt, OSHPACKET_HDR_SIZE)
+
+#define OSHPACKET_HDR_CONST(pkt)         ((const oshpacket_hdr_t *) (pkt))
+#define OSHPACKET_PRIVATE_HDR_CONST(pkt) _OSHPACKET_OFFSET_CONST(pkt, OSHPACKET_PUBLIC_HDR_SIZE)
+#define OSHPACKET_PAYLOAD_CONST(pkt)     _OSHPACKET_OFFSET_CONST(pkt, OSHPACKET_HDR_SIZE)
 
 static inline bool oshpacket_type_valid(oshpacket_type_t type)
 {

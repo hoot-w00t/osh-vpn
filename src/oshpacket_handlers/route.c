@@ -21,8 +21,7 @@ bool oshpacket_handler_route(node_t *node, __attribute__((unused)) node_id_t *sr
         logger_debug(DBG_STATEEXG,
             "%s: %s: State exchange: Relaying ROUTE_ADD packet",
             node->addrw, node->id->name);
-        node_queue_packet_broadcast(node, ROUTE_ADD, (uint8_t *) payload,
-            hdr->payload_size);
+        node_queue_packet_broadcast(node, ROUTE_ADD, payload, hdr->payload_size);
     }
 
     memset(node_name, 0, sizeof(node_name));

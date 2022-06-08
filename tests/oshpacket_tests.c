@@ -8,6 +8,13 @@ Test(oshpacket_hdr_t, oshpacket_hdr_sizes)
     cr_assert_eq(OSHPACKET_PUBLIC_HDR_SIZE + OSHPACKET_PRIVATE_HDR_SIZE, OSHPACKET_HDR_SIZE);
     cr_assert_eq(sizeof(hdr), OSHPACKET_HDR_SIZE);
     cr_assert_eq(sizeof(hdr) + OSHPACKET_PAYLOAD_MAXSIZE, OSHPACKET_MAXSIZE);
+    cr_assert_eq(sizeof(hdr.flags), sizeof(hdr.flags.u));
+    cr_assert_eq(sizeof(hdr.flags.s), sizeof(hdr.flags.u));
+    cr_assert_eq(sizeof(hdr.dest), sizeof(hdr.dest.unicast));
+    cr_assert_eq(sizeof(hdr.dest.broadcast), sizeof(hdr.dest.unicast));
+
+    cr_assert_eq(sizeof(hdr.payload_size), sizeof(uint16_t));
+    cr_assert_leq(OSHPACKET_PAYLOAD_MAXSIZE, UINT16_MAX);
 }
 
 Test(oshpacket_hdr_t, oshpacket_hdr_macros)
@@ -17,7 +24,11 @@ Test(oshpacket_hdr_t, oshpacket_hdr_macros)
 
     cr_assert_eq(ptr, (void *) OSHPACKET_HDR(&hdr));
     cr_assert_eq(ptr + OSHPACKET_PUBLIC_HDR_SIZE, (void *) OSHPACKET_PRIVATE_HDR(&hdr));
-    cr_assert_eq(ptr + OSHPACKET_HDR_SIZE, (void *) OSHPACKET_PAYLOAD(&hdr));
+    cr_assert_eq(ptr + OSHPACKET_HDR_SIZE,        (void *) OSHPACKET_PAYLOAD(&hdr));
+
+    cr_assert_eq(OSHPACKET_HDR(&hdr),         OSHPACKET_HDR_CONST(&hdr));
+    cr_assert_eq(OSHPACKET_PRIVATE_HDR(&hdr), OSHPACKET_PRIVATE_HDR_CONST(&hdr));
+    cr_assert_eq(OSHPACKET_PAYLOAD(&hdr),     OSHPACKET_PAYLOAD_CONST(&hdr));
 }
 
 Test(oshpacket_type_valid, oshpacket_type_is_valid)
