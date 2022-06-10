@@ -96,7 +96,7 @@ bool oshd_process_packet(node_t *node, void *packet)
     } else {
         // If this packet is a unicast, we will check its destination
 
-        const node_id_t *dest = node_id_find(hdr->dest.unicast.dest_node);
+        node_id_t *dest = node_id_find(hdr->dest.unicast.dest_node);
 
         if (!dest) {
             logger(LOG_ERR, "%s: %s: Unknown destination node", node->addrw, node->id->name);
@@ -112,7 +112,7 @@ bool oshd_process_packet(node_t *node, void *packet)
                 return true;
             }
 
-            if (dest->next_hop) {
+            if (node_id_next_hop(dest)) {
                 logger_debug(DBG_ROUTING, "Forwarding %s packet from %s to %s through %s",
                     def->name, src->name, dest->name, dest->next_hop->id->name);
                 node_queue_packet_forward(dest->next_hop, hdr, payload, hdr->payload_size);

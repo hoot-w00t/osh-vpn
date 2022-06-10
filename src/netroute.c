@@ -461,6 +461,33 @@ void netroute_del_owner(netroute_table_t *table, node_id_t *owner)
     }
 }
 
+// Delete all orphan routes from the table
+bool netroute_del_orphan_owners(netroute_table_t *table)
+{
+    bool deleted = false;
+    netroute_t *route;
+    netroute_t *next;
+
+    for (size_t i = 0; i < table->heads_count; ++i) {
+        route = table->heads[i];
+
+        while (route) {
+            next = route->next;
+
+            if (    route->owner
+                && !route->owner->online
+                && !route->owner->local_node)
+            {
+                netroute_del(table, route);
+                deleted = true;
+            }
+
+            route = next;
+        }
+    }
+    return deleted;
+}
+
 // Delete all expired routes from the table
 // next_expire will contain the delay in seconds of the next route expiry
 // next_expire will be limited to next_expire_max seconds

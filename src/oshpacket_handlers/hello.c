@@ -210,7 +210,7 @@ bool oshpacket_handler_hello_end(node_t *node, __attribute__((unused)) oshpacket
     // We are no longer actively trying to connect to these endpoints
     endpoint_group_set_is_connecting(node->id->endpoints, false);
 
-    if (node->hello_id->next_hop) {
+    if (node->id->next_hop) {
         logger_debug(DBG_STATEEXG, "%s: %s: Previously accessible through %s (%s)",
             node->addrw, node->id->name,
             node->id->next_hop->id->name, node->id->next_hop->addrw);

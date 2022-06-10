@@ -110,6 +110,7 @@ struct node_id {
 
     // The node socket to which we should queue packets for this destination
     node_t *next_hop;
+    bool next_hop_searched;
 
     // The number of hops to reach this node, how many others nodes will relay
     // packets for this destination
@@ -132,7 +133,10 @@ struct node_id {
     // true if the node ID is our ID (name == oshd.name)
     bool local_node;
 
-    // Used for the Breadth-first Search (node_id_find_next_hop function)
+    // true if the node is online
+    bool online;
+
+    // Used for the Breadth-First Search
     bool visited;
 };
 
@@ -226,6 +230,8 @@ void node_id_add_edge(node_id_t *src, node_id_t *dest);
 void node_id_del_edge(node_id_t *src, node_id_t *dest);
 bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
     size_t pubkey_size);
+
+node_t *node_id_next_hop(node_id_t *id);
 
 void node_tree_dump_digraph(void);
 void node_tree_dump(void);

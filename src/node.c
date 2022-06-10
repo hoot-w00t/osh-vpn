@@ -164,103 +164,68 @@ bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
     return true;
 }
 
-// Dynamically resize array and add *n to the end, then increment the count
-static void node_id_array_append(node_id_t ***arr, size_t *count, node_id_t *n)
-{
-    const size_t alloc_count = 16;
-
-    if ((*count) % alloc_count == 0)
-        *arr = xreallocarray(*arr, (*count) + alloc_count, sizeof(node_id_t *));
-    (*arr)[(*count)] = n;
-    *count += 1;
-}
-
-/*
-TODO: Maybe implement another algorithm to calculate and choose the lowest
-      latency route instead of the shortest
-*/
 static node_t *node_id_find_next_hop(node_id_t *dest_node)
 {
+    const size_t queue_maxcount = oshd.node_tree_count;
+    node_t *next_hop = NULL;
+    node_id_t **queue;
+    size_t queue_count;
+
     // We clear visited status for every node
     for (size_t i = 0; i < oshd.node_tree_count; ++i)
         oshd.node_tree[i]->visited = false;
 
-    // If we have a direct connection to the destination node we don't need to
-    // search for the route (obviously)
-    if (dest_node->node_socket)
-        return dest_node->node_socket;
-
-    // We visited the destination node
+    // Initialize the queue with our destination node as the starting node
+    queue = xalloc(queue_maxcount * sizeof(node_id_t *));
+    queue[0] = dest_node;
+    queue_count = 1;
     dest_node->visited = 1;
 
-
-    // Search through all edges of the node for a route
-    // This is the current queue that we will explore
-    node_id_t **queue = NULL;
-    size_t queue_count = 0;
-
-    // This is the next queue that will be populated with
-    node_id_t **next_queue = NULL;
-    size_t next_queue_count = 0;
-
-    // This is a list of shortest routes
-    // If there are more than one the next hop will be the route with the lowest
-    // latency (RTT)
-    node_id_t **routes = NULL;
-    size_t routes_count = 0;
-    node_t *next_hop = NULL;
-
-    // We initialize our current queue with the current edges
-    queue_count = (size_t) dest_node->edges_count;
-    queue = xmemdup(dest_node->edges, sizeof(node_id_t *) * queue_count);
-
-iterate_queue:
     // Iterate through the current queue to find a direct connection
-    for (size_t i = 0; i < queue_count; ++i) {
-        // If the node has a direct connection, we have a new route
-        if (queue[i]->node_socket)
-            node_id_array_append(&routes, &routes_count, queue[i]);
-        queue[i]->visited = true;
-    }
+    // Break if we reach the end or if the next hop was found
+    for (size_t i = 0; i < queue_count && next_hop == NULL; ++i) {
+        for (ssize_t j = 0; j < queue[i]->edges_count; ++j) {
+            // If the edge was not visited yet, append it to the queue
+            if (!queue[i]->edges[j]->visited) {
+                // Safety check, this should never happen but
+                if (queue_count >= queue_maxcount) {
+                    logger(LOG_CRIT, "%s: queue_count >= queue_maxcount", __func__);
+                    abort();
+                }
 
-    // We found one or more routes
-    if (routes_count) {
-        next_hop = routes[0]->node_socket;
+                queue[queue_count] = queue[i]->edges[j];
+                queue_count += 1;
+                queue[i]->edges[j]->visited = true;
 
-        // Select the lowest latency route if we have multiple routes
-        for (size_t i = 1; i < routes_count; ++i) {
-            if (routes[i]->node_socket->rtt < next_hop->rtt)
-                next_hop = routes[i]->node_socket;
-        }
-    } else {
-        // Iterate through the visited current queue again to queue the next
-        // unvisited nodes
-        for (size_t i = 0; i < queue_count; ++i) {
-            for (ssize_t j = 0; j < queue[i]->edges_count; ++j) {
-                if (!queue[i]->edges[j]->visited) {
-                    node_id_array_append(&next_queue, &next_queue_count,
-                        queue[i]->edges[j]);
+                // If we have a direct connection to this node it is a candidate
+                // for being the next hop
+                if (queue[i]->edges[j]->node_socket) {
+                    // If we don't have a next_hop, set it to this direct connection
+                    // If we do have a next_hop already, replace it with this
+                    // direct connection if its latency is higher
+                    if (   !next_hop
+                        ||  next_hop->rtt > queue[i]->edges[j]->node_socket->rtt)
+                    {
+                        next_hop = queue[i]->edges[j]->node_socket;
+                    }
                 }
             }
         }
-
-        // If we have more edges to explore, queue them and loop
-        if (next_queue_count) {
-            free(queue);
-            queue = next_queue;
-            queue_count = next_queue_count;
-            next_queue = NULL;
-            next_queue_count = 0;
-            goto iterate_queue;
-        }
     }
 
-    // Free the temporary allocated memory
     free(queue);
-    free(next_queue);
-    free(routes);
-
     return next_hop;
+}
+
+// Return the node's next_hop (searches it first after node_tree_update())
+node_t *node_id_next_hop(node_id_t *id)
+{
+    if (!id->next_hop_searched) {
+        logger_debug(DBG_NODETREE, "Searching next hop of %s", id->name);
+        id->next_hop = node_id_find_next_hop(id);
+        id->next_hop_searched = true;
+    }
+    return id->next_hop;
 }
 
 // Digraph dump to *out
@@ -281,7 +246,7 @@ static void node_tree_dump_digraph_to(FILE *out)
             color = "green";
             style = "filled";
             snprintf(route, sizeof(route), "(local)");
-        } else if (oshd.node_tree[i]->next_hop) {
+        } else if (oshd.node_tree[i]->online) {
             // Direct and indirect nodes are outlined in either green or turquoise
             style = "solid";
             if (oshd.node_tree[i]->node_socket) {
@@ -292,7 +257,7 @@ static void node_tree_dump_digraph_to(FILE *out)
             } else {
                 color = "turquoise";
                 snprintf(route, sizeof(route), "(indirect through %s, %zu hops)",
-                    oshd.node_tree[i]->next_hop->id->name,
+                    oshd.node_tree[i]->next_hop ? oshd.node_tree[i]->next_hop->id->name : "(unknown)",
                     oshd.node_tree[i]->hops_count);
             }
         } else {
@@ -373,7 +338,7 @@ void node_tree_dump(void)
         printf("    %s (%s, next hop: %s, %zu hops): %zi edges: ",
             oshd.node_tree[i]->name,
             oshd.node_tree[i]->node_socket ? "direct" : "indirect",
-            oshd.node_tree[i]->next_hop ? oshd.node_tree[i]->next_hop->id->name : "(no route)",
+            oshd.node_tree[i]->next_hop ? oshd.node_tree[i]->next_hop->id->name : "(unknown)",
             oshd.node_tree[i]->hops_count,
             oshd.node_tree[i]->edges_count);
 
@@ -388,140 +353,99 @@ void node_tree_dump(void)
 }
 
 // Calculate the hops_count from our local node for all nodes in the tree
+// This updates the state of all nodes
 // Sorts oshd.node_tree_ordered_hops before returning
 // Returns the maximum hops_count
 static size_t node_tree_calc_hops_count(void)
 {
     node_id_t *local_node = node_id_find_local();
+    const size_t queue_maxcount = oshd.node_tree_count;
+    node_id_t **queue;
+    size_t queue_count;
+    size_t hops_count;
 
-    // We clear visited status for every node
+    // Reset the state of all nodes
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
-        // Nodes to which we don't have a route have a distance of 0
-        if (!oshd.node_tree[i]->next_hop)
-            oshd.node_tree[i]->hops_count = 0;
-
+        oshd.node_tree[i]->hops_count = 0;
         oshd.node_tree[i]->visited = false;
+        oshd.node_tree[i]->next_hop = NULL;
+        oshd.node_tree[i]->next_hop_searched = false;
+        oshd.node_tree[i]->online = false;
     }
 
-    // We visited our local node
+    // Initialize the queue with our local node as the starting node
+    queue = xalloc(queue_maxcount * sizeof(node_id_t *));
+    queue[0] = local_node;
+    queue_count = 1;
+    hops_count = 0;
     local_node->visited = 1;
+    local_node->hops_count = hops_count;
+    local_node->online = true;
 
-    // This is the current queue that we will explore
-    node_id_t **queue = NULL;
-    size_t queue_count = 0;
-
-    // This is the next queue that will be populated with
-    node_id_t **next_queue = NULL;
-    size_t next_queue_count = 0;
-
-    // This is the current hops_count
-    size_t hops_count = 0;
-
-    // We initialize our current queue with the current edges
-    queue_count = (size_t) local_node->edges_count;
-    queue = xmemdup(local_node->edges, sizeof(node_id_t *) * queue_count);
-
-iterate_queue:
     // Iterate through the current queue to find a direct connection
     for (size_t i = 0; i < queue_count; ++i) {
-        queue[i]->hops_count = hops_count;
-        queue[i]->visited = true;
-    }
-
-    // Iterate through the visited current queue again to queue the next
-    // unvisited nodes
-    for (size_t i = 0; i < queue_count; ++i) {
         for (ssize_t j = 0; j < queue[i]->edges_count; ++j) {
+            // If the edge was not visited yet, append it to the queue
             if (!queue[i]->edges[j]->visited) {
-                node_id_array_append(&next_queue, &next_queue_count,
-                    queue[i]->edges[j]);
+                // Safety check, this should never happen but
+                if (queue_count >= queue_maxcount) {
+                    logger(LOG_CRIT, "%s: queue_count >= queue_maxcount", __func__);
+                    abort();
+                }
+                queue[queue_count] = queue[i]->edges[j];
+                queue_count += 1;
+                queue[i]->edges[j]->visited = true;
+                queue[i]->edges[j]->hops_count = queue[i]->hops_count + 1;
+                queue[i]->edges[j]->online = true;
+
+                // If we have a direct connection to this node, set its next_hop
+                // now
+                if (queue[i]->edges[j]->node_socket) {
+                    queue[i]->edges[j]->next_hop = queue[i]->edges[j]->node_socket;
+                    queue[i]->edges[j]->next_hop_searched = true;
+                }
             }
         }
     }
 
-    // If we have more edges to explore, queue them and loop
-    if (next_queue_count) {
-        free(queue);
-        queue = next_queue;
-        queue_count = next_queue_count;
-        next_queue = NULL;
-        next_queue_count = 0;
-        hops_count += 1;
-        goto iterate_queue;
-    }
-
-    // Free the temporary allocated memory
     free(queue);
-    free(next_queue);
 
     // Before returning, sort the node IDs with their updated hops count
     node_id_sort_hops();
     return hops_count;
 }
 
-static void node_id_clear_seen_brd_id(node_id_t *id)
+static void node_tree_clear_orphan_nodes(void)
 {
-    memset(id->seen_brd_id, 0, sizeof(id->seen_brd_id));
-    id->seen_brd_id_count = 0;
-}
+    logger_debug(DBG_NODETREE, "Clearing orphan nodes");
 
-static void node_tree_update_next_hops(void)
-{
-    logger_debug(DBG_NODETREE, "Updating next hops");
-
-    // We will never have to update the next hop or the edges or our local node,
-    // so we skip by starting with the second element in the tree, because the
-    // first will always be our local node
+    // The first node is us and this task is handled by our direct connections
+    // so we can skip it
     for (size_t i = 1; i < oshd.node_tree_count; ++i) {
-        oshd.node_tree[i]->next_hop = node_id_find_next_hop(oshd.node_tree[i]);
-
-        /*
-           If we have no route for this destination then we clear its edges
-           If we don't we go out of sync
-        */
-        if (!oshd.node_tree[i]->next_hop)
-        {
+        // If this node was not visited by the hop count BFS, there is no route
+        // to it, the node is offline
+        if (!oshd.node_tree[i]->visited) {
             logger_debug(DBG_NODETREE, "Clearing edges from orphan node %s",
                 oshd.node_tree[i]->name);
+
             free(oshd.node_tree[i]->edges);
             oshd.node_tree[i]->edges = NULL;
             oshd.node_tree[i]->edges_count = 0;
-
-            // Also clear the seen broadcast IDs
-            node_id_clear_seen_brd_id(oshd.node_tree[i]);
         }
     }
-}
-
-// Deletes all routes owned by orphan nodes from the routing table
-// Returns true if routes were deleted, false otherwise
-static bool netroute_del_orphan(netroute_table_t *table)
-{
-    bool deleted = false;
-
-    for (size_t i = 1; i < oshd.node_tree_count; ++i) {
-        if (!oshd.node_tree[i]->next_hop) {
-            netroute_del_owner(table, oshd.node_tree[i]);
-            deleted = true;
-        }
-    }
-
-    return deleted;
 }
 
 void node_tree_update(void)
 {
     logger_debug(DBG_NODETREE, "Node tree updated");
 
-    // After the node tree gets updated we need to re-calculate the next hops
-    // of all nodes
-    node_tree_update_next_hops();
-
     // Calculate the hops_count of all nodes in the tree
     node_tree_calc_hops_count();
 
-    // We also need to delete all routes to orphan nodes
-    if (netroute_del_orphan(oshd.route_table)) {
+    // Clear the orphan nodes
+    node_tree_clear_orphan_nodes();
+
+    if (netroute_del_orphan_owners(oshd.route_table)) {
         if (logger_is_debugged(DBG_ROUTING)) {
             printf("Routing table (%zu):\n", oshd.route_table->total_routes);
             netroute_dump(oshd.route_table);
@@ -1265,7 +1189,7 @@ bool node_queue_pubkey_exg(node_t *node)
 
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
         // Only exchange public keys from online nodes
-        if (   !oshd.node_tree[i]->next_hop
+        if (    oshd.node_tree[i]->online
             || !oshd.node_tree[i]->pubkey
             || !oshd.node_tree[i]->pubkey_raw
             ||  oshd.node_tree[i]->pubkey_raw_size != PUBLIC_KEY_SIZE)
