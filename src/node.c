@@ -1189,7 +1189,7 @@ bool node_queue_pubkey_exg(node_t *node)
 
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
         // Only exchange public keys from online nodes
-        if (    oshd.node_tree[i]->online
+        if (   !oshd.node_tree[i]->online
             || !oshd.node_tree[i]->pubkey
             || !oshd.node_tree[i]->pubkey_raw
             ||  oshd.node_tree[i]->pubkey_raw_size != PUBLIC_KEY_SIZE)
