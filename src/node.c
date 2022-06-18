@@ -469,18 +469,16 @@ void node_graceful_disconnect(node_t *node)
 void node_disconnect(node_t *node)
 {
     if (node->authenticated) {
-        // Find our two nodes
-        node_id_t *src = node_id_find_local();
-        node_id_t *dest = node_id_find(node->id->name);
+        node_id_t *me = node_id_find_local();
 
         // Make sure that we don't have a direct connection to this node
         node->id->node_socket = NULL;
 
         // We delete the edges between the local and the remote node
-        node_id_del_edge(src, dest);
+        node_id_del_edge(me, node->id);
 
         // We broadcast this change to the rest of the network
-        node_queue_edge_broadcast(node, EDGE_DEL, oshd.name, node->id->name);
+        node_queue_edge_broadcast(node, EDGE_DEL, me->name, node->id->name);
         node_tree_update();
     }
 
