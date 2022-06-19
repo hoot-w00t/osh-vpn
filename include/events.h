@@ -60,7 +60,7 @@ event_t *event_create(
 void event_free(event_t *event);
 
 void event_queue_in(event_t *event, time_t delay);
-#define event_queue_now(event) event_queue_in(event, 0)
+#define event_queue_now(event) event_queue_in(event, EVENT_QUEUE_NOW)
 void event_cancel(event_t *event);
 void event_cancel_queue(void);
 

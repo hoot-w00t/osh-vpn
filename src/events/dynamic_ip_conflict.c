@@ -149,11 +149,9 @@ void event_queue_dynamic_ip_conflict(node_id_t *s1, node_id_t *s2,
         data->keeps = tmp;
     }
 
-    event_queue_in(
-        event_create(
+    event_queue_now(event_create(
             "dynamic_ip_conflict",
             dynamic_ip_conflict_handler,
             dynamic_ip_conflict_freedata,
-            data),
-        EVENT_QUEUE_NOW);
+            data));
 }
