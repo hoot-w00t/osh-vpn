@@ -24,6 +24,32 @@ set(OSH_VERSION_FILE_DEST "${OSH_BINARY_SOURCEDIR}/version.c")
 set(VERSION_GIT_FILE_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/include/version_git.h.in")
 set(VERSION_GIT_FILE_DEST "${OSH_BINARY_INCLUDEDIR}/version_git.h")
 
+# Git revision information
+add_custom_target(version_git
+    COMMAND ${CMAKE_COMMAND} -Droot_dir=${CMAKE_CURRENT_SOURCE_DIR}
+                             -Dsrc_file=${VERSION_GIT_FILE_SOURCE}
+                             -Ddest_file=${VERSION_GIT_FILE_DEST}
+                             -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/version_git.cmake
+    DEPENDS ${VERSION_GIT_FILE_SOURCE}
+    BYPRODUCTS ${VERSION_GIT_FILE_DEST}
+    VERBATIM)
+
+# Osh version definitions and configuration
+set(OSH_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(OSH_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(OSH_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+
+set(OSH_VERSION_STR "${OSH_VERSION_MAJOR}.${OSH_VERSION_MINOR}.${OSH_VERSION_PATCH}")
+
+if (OSH_VERSION_COMMENT)
+    set(OSH_VERSION_HAS_COMMENT 1)
+else()
+    set(OSH_VERSION_HAS_COMMENT 0)
+endif()
+
+message(STATUS "Configuring ${OSH_VERSION_FILE_DEST} with version ${OSH_VERSION_STR} ${OSH_VERSION_COMMENT}")
+configure_file("${OSH_VERSION_FILE_SOURCE}" "${OSH_VERSION_FILE_DEST}" @ONLY)
+
 # Package variables
 set(CPACK_VERBATIM_VARIABLES TRUE)
 
@@ -166,33 +192,7 @@ set(OSHD_LINK_LIBRARIES
 # Osh daemon
 add_executable(oshd ${OSHD_SOURCES} src/main.c)
 target_link_libraries(oshd ${OSHD_LINK_LIBRARIES})
-
-# Git revision information
-add_custom_target(version_git
-    COMMAND ${CMAKE_COMMAND} -Droot_dir=${CMAKE_CURRENT_SOURCE_DIR}
-                             -Dsrc_file=${VERSION_GIT_FILE_SOURCE}
-                             -Ddest_file=${VERSION_GIT_FILE_DEST}
-                             -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/version_git.cmake
-    DEPENDS ${VERSION_GIT_FILE_SOURCE}
-    BYPRODUCTS ${VERSION_GIT_FILE_DEST}
-    VERBATIM)
 add_dependencies(oshd version_git)
-
-# Osh version definitions and configuration
-set(OSH_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
-set(OSH_VERSION_MINOR ${PROJECT_VERSION_MINOR})
-set(OSH_VERSION_PATCH ${PROJECT_VERSION_PATCH})
-
-set(OSH_VERSION_STR "${OSH_VERSION_MAJOR}.${OSH_VERSION_MINOR}.${OSH_VERSION_PATCH}")
-
-if (OSH_VERSION_COMMENT)
-    set(OSH_VERSION_HAS_COMMENT 1)
-else()
-    set(OSH_VERSION_HAS_COMMENT 0)
-endif()
-
-message(STATUS "Configuring ${OSH_VERSION_FILE_DEST} with version ${OSH_VERSION_STR} ${OSH_VERSION_COMMENT}")
-configure_file("${OSH_VERSION_FILE_SOURCE}" "${OSH_VERSION_FILE_DEST}" @ONLY)
 
 # Criterion unit tests
 option(ENABLE_UNIT_TESTS "Enable unit testing with Criterion" OFF)
@@ -202,6 +202,7 @@ if (ENABLE_UNIT_TESTS)
     find_library(CRITERION_FOUND criterion REQUIRED)
     add_executable(oshd_tests ${OSHD_SOURCES} ${OSHD_TESTS_SOURCES})
     target_link_libraries(oshd_tests ${OSHD_LINK_LIBRARIES} criterion)
+    add_dependencies(oshd_tests version_git)
 
     add_test(NAME unit_tests COMMAND ./oshd_tests)
 
