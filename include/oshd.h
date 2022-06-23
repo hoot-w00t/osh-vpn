@@ -93,10 +93,10 @@ typedef struct oshd {
     endpoint_group_t **remote_endpoints;
     size_t remote_count;
 
-    // Array of the node's sockets, all direct connections
-    node_t **nodes;
-    size_t nodes_count;
-    size_t nodes_count_max;
+    // Array of the clients, all our direct connections
+    client_t **clients;
+    size_t clients_count;
+    size_t clients_count_max;
 
     // Array of all nodes on the network (ID)
     node_id_t **node_tree;
@@ -137,8 +137,8 @@ typedef struct oshd {
     aio_t *aio;
 } oshd_t;
 
-// true if the maximum number of nodes is reached
-#define oshd_nodes_limited() (oshd.nodes_count_max != 0 && oshd.nodes_count >= oshd.nodes_count_max)
+// true if the maximum number of clients is reached
+#define oshd_clients_limited() (oshd.clients_count_max != 0 && oshd.clients_count >= oshd.clients_count_max)
 
 int set_nonblocking(int fd);
 

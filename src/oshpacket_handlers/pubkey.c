@@ -3,17 +3,17 @@
 #include <string.h>
 
 bool oshpacket_handler_pubkey(
-    node_t *node,
+    client_t *c,
     __attribute__((unused)) node_id_t *src,
     oshpacket_hdr_t *hdr,
     void *payload)
 {
-    if (node->state_exg) {
+    if (c->state_exg) {
         // Broadcast the public keys to our end of the network
         logger_debug(DBG_STATEEXG,
             "%s: %s: State exchange: Relaying PUBKEY packet",
-            node->addrw, node->id->name);
-        node_queue_packet_broadcast(node, PUBKEY, payload,
+            c->addrw, c->id->name);
+        client_queue_packet_broadcast(c, PUBKEY, payload,
             hdr->payload_size);
     }
 
@@ -25,8 +25,8 @@ bool oshpacket_handler_pubkey(
     for (size_t i = 0; i < count; ++i) {
         memcpy(node_name, pubkeys[i].node_name, NODE_NAME_SIZE);
         if (!node_valid_name(node_name)) {
-            logger(LOG_ERR, "%s: %s: Public key: Invalid name", node->addrw,
-                node->id->name);
+            logger(LOG_ERR, "%s: %s: Public key: Invalid name", c->addrw,
+                c->id->name);
             return false;
         }
 
@@ -34,17 +34,17 @@ bool oshpacket_handler_pubkey(
 
         if (!id) {
             logger(LOG_ERR, "%s: %s: Public key: Unknown node: %s",
-                node->addrw, node->id->name, node_name);
+                c->addrw, c->id->name, node_name);
             return false;
         }
 
         logger_debug(DBG_AUTHENTICATION, "%s: %s: Loading public key for %s",
-            node->addrw, node->id->name, node_name);
+            c->addrw, c->id->name, node_name);
         if (!node_id_set_pubkey(id, pubkeys[i].node_pubkey,
                 sizeof(pubkeys[i].node_pubkey)))
         {
             logger(LOG_ERR, "%s: %s: Failed to load public key for %s",
-                node->addrw, node->id->name, node_name);
+                c->addrw, c->id->name, node_name);
             return false;
         }
     }

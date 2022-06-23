@@ -7,9 +7,9 @@
 
 static time_t periodic_ping_event_handler(__attribute__((unused)) void *data)
 {
-    for (size_t i = 0; i < oshd.nodes_count; ++i) {
-        if (oshd.nodes[i]->authenticated)
-            node_queue_ping(oshd.nodes[i]);
+    for (size_t i = 0; i < oshd.clients_count; ++i) {
+        if (oshd.clients[i]->authenticated)
+            client_queue_ping(oshd.clients[i]);
     }
     return EVENT_QUEUE_IN_S(PERIODIC_PING_INTERVAL);
 }

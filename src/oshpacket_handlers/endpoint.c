@@ -2,15 +2,15 @@
 #include "logger.h"
 #include <string.h>
 
-bool oshpacket_handler_endpoint(node_t *node, __attribute__((unused)) node_id_t *src,
+bool oshpacket_handler_endpoint(client_t *c, __attribute__((unused)) node_id_t *src,
     oshpacket_hdr_t *hdr, void *payload)
 {
-    if (node->state_exg) {
+    if (c->state_exg) {
         // Broadcast the endpoints to our end of the network
         logger_debug(DBG_STATEEXG,
             "%s: %s: State exchange: Relaying ENDPOINT packet",
-            node->addrw, node->id->name);
-        node_queue_packet_broadcast(node, ENDPOINT, payload,
+            c->addrw, c->id->name);
+        client_queue_packet_broadcast(c, ENDPOINT, payload,
             hdr->payload_size);
     }
 
@@ -25,7 +25,7 @@ bool oshpacket_handler_endpoint(node_t *node, __attribute__((unused)) node_id_t 
         // Verify the node's name
         if (!node_valid_name(node_name)) {
             logger(LOG_ERR, "%s: %s: Endpoint: Invalid name",
-                node->addrw, node->id->name);
+                c->addrw, c->id->name);
             return false;
         }
 
@@ -41,7 +41,7 @@ bool oshpacket_handler_endpoint(node_t *node, __attribute__((unused)) node_id_t 
                           &endpoints[i].addr_data))
         {
             logger(LOG_ERR, "%s: %s: Endpoint: Invalid endpoint type",
-                node->addrw, node->id->name);
+                c->addrw, c->id->name);
             return false;
         }
 
@@ -51,7 +51,7 @@ bool oshpacket_handler_endpoint(node_t *node, __attribute__((unused)) node_id_t 
         hport = ntohs(endpoints[i].port);
 
         logger_debug(DBG_ENDPOINTS, "%s: %s: Adding %s endpoint %s:%u to %s",
-            node->addrw, node->id->name, netarea_name(area),
+            c->addrw, c->id->name, netarea_name(area),
             hostname, hport, id->name);
         endpoint_group_add(id->endpoints, hostname,
             hport, area, true);

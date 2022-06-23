@@ -57,7 +57,7 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
     if (!route || (route->owner != me && route->owner != NULL)) {
         netroute_add(oshd.route_table, &pkt_hdr.src,
             netaddr_max_prefixlen(pkt_hdr.src.type), me, ROUTE_LOCAL_EXPIRY);
-        node_queue_route_add_local(NULL, &pkt_hdr.src, 1, true);
+        client_queue_route_add_local(NULL, &pkt_hdr.src, 1, true);
     }
 
     // Lookup the destination address, if there is no route or we own it, drop
@@ -67,13 +67,13 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
         return;
 
     if (route->owner) {
-        // We have a node to send this packet to
-        // next_hop should always be a valid node_t
+        // We have a client to send this packet to
+        // next_hop should always be a valid client_t
         if (node_id_next_hop(route->owner))
-            node_queue_packet(route->owner->next_hop, route->owner, DATA, pkt, pkt_size);
+            client_queue_packet(route->owner->next_hop, route->owner, DATA, pkt, pkt_size);
     } else {
         // This route is a broadcast
-        node_queue_packet_broadcast(NULL, DATA, pkt, pkt_size);
+        client_queue_packet_broadcast(NULL, DATA, pkt, pkt_size);
     }
 
     if (logger_is_debugged(DBG_TUNTAP)) {

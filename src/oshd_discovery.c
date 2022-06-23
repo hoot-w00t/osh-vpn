@@ -67,7 +67,7 @@ void oshd_discover_local_routes(void)
                 route = netroute_add(oshd.route_table, &addr,
                     netaddr_max_prefixlen(addr.type), node_id_find_local(),
                         ROUTE_LOCAL_EXPIRY);
-                node_queue_route_add_local(NULL, &route->addr, 1, true);
+                client_queue_route_add_local(NULL, &route->addr, 1, true);
             }
         }
     }
@@ -173,7 +173,7 @@ void oshd_discover_local_endpoints(void)
             oshd.server_port, area, true);
 
         if (endpoint)
-            node_queue_endpoint_broadcast(NULL, endpoint, local_id->endpoints);
+            client_queue_endpoint_broadcast(NULL, endpoint, local_id->endpoints);
     }
     freeifaddrs(ifaces);
 }

@@ -112,18 +112,18 @@ typedef struct __attribute__((__packed__)) oshpacket_hdr {
     } dest;
 } oshpacket_hdr_t;
 
-typedef struct node node_t;
+typedef struct client client_t;
 typedef struct node_id node_id_t;
 
-// Unauthenticated handler is called with the node_t socket which received the
+// Unauthenticated handler is called with the client_t socket which received the
 // packet, its header and the payload
 // Closes the socket if the return value is false
-typedef bool (*oshpacket_unauth_handler_t)(node_t *, oshpacket_hdr_t *, void *);
+typedef bool (*oshpacket_unauth_handler_t)(client_t *, oshpacket_hdr_t *, void *);
 
-// Authenticated handler is called with the node_t socket which received the
+// Authenticated handler is called with the client_t socket which received the
 // packet, the node that sent it, the packet header and the payload
 // Closes the socket if the return value is false
-typedef bool (*oshpacket_handler_t)(node_t *, node_id_t *, oshpacket_hdr_t *, void *);
+typedef bool (*oshpacket_handler_t)(client_t *, node_id_t *, oshpacket_hdr_t *, void *);
 
 typedef struct oshpacket {
     oshpacket_type_t type;

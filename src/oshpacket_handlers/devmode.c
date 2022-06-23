@@ -2,7 +2,7 @@
 #include "logger.h"
 #include <string.h>
 
-bool oshpacket_handler_devmode(node_t *node, __attribute__((unused)) node_id_t *src,
+bool oshpacket_handler_devmode(client_t *c, __attribute__((unused)) node_id_t *src,
     __attribute__((unused)) oshpacket_hdr_t *hdr, void *payload)
 {
     const oshpacket_devmode_t *pkt = (const oshpacket_devmode_t *) payload;
@@ -12,7 +12,7 @@ bool oshpacket_handler_devmode(node_t *node, __attribute__((unused)) node_id_t *
         && hdr->payload_size != sizeof(oshpacket_devmode_dynamic_t))
     {
         logger(LOG_ERR, "%s: %s: Invalid DEVMODE size (%u bytes)",
-            node->addrw, node->id->name, hdr->payload_size);
+            c->addrw, c->id->name, hdr->payload_size);
         return false;
     }
 
@@ -23,9 +23,9 @@ bool oshpacket_handler_devmode(node_t *node, __attribute__((unused)) node_id_t *
         && pkt->devmode     != oshd.device_mode)
     {
         logger(LOG_ERR, "%s: %s: Incompatible device modes (local: %s, remote: %s)",
-            node->addrw, node->id->name, device_mode_name(oshd.device_mode),
+            c->addrw, c->id->name, device_mode_name(oshd.device_mode),
             device_mode_name(pkt->devmode));
-        return node_queue_goodbye(node);
+        return client_queue_goodbye(c);
     }
 
     // If the device mode is dynamic we have to verify that both nodes share the
@@ -35,13 +35,13 @@ bool oshpacket_handler_devmode(node_t *node, __attribute__((unused)) node_id_t *
 
         if (hdr->payload_size != sizeof(oshpacket_devmode_dynamic_t)) {
             logger(LOG_ERR, "%s: %s: Invalid dynamic DEVMODE size (%u bytes)",
-                node->addrw, node->id->name, hdr->payload_size);
+                c->addrw, c->id->name, hdr->payload_size);
             return false;
         }
 
         if (memcmp(pkt_dyn->network_name, oshd.network_name, NODE_NAME_SIZE)) {
             logger(LOG_ERR, "%s: %s: Network name does not match",
-                node->addrw, node->id->name);
+                c->addrw, c->id->name);
             return false;
         }
 
@@ -49,13 +49,13 @@ bool oshpacket_handler_devmode(node_t *node, __attribute__((unused)) node_id_t *
                 sizeof(oshd.dynamic_prefix6.data.ip6)))
         {
             logger(LOG_ERR, "%s: %s: Dynamic IPv6 prefix does not match",
-                node->addrw, node->id->name);
+                c->addrw, c->id->name);
             return false;
         }
 
         if (pkt_dyn->prefixlen6 != oshd.dynamic_prefixlen6) {
             logger(LOG_ERR, "%s: %s: Dynamic IPv6 prefix length does not match",
-                node->addrw, node->id->name);
+                c->addrw, c->id->name);
             return false;
         }
 
@@ -63,13 +63,13 @@ bool oshpacket_handler_devmode(node_t *node, __attribute__((unused)) node_id_t *
                 sizeof(oshd.dynamic_prefix4.data.ip4)))
         {
             logger(LOG_ERR, "%s: %s: Dynamic IPv4 prefix does not match",
-                node->addrw, node->id->name);
+                c->addrw, c->id->name);
             return false;
         }
 
         if (pkt_dyn->prefixlen4 != oshd.dynamic_prefixlen4) {
             logger(LOG_ERR, "%s: %s: Dynamic IPv4 prefix length does not match",
-                node->addrw, node->id->name);
+                c->addrw, c->id->name);
             return false;
         }
     }

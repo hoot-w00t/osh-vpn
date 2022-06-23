@@ -224,7 +224,7 @@ bool endpoint_group_del_expired(endpoint_group_t *group)
             } else {
                 endpoint_refresh(group, endpoint);
                 if (oshd.shareremotes)
-                    node_queue_endpoint_broadcast(NULL, endpoint, group);
+                    client_queue_endpoint_broadcast(NULL, endpoint, group);
             }
         }
 

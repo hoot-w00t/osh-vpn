@@ -5,7 +5,7 @@
 #include <string.h>
 
 // Iterate through all routes in *payload and add them
-bool oshpacket_handler_route(node_t *node, __attribute__((unused)) node_id_t *src,
+bool oshpacket_handler_route(client_t *c, __attribute__((unused)) node_id_t *src,
     oshpacket_hdr_t *hdr, void *payload)
 {
     const oshpacket_route_t *packet = (const oshpacket_route_t *) payload;
@@ -16,12 +16,12 @@ bool oshpacket_handler_route(node_t *node, __attribute__((unused)) node_id_t *sr
     node_id_t *id;
     const netroute_t *route;
 
-    if (node->state_exg) {
+    if (c->state_exg) {
         // Broadcast remote node's routes to our end of the network
         logger_debug(DBG_STATEEXG,
             "%s: %s: State exchange: Relaying ROUTE_ADD packet",
-            node->addrw, node->id->name);
-        node_queue_packet_broadcast(node, ROUTE_ADD, payload, hdr->payload_size);
+            c->addrw, c->id->name);
+        client_queue_packet_broadcast(c, ROUTE_ADD, payload, hdr->payload_size);
     }
 
     memset(node_name, 0, sizeof(node_name));
@@ -32,14 +32,14 @@ bool oshpacket_handler_route(node_t *node, __attribute__((unused)) node_id_t *sr
                           &packet[i].addr))
         {
             logger(LOG_ERR, "%s: %s: Add route: Invalid address type",
-                node->addrw, node->id->name);
+                c->addrw, c->id->name);
             return false;
         }
 
         // Verify that the prefix length is valid
         if (packet[i].prefixlen > netaddr_max_prefixlen(addr.type)) {
             logger(LOG_ERR, "%s: %s: Add route: Invalid prefix length",
-                node->addrw, node->id->name);
+                c->addrw, c->id->name);
             return false;
         }
 
@@ -47,14 +47,14 @@ bool oshpacket_handler_route(node_t *node, __attribute__((unused)) node_id_t *sr
         memcpy(node_name, packet[i].owner_name, NODE_NAME_SIZE);
         if (!node_valid_name(node_name)) {
             logger(LOG_ERR, "%s: %s: Add route: Invalid name",
-                node->addrw, node->id->name);
+                c->addrw, c->id->name);
             return false;
         }
 
         // Make sure that the node exists
         if (!(id = node_id_find(node_name))) {
             logger(LOG_ERR, "%s: %s: Add route: Unknown node '%s'",
-                node->addrw, node->id->name, node_name);
+                c->addrw, c->id->name, node_name);
             return false;
         }
 
@@ -67,10 +67,10 @@ bool oshpacket_handler_route(node_t *node, __attribute__((unused)) node_id_t *sr
             netaddr_ntop(addr_str, sizeof(addr_str), &addr);
             if (id->local_node) {
                 logger_debug(DBG_ROUTING, "%s: %s: Add route: Skipping local route %s/%u",
-                    node->addrw, node->id->name, addr_str, packet[i].prefixlen);
+                    c->addrw, c->id->name, addr_str, packet[i].prefixlen);
             } else {
                 logger(LOG_WARN, "%s: %s: Add route: %s/%u -> %s: No route",
-                    node->addrw, node->id->name, addr_str, packet[i].prefixlen, node_name);
+                    c->addrw, c->id->name, addr_str, packet[i].prefixlen, node_name);
             }
             continue;
         }
@@ -80,15 +80,15 @@ bool oshpacket_handler_route(node_t *node, __attribute__((unused)) node_id_t *sr
         if (route && !route->owner) {
             netaddr_ntop(addr_str, sizeof(addr_str), &addr);
             logger(LOG_WARN, "%s: %s: Ignoring broadcast route: %s/%u -> %s",
-                node->addrw, node->id->name, addr_str, packet[i].prefixlen, id->name);
+                c->addrw, c->id->name, addr_str, packet[i].prefixlen, id->name);
             continue;
         }
 
         // Add a route to node_name for the network address
         if (logger_is_debugged(DBG_ROUTING)) {
             netaddr_ntop(addr_str, sizeof(addr_str), &addr);
-            logger_debug(DBG_ROUTING, "%s: %s: Add route: %s/%u -> %s", node->addrw,
-                node->id->name, addr_str, packet[i].prefixlen, id->name);
+            logger_debug(DBG_ROUTING, "%s: %s: Add route: %s/%u -> %s", c->addrw,
+                c->id->name, addr_str, packet[i].prefixlen, id->name);
         }
 
         netroute_add(oshd.route_table, &addr, packet[i].prefixlen, id,

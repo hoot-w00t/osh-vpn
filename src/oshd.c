@@ -62,12 +62,12 @@ void oshd_stop(void)
     logger_debug(DBG_OSHD, "Gracefully stopping");
     oshd.run = false;
     poll_timeout = 1000;
-    for (size_t i = 0; i < oshd.nodes_count; ++i) {
-        node_reconnect_disable(oshd.nodes[i]);
-        if (oshd.nodes[i]->connected) {
-            node_queue_goodbye(oshd.nodes[i]);
+    for (size_t i = 0; i < oshd.clients_count; ++i) {
+        client_reconnect_disable(oshd.clients[i]);
+        if (oshd.clients[i]->connected) {
+            client_queue_goodbye(oshd.clients[i]);
         } else {
-            aio_event_del(oshd.nodes[i]->aio_event);
+            aio_event_del(oshd.clients[i]->aio_event);
         }
     }
 }
@@ -225,17 +225,17 @@ void oshd_free(void)
 
         tuntap_close(oshd.tuntap);
     }
-    for (size_t i = 0; i < oshd.nodes_count; ++i)
-        node_destroy(oshd.nodes[i]);
-    free(oshd.nodes);
+    for (size_t i = 0; i < oshd.clients_count; ++i)
+        client_destroy(oshd.clients[i]);
+    free(oshd.clients);
 
     // Free routing tables
     netroute_table_free(oshd.route_table);
 
     // We have to reset those in case the event queue tries to remove nodes
     // This is to safely cancel these events
-    oshd.nodes_count = 0;
-    oshd.nodes = NULL;
+    oshd.clients_count = 0;
+    oshd.clients = NULL;
 
     for (size_t i = 0; i < oshd.remote_count; ++i)
         endpoint_group_free(oshd.remote_endpoints[i]);
@@ -289,9 +289,9 @@ void oshd_loop(void)
     // We continue running while oshd.run is true and there are still connected
     // nodes
     // When oshd.run is set to false all nodes should gracefully close and the
-    // nodes_count should get to 0 before the program can finally exit
+    // clients_count should get to 0 before the program can finally exit
     logger_debug(DBG_OSHD, "Entering main loop");
-    while (oshd.run || oshd.nodes_count) {
+    while (oshd.run || oshd.clients_count) {
         // Poll for events on all sockets and the TUN/TAP device
         events = aio_poll(oshd.aio, poll_timeout);
         if (events < 0) {

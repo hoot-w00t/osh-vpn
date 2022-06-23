@@ -145,6 +145,7 @@ set(OSHD_SOURCES
     src/oshpacket_handlers/stateexg_end.c
     ${OSH_TUNTAP_SOURCES}
     src/base64.c
+    src/client.c
     src/device_mode.c
     src/device.c
     src/endpoints.c

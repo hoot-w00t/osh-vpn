@@ -71,9 +71,9 @@ void event_queue_dynamic_ip_conflict(node_id_t *s1, node_id_t *s2,
     const netaddr_t *addr);
 void event_queue_expire_endpoints(void);
 void event_queue_expire_routes(void);
-void event_queue_handshake_renew(node_t *node);
-void event_queue_handshake_timeout(node_t *node, time_t timeout_delay);
-void event_queue_node_auth_timeout(node_t *node, time_t timeout_delay);
+void event_queue_handshake_renew(client_t *c);
+void event_queue_handshake_timeout(client_t *c, time_t timeout_delay);
+void event_queue_node_auth_timeout(client_t *c, time_t timeout_delay);
 void event_queue_periodic_ping(void);
 
 #endif

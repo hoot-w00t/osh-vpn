@@ -1,8 +1,8 @@
 #ifndef _OSH_OSHD_PROCESS_PACKET_H
 #define _OSH_OSHD_PROCESS_PACKET_H
 
-#include "node.h"
+#include "client.h"
 
-bool oshd_process_packet(node_t *node, void *packet);
+bool oshd_process_packet(client_t *c, void *packet);
 
 #endif

@@ -1,4 +1,4 @@
-#include "node.h"
+#include "client.h"
 #include "events.h"
 #include "logger.h"
 
@@ -6,26 +6,26 @@
 
 static time_t handshake_renew_event_handler(void *data)
 {
-    node_t *node = (node_t *) data;
+    client_t *c = (client_t *) data;
 
-    node->handshake_renew_event = NULL;
-    node_renew_handshake(node);
+    c->handshake_renew_event = NULL;
+    client_renew_handshake(c);
     return EVENT_IS_DONE;
 }
 
 static void handshake_renew_event_freedata(void *data)
 {
-    ((node_t *) data)->handshake_renew_event = NULL;
+    ((client_t *) data)->handshake_renew_event = NULL;
 }
 
-void event_queue_handshake_renew(node_t *node)
+void event_queue_handshake_renew(client_t *c)
 {
-    if (!node->handshake_renew_event) {
-        node->handshake_renew_event = event_create(
+    if (!c->handshake_renew_event) {
+        c->handshake_renew_event = event_create(
             "handshake_renew",
             handshake_renew_event_handler,
             handshake_renew_event_freedata,
-            node);
+            c);
     }
-    event_queue_in(node->handshake_renew_event, HANDSHAKE_RENEW_INTERVAL);
+    event_queue_in(c->handshake_renew_event, HANDSHAKE_RENEW_INTERVAL);
 }

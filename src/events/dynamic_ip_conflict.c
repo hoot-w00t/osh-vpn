@@ -51,7 +51,7 @@ static bool change_addr(struct conflict_routes *cr)
         cr->chg, ROUTE_NEVER_EXPIRE);
 
     // .. and advertise it to the mesh
-    node_queue_route_add_local(NULL, &cr->daddr->addr, 1, false);
+    client_queue_route_add_local(NULL, &cr->daddr->addr, 1, false);
 
     return true;
 }
@@ -66,7 +66,7 @@ static void keep_addr(struct conflict_routes *cr)
         cr->keeps, ROUTE_NEVER_EXPIRE);
 
     // Advertise it to the mesh
-    node_queue_route_add_local(NULL, &cr->daddr->addr, 1, false);
+    client_queue_route_add_local(NULL, &cr->daddr->addr, 1, false);
 }
 
 static time_t dynamic_ip_conflict_handler(void *data)

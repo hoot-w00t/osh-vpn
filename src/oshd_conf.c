@@ -411,9 +411,9 @@ static bool oshd_param_connectionslimit(ecp_t *ecp)
         set_error("Invalid %s value", ecp_name(ecp));
         return false;
     }
-    oshd.nodes_count_max = limit;
-    logger_debug(DBG_CONF, "Set %s to %zu%s", ecp_name(ecp), oshd.nodes_count_max,
-        (oshd.nodes_count_max == 0) ? " (unlimited)" : "");
+    oshd.clients_count_max = limit;
+    logger_debug(DBG_CONF, "Set %s to %zu%s", ecp_name(ecp), oshd.clients_count_max,
+        (oshd.clients_count_max == 0) ? " (unlimited)" : "");
     return true;
 }
 

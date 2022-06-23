@@ -17,20 +17,20 @@ static size_t automatic_connections_remaining(size_t max_tries)
     // If we have more active connections than required, we don't need any more
     // automatic connections
     // TODO: Maybe only count authenticated sockets as active connections
-    if (oshd.nodes_count >= target_connections)
+    if (oshd.clients_count >= target_connections)
         return 0;
 
     // Otherwise we calculate how many connections we should establish to reach
     // the target percentage
-    size_t remaining_tries = target_connections - oshd.nodes_count;
+    size_t remaining_tries = target_connections - oshd.clients_count;
 
     // If connections are limited, make sure to always leave enough slots for
     // the remotes from the configuration file
-    if (oshd.nodes_count_max != 0) {
-        if (oshd.remote_count >= oshd.nodes_count_max)
+    if (oshd.clients_count_max != 0) {
+        if (oshd.remote_count >= oshd.clients_count_max)
             return 0;
         else
-            remaining_tries = oshd.nodes_count_max - oshd.remote_count;
+            remaining_tries = oshd.clients_count_max - oshd.remote_count;
     }
 
     // Make sure to not exceed the maximum amount of tries

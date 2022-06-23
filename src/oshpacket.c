@@ -4,19 +4,19 @@
 #include "node.h"
 
 // Generic default handlers for invalid packet types
-static bool unauth_handler_reject(node_t *node, oshpacket_hdr_t *hdr,
+static bool unauth_handler_reject(client_t *c, oshpacket_hdr_t *hdr,
     __attribute__((unused)) void *payload)
 {
     logger(LOG_ERR, "%s: Rejecting %s packet",
-        node->addrw, oshpacket_type_name(hdr->type));
+        c->addrw, oshpacket_type_name(hdr->type));
     return false;
 }
 
-static bool handler_reject(node_t *node, node_id_t *src, oshpacket_hdr_t *hdr,
+static bool handler_reject(client_t *c, node_id_t *src, oshpacket_hdr_t *hdr,
     __attribute__((unused)) void *payload)
 {
     logger(LOG_ERR, "%s: %s: Rejecting %s packet from %s",
-        node->addrw, node->id->name, oshpacket_type_name(hdr->type), src->name);
+        c->addrw, c->id->name, oshpacket_type_name(hdr->type), src->name);
     return false;
 }
 
