@@ -61,9 +61,9 @@ void netbuffer_shrink(netbuffer_t *nbuf)
 // Reserve data_size bytes at the end of the netbuffer
 // Dynamically allocates memory if needed
 _netbuffer_ptr_attr
-uint8_t *netbuffer_reserve(netbuffer_t *nbuf, size_t data_size)
+void *netbuffer_reserve(netbuffer_t *nbuf, size_t data_size)
 {
-    uint8_t *dataptr;
+    void *dataptr;
 
     // If the new data size is bigger than the allocated buffer, expand it
     if ((nbuf->data_size + data_size) > nbuf->current_size)
@@ -100,9 +100,9 @@ void netbuffer_cancel(netbuffer_t *nbuf, size_t data_size)
 }
 
 // Reserve data_size bytes and copy data to the reserved space
-void netbuffer_push(netbuffer_t *nbuf, const uint8_t *data, size_t data_size)
+void netbuffer_push(netbuffer_t *nbuf, const void *data, size_t data_size)
 {
-    uint8_t *dataptr = netbuffer_reserve(nbuf, data_size);
+    void *dataptr = netbuffer_reserve(nbuf, data_size);
 
     memcpy(dataptr, data, data_size);
     logger_debug(DBG_NETBUFFER, "Netbuffer %p: Pushed %zu bytes (%p)",

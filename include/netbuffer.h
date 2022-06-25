@@ -5,7 +5,7 @@
 #include <stddef.h>
 
 typedef struct netbuffer {
-    uint8_t *data;       // Data buffer
+    void *data;          // Data buffer
     size_t data_size;    // Size of the reserved data in the buffer
 
     size_t min_size;     // Minimum allocated size of the data buffer
@@ -28,10 +28,10 @@ void netbuffer_expand(netbuffer_t *nbuf, size_t size);
 void netbuffer_shrink(netbuffer_t *nbuf);
 
 _netbuffer_ptr_attr
-uint8_t *netbuffer_reserve(netbuffer_t *nbuf, size_t data_size);
+void *netbuffer_reserve(netbuffer_t *nbuf, size_t data_size);
 void netbuffer_cancel(netbuffer_t *nbuf, size_t data_size);
 #define netbuffer_clear(nbuf) netbuffer_cancel(nbuf, netbuffer_data_size(nbuf))
-void netbuffer_push(netbuffer_t *nbuf, const uint8_t *data, size_t data_size);
+void netbuffer_push(netbuffer_t *nbuf, const void *data, size_t data_size);
 size_t netbuffer_pop(netbuffer_t *nbuf, size_t size);
 
 #endif
