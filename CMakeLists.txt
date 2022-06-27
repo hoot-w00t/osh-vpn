@@ -67,6 +67,7 @@ find_package(OpenSSL REQUIRED)
 if (OPENSSL_VERSION VERSION_LESS "1.1.0")
     message(FATAL_ERROR "OpenSSL version 1.1.0 or later is required (found version ${OPENSSL_VERSION})")
 endif()
+include_directories(${OPENSSL_INCLUDE_DIR})
 
 # easyconf (from the submodule)
 set(EASYCONF_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/easyconf")
