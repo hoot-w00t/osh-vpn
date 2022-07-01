@@ -97,7 +97,9 @@ static void event_process_queued(void)
         event->in_queue = false;
 
         // Handle the current event
-        logger_debug(DBG_EVENTS, "Processing %s event %p", event->name, event);
+        logger_debug(DBG_EVENTS, "Processing %s event %p (delay %li.%09lis)",
+            event->name, event, diff.tv_sec, diff.tv_nsec);
+
         new_delay = event->handler(event->userdata);
 
         // If the event handler returned a positive value, queue the event again
