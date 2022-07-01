@@ -143,9 +143,9 @@ set(OSHD_SOURCES
     src/oshpacket_handlers/ping_pong.c
     src/oshpacket_handlers/pubkey.c
     src/oshpacket_handlers/route.c
-    src/oshpacket_handlers/stateexg_end.c
     ${OSH_TUNTAP_SOURCES}
     src/base64.c
+    src/client_state_exchange.c
     src/client.c
     src/device_mode.c
     src/device.c

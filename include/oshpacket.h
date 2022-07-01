@@ -47,7 +47,6 @@ typedef enum oshpacket_type {
     HELLO_RESPONSE,
     HELLO_END,
     DEVMODE,
-    STATEEXG_END,
     GOODBYE,
     PING,
     PONG,

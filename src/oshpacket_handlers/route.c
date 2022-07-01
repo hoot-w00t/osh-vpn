@@ -16,14 +16,6 @@ bool oshpacket_handler_route(client_t *c, __attribute__((unused)) node_id_t *src
     node_id_t *id;
     const netroute_t *route;
 
-    if (c->state_exg) {
-        // Broadcast remote node's routes to our end of the network
-        logger_debug(DBG_STATEEXG,
-            "%s: %s: State exchange: Relaying ROUTE_ADD packet",
-            c->addrw, c->id->name);
-        client_queue_packet_broadcast(c, ROUTE_ADD, payload, hdr->payload_size);
-    }
-
     memset(node_name, 0, sizeof(node_name));
     for (size_t i = 0; i < entries; ++i) {
         // Extract and verify the network address

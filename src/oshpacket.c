@@ -80,15 +80,6 @@ static const oshpacket_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = 0
     },
     {
-        .type = STATEEXG_END,
-        .name = "STATEEXG_END",
-        .handler_unauth = unauth_handler_reject,
-        .handler = oshpacket_handler_stateexg_end,
-        .can_be_forwarded = false,
-        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
-        .payload_size = 0
-    },
-    {
         .type = GOODBYE,
         .name = "GOODBYE",
         .handler_unauth = oshpacket_handler_goodbye_unauth,

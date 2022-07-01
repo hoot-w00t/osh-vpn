@@ -60,6 +60,7 @@ Test(oshpacket_lookup, oshpacket_lookup_has_valid_information)
         cr_assert_str_eq(p->name, oshpacket_type_name(i));
         cr_assert_not_null(p->handler_unauth);
         cr_assert_not_null(p->handler);
+        cr_assert_leq(p->payload_size, OSHPACKET_PAYLOAD_MAXSIZE);
         switch (p->payload_size_type) {
             case OSHPACKET_PAYLOAD_SIZE_VARIABLE:
                 cr_assert_eq(p->payload_size, 0);

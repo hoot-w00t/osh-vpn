@@ -115,8 +115,7 @@ struct client {
     oshpacket_hello_challenge_t *hello_chall;
 
     // This is the result of the authentication process, if this is true and the
-    // the other node also succeeds we will then finish the authentication and
-    // start the state exchange
+    // the other node also succeeds we will then finish the authentication
     bool hello_auth;
 
     // X25519 keys and ciphers to encrypt/decrypt traffic
@@ -134,13 +133,6 @@ struct client {
 
     // This pointer holds a copy of the first unauthenticated handshake packet
     oshpacket_handshake_t *unauth_handshake;
-
-    // This is set to true after authentication to indicate that all the
-    // information about the other node's network map should also be relayed to
-    // our end of the network
-    // This is to merge two nodes' current states when they connect and relay
-    // all of the information to both ends of the network
-    bool state_exg;
 
     // If this is true disconnect and remove the client after the send queue is
     // empty. Used for GOODBYE packets
@@ -184,6 +176,8 @@ bool client_queue_packet_broadcast(client_t *exclude, oshpacket_type_t type,
     const void *payload, size_t payload_size);
 bool client_queue_packet_broadcast_forward(client_t *exclude, const oshpacket_hdr_t *hdr,
     const void *payload, size_t payload_size);
+bool client_queue_packet_exg(client_t *c, oshpacket_type_t type,
+    const void *payload, const size_t payload_size);
 
 #define client_queue_packet_empty(client, dest, type) client_queue_packet(client, dest, type, NULL, 0)
 
@@ -193,24 +187,25 @@ void client_renew_handshake(client_t *c);
 bool client_queue_hello_challenge(client_t *c);
 bool client_queue_hello_end(client_t *c);
 bool client_queue_devmode(client_t *c);
-bool client_queue_stateexg_end(client_t *c);
 bool client_queue_goodbye(client_t *c);
 bool client_queue_ping(client_t *c);
 bool client_queue_pong(client_t *c);
 bool client_queue_pubkey_broadcast(client_t *exclude, node_id_t *id);
-bool client_queue_pubkey_exg(client_t *c);
 bool client_queue_endpoint_broadcast(client_t *exclude, const endpoint_t *endpoint,
     const endpoint_group_t *group);
-bool client_queue_endpoint_exg(client_t *c);
 bool client_queue_edge_broadcast(client_t *exclude, oshpacket_type_t type,
     const char *src, const char *dest);
-bool client_queue_edge_exg(client_t *c);
 bool client_queue_route_add_local(client_t *exclude, const netaddr_t *addrs,
     size_t count, bool can_expire);
-bool client_queue_route_exg(client_t *c);
 
 // This is the function called to send the initial packet when an initiator
 // established a connection
 #define client_queue_initial_packet(client) client_queue_handshake(client)
+
+// Defined in client_state_exchange.c
+bool client_queue_pubkey_exg(client_t *c);
+bool client_queue_endpoint_exg(client_t *c);
+bool client_queue_edge_exg(client_t *c);
+bool client_queue_route_exg(client_t *c);
 
 #endif

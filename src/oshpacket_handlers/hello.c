@@ -191,6 +191,10 @@ bool oshpacket_handler_hello_end(client_t *c, __attribute__((unused)) oshpacket_
     c->id = c->hello_id;
     c->id->node_socket = c;
 
+    // Add the new connection with the other node
+    node_id_add_edge(me, c->id);
+    node_tree_update();
+
     // After successful authentication we can consider that the reconnection
     // succeeded, reset the reconnection delay
     client_reconnect_delay(c, oshd.reconnect_delay_min);
@@ -209,61 +213,45 @@ bool oshpacket_handler_hello_end(client_t *c, __attribute__((unused)) oshpacket_
     // We are no longer actively trying to connect to these endpoints
     endpoint_group_set_is_connecting(c->id->endpoints, false);
 
-    if (c->id->next_hop) {
-        logger_debug(DBG_STATEEXG, "%s: %s: Previously accessible through %s (%s)",
-            c->addrw, c->id->name,
-            c->id->next_hop->id->name, c->id->next_hop->addrw);
-    }
-
     // Cleanup the temporary hello variables
     c->hello_id = NULL;
     free(c->hello_chall);
     c->hello_chall = NULL;
 
-    node_id_add_edge(me, c->id);
-    node_tree_update();
-
     logger(LOG_INFO, "%s: %s: Authenticated successfully", c->addrw,
         c->id->name);
-
-    logger_debug(DBG_STATEEXG, "%s: %s: Starting state exchange",
-        c->addrw, c->id->name);
-    c->state_exg = true;
 
     // Make sure that we are our device modes are compatible
     if (!client_queue_devmode(c))
         return false;
 
-    logger_debug(DBG_STATEEXG, "%s: %s: Exchanging local state",
-        c->addrw, c->id->name);
+    // Advertise the new connection between us and the other node to our part of
+    // the mesh (followed by its public key)
+    if (!client_queue_edge_broadcast(c, EDGE_ADD, oshd.name, c->id->name))
+        return false;
+    if (!client_queue_pubkey_broadcast(c, c->id))
+        return false;
 
-    // We exchange our network map
+    const size_t sendq_size_before_exg = netbuffer_data_size(c->io.sendq);
+
+    // Broadcast all the information we know about the mesh to the other node
+    // This syncs both nodes' maps of the mesh along with other relevant
+    // information (routes, endpoints, etc)
+    // If both nodes share a common edge this could be skipped as they should
+    // already be in sync
     if (!client_queue_edge_exg(c))
         return false;
-
-    // We exchange all known network routes
     if (!client_queue_route_exg(c))
         return false;
-
-    // We exchange all known public keys of the nodes that are online
     if (!client_queue_pubkey_exg(c))
         return false;
-
-    // We exchange all known endpoints
     if (!client_queue_endpoint_exg(c))
         return false;
 
-    // We finished queuing our state exchange packets
-    if (!client_queue_stateexg_end(c))
-        return false;
+    const size_t sendq_size_after_exg = netbuffer_data_size(c->io.sendq);
 
-    // We broadcast the new connection to our end of the network
-    if (!client_queue_edge_broadcast(c, EDGE_ADD, oshd.name, c->id->name))
-        return false;
-
-    // We broadcast the remote node's public key to our end of the network
-    if (!client_queue_pubkey_broadcast(c, c->id))
-        return false;
+    logger_debug(DBG_STATEEXG, "%s: %s: Queued %zu bytes",
+        c->addrw, c->id->name, sendq_size_after_exg - sendq_size_before_exg);
 
     // Update the client's latency
     return client_queue_ping(c);

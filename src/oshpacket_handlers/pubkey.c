@@ -8,15 +8,6 @@ bool oshpacket_handler_pubkey(
     oshpacket_hdr_t *hdr,
     void *payload)
 {
-    if (c->state_exg) {
-        // Broadcast the public keys to our end of the network
-        logger_debug(DBG_STATEEXG,
-            "%s: %s: State exchange: Relaying PUBKEY packet",
-            c->addrw, c->id->name);
-        client_queue_packet_broadcast(c, PUBKEY, payload,
-            hdr->payload_size);
-    }
-
     const size_t count = hdr->payload_size / sizeof(oshpacket_pubkey_t);
     const oshpacket_pubkey_t *pubkeys = (const oshpacket_pubkey_t *) payload;
     char node_name[NODE_NAME_SIZE + 1];

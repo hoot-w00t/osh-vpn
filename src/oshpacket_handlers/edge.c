@@ -48,14 +48,6 @@ bool oshpacket_handler_edge_add(client_t *c, __attribute__((unused)) node_id_t *
 {
     bool success;
 
-    if (c->state_exg) {
-        // Broadcast remote node's edges to our end of the network
-        logger_debug(DBG_STATEEXG,
-            "%s: %s: State exchange: Relaying EDGE_ADD packet",
-            c->addrw, c->id->name);
-        client_queue_packet_broadcast(c, EDGE_ADD, payload, hdr->payload_size);
-    }
-
     success = process_edge(c, hdr, (oshpacket_edge_t *) payload, true);
     node_tree_update();
     return success;

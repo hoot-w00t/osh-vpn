@@ -438,6 +438,28 @@ bool client_queue_packet_broadcast_forward(client_t *exclude, const oshpacket_hd
     return true;
 }
 
+// Queue a broadcast packet for a single client
+// This function should only be used to exchange mesh states after authenticating
+bool client_queue_packet_exg(client_t *c, oshpacket_type_t type,
+    const void *payload, const size_t payload_size)
+{
+    oshpacket_hdr_t hdr;
+
+    hdr.type = type;
+    hdr.flags.u = 0;
+    hdr.flags.s.broadcast = 1;
+    memcpy(hdr.src_node, oshd.name, sizeof(hdr.src_node));
+    memset(&hdr.dest.broadcast, 0, sizeof(hdr.dest.broadcast));
+    hdr.dest.broadcast.id = random_xoshiro256();
+
+    logger_debug(DBG_SOCKETS,
+        "%s: %s: Queuing state exchange %s packet of %zu bytes (id: %" PRI_BRD_ID ")",
+        c->addrw, c->id->name, oshpacket_type_name(type), payload_size,
+        hdr.dest.broadcast.id);
+
+    return client_queue_packet_internal(c, &hdr, payload, payload_size);
+}
+
 // Queue packet with a fragmented payload
 // If the payload size is bigger than OSHPACKET_PAYLOAD_MAXSIZE it will be
 // fragmented and sent with multiple packets (as many as needed)
@@ -650,12 +672,6 @@ bool client_queue_devmode(client_t *c)
     }
 }
 
-// Queue STATEEXG_END packet
-bool client_queue_stateexg_end(client_t *c)
-{
-    return client_queue_packet_empty(c, c->id, STATEEXG_END);
-}
-
 // Queue GOODBYE request
 bool client_queue_goodbye(client_t *c)
 {
@@ -704,36 +720,6 @@ bool client_queue_pubkey_broadcast(client_t *exclude, node_id_t *id)
     return client_queue_packet_broadcast(exclude, PUBKEY, &packet, sizeof(packet));
 }
 
-// Queue PUBKEY exchange packet
-bool client_queue_pubkey_exg(client_t *c)
-{
-    oshpacket_pubkey_t *pubkeys = NULL;
-    size_t count = 0;
-    bool success;
-
-    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
-        // Only exchange public keys from online nodes
-        if (   !oshd.node_tree[i]->online
-            || !oshd.node_tree[i]->pubkey
-            || !oshd.node_tree[i]->pubkey_raw
-            ||  oshd.node_tree[i]->pubkey_raw_size != PUBLIC_KEY_SIZE)
-        {
-            continue;
-        }
-
-        logger_debug(DBG_AUTHENTICATION, "Public keys exchange: Adding %s", oshd.node_tree[i]->name);
-        pubkeys = xreallocarray(pubkeys, count + 1, sizeof(oshpacket_pubkey_t));
-        memcpy(pubkeys[count].node_name, oshd.node_tree[i]->name, NODE_NAME_SIZE);
-        memcpy(pubkeys[count].node_pubkey, oshd.node_tree[i]->pubkey_raw, PUBLIC_KEY_SIZE);
-        count += 1;
-    }
-
-    success = client_queue_packet_fragmented(c, PUBKEY, pubkeys,
-        sizeof(oshpacket_pubkey_t) * count, sizeof(oshpacket_pubkey_t), false);
-    free(pubkeys);
-    return success;
-}
-
 // Broadcast an endpoint owned by group->owner_name
 bool client_queue_endpoint_broadcast(client_t *exclude, const endpoint_t *endpoint,
     const endpoint_group_t *group)
@@ -765,58 +751,7 @@ bool client_queue_endpoint_broadcast(client_t *exclude, const endpoint_t *endpoi
     return client_queue_packet_broadcast(exclude, ENDPOINT, &pkt, sizeof(pkt));
 }
 
-// Send an endpoint owned by group->owner_name to the client
-static bool client_queue_endpoint(client_t *c, const endpoint_t *endpoint,
-    const endpoint_group_t *group)
-{
-    oshpacket_endpoint_t pkt;
-    netaddr_t addr;
 
-    if (!group->has_owner) {
-        logger(LOG_ERR, "%s: Failed to queue endpoint %s:%u: No owner (%s)",
-            c->addrw, endpoint->hostname, endpoint->port, group->owner_name);
-        return false;
-    }
-    if (!netaddr_lookup(&addr, endpoint->hostname)) {
-        logger(LOG_WARN,
-            "%s: Failed to queue endpoint %s:%u owned by %s (lookup failed)",
-            c->addrw, endpoint->hostname, endpoint->port, group->owner_name);
-        return false;
-    }
-
-    memset(&pkt, 0, sizeof(pkt));
-    for (size_t i = 0; (group->owner_name[i] != 0) && (i < NODE_NAME_SIZE); ++i)
-        pkt.node_name[i] = group->owner_name[i];
-    pkt.addr_type = addr.type;
-    netaddr_cpy_data(&pkt.addr_data, &addr);
-    pkt.port = htons(endpoint->port);
-
-    logger_debug(DBG_ENDPOINTS, "%s: Queuing endpoint %s:%u owned by %s",
-        c->addrw, endpoint->hostname, endpoint->port, group->owner_name);
-    return client_queue_packet(c, c->id, ENDPOINT, &pkt, sizeof(pkt));
-}
-
-// Queue ENDPOINT exchange packets
-// Exchanges all endpoints with another node
-// Endpoints from the configuration file will be skipped if ShareRemotes is
-// not enabled
-bool client_queue_endpoint_exg(client_t *c)
-{
-    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
-        endpoint_group_t *group = oshd.node_tree[i]->endpoints;
-
-        foreach_endpoint(endpoint, group) {
-            // If ShareRemotes was not set in the configuration file,
-            // endpoints that don't expire will not be shared
-            if (!endpoint->can_expire && !oshd.shareremotes)
-                continue;
-
-            if (!client_queue_endpoint(c, endpoint, group))
-                return false;
-        }
-    }
-    return true;
-}
 
 // Broadcast EDGE_ADD or EDGE_DEL request
 bool client_queue_edge_broadcast(client_t *exclude, oshpacket_type_t type,
@@ -837,85 +772,6 @@ bool client_queue_edge_broadcast(client_t *exclude, oshpacket_type_t type,
                 oshpacket_type_name(type));
             return false;
     }
-}
-
-// Dynamically append edges to *buf
-static void edge_exg_append(oshpacket_edge_t **buf, size_t *buf_count,
-    const char *src_node, const char *dest_node, const char *edge_type,
-    node_id_t *remote_node)
-{
-    const size_t alloc_count = 16;
-
-    // Trim edges of the remote node with which we are exchanging states, it
-    // will already know its edges
-    if (   !strcmp(src_node, remote_node->name)
-        || !strcmp(dest_node, remote_node->name))
-    {
-        // This edge is owned by the remote node, it already knows about it
-        logger_debug(DBG_NODETREE, "    Skipped: %s: %s <=> %s (remote)",
-            edge_type, src_node, dest_node);
-        return;
-    }
-
-    // Trim repeating edges
-    // Including src -> dest and dest -> src
-    // The source and destination edges will be linked bidirectionally so we can
-    // send one direction only
-    for (size_t i = 0; i < (*buf_count); ++i) {
-        if (   !strcmp((*buf)[i].src_node, dest_node)
-            && !strcmp((*buf)[i].dest_node, src_node))
-        {
-            // This edge is already in the list in the other direction
-            logger_debug(DBG_NODETREE, "    Skipped: %s: %s <=> %s (repeating)",
-                edge_type, src_node, dest_node);
-            return;
-        }
-    }
-
-    // Add this edge to the buffer
-    logger_debug(DBG_NODETREE, "    Adding : %s: %s <=> %s",
-        edge_type, src_node, dest_node);
-
-    // Reallocate more alloc_count items in the buffer when we need more memory
-    if ((*buf_count) % alloc_count == 0)
-        *buf = xreallocarray(*buf, (*buf_count) + alloc_count, sizeof(oshpacket_edge_t));
-
-    memcpy((*buf)[(*buf_count)].src_node, src_node, NODE_NAME_SIZE);
-    memcpy((*buf)[(*buf_count)].dest_node, dest_node, NODE_NAME_SIZE);
-    *buf_count += 1;
-}
-
-// Queue EDGE_ADD packets for the client with the whole network map
-bool client_queue_edge_exg(client_t *c)
-{
-    size_t buf_count = 0;
-    oshpacket_edge_t *buf = NULL;
-
-    logger_debug(DBG_NODETREE, "%s: %s: Creating EDGE_ADD packets (state exchange)",
-        c->addrw, c->id->name);
-
-    // We skip the local node because it is useless, by starting with the
-    // second element, because the first one will always be our local node
-    for (size_t i = 1; i < oshd.node_tree_count; ++i) {
-        // Direct edge
-        if (oshd.node_tree[i]->node_socket)
-            edge_exg_append(&buf, &buf_count, oshd.name, oshd.node_tree[i]->name,
-                "Direct", c->id);
-
-        // Indirect edges
-        for (ssize_t j = 0; j < oshd.node_tree[i]->edges_count; ++j) {
-            edge_exg_append(&buf, &buf_count, oshd.node_tree[i]->name,
-                oshd.node_tree[i]->edges[j]->name, "Indirect", c->id);
-        }
-    }
-
-    size_t buf_size = buf_count * sizeof(oshpacket_edge_t);
-    bool success = client_queue_packet_fragmented(c, EDGE_ADD, buf, buf_size,
-        sizeof(oshpacket_edge_t), false);
-
-    // We need to free the memory before returning
-    free(buf);
-    return success;
 }
 
 // Broadcast ROUTE_ADD request with one or more local routes
@@ -939,47 +795,6 @@ bool client_queue_route_add_local(client_t *exclude, const netaddr_t *addrs,
 
     bool success = client_queue_packet_fragmented(exclude, ROUTE_ADD, buf, buf_size,
         sizeof(oshpacket_route_t), true);
-
-    // We need to free the memory before returning
-    free(buf);
-    return success;
-}
-
-// Queue ROUTE_ADD request with all our known routes
-bool client_queue_route_exg(client_t *c)
-{
-    const size_t total_count = oshd.route_table->total_owned_routes;
-
-    if (total_count == 0)
-        return true;
-
-    size_t buf_size = sizeof(oshpacket_route_t) * total_count;
-    oshpacket_route_t *buf = xalloc(buf_size);
-
-    // Format all routes' addresses into buf
-    size_t i = 0;
-
-    foreach_netroute_const(route, oshd.route_table, route_iter) {
-        if (route->owner) {
-            memcpy(buf[i].owner_name, route->owner->name, NODE_NAME_SIZE);
-            buf[i].type = route->addr.type;
-            buf[i].prefixlen = route->prefixlen;
-            netaddr_cpy_data(&buf[i].addr, &route->addr);
-            buf[i].can_expire = route->can_expire;
-            ++i;
-        }
-    }
-
-    bool success = false;
-
-    if (i == total_count) {
-        success = client_queue_packet_fragmented(c, ROUTE_ADD, buf, buf_size,
-            sizeof(oshpacket_route_t), false);
-    } else {
-        logger(LOG_CRIT,
-            "%s: %s: Route exchange copied %zu routes but expected %zu (this should never happen)",
-            c->addrw, c->id->name, i, total_count);
-    }
 
     // We need to free the memory before returning
     free(buf);
