@@ -73,6 +73,7 @@ static void event_process_queued(void)
     event_t *event;
     struct timespec now;
     struct timespec diff;
+    struct timespec max_diff = {0};
     time_t new_delay;
 
     // Don't update the timer if events are queued/cancelled while we are
@@ -89,6 +90,10 @@ static void event_process_queued(void)
         timespecsub(&now, &event_queue_head->trigger_at, &diff);
         if (diff.tv_sec < 0)
             break;
+
+        // Remember delays bigger than 10 seconds
+        if (diff.tv_sec >= 10 && max_diff.tv_sec <= 0)
+            max_diff = diff;
 
         event = event_queue_head;
 
@@ -109,6 +114,14 @@ static void event_process_queued(void)
         } else {
             event_free(event);
         }
+    }
+
+    // This should only happen after the system or process is suspended and
+    // resumes, otherwise it indicates that the daemon is overwhelmed
+    // FIXME: This is not a very accurate method as it relies on timed events
+    if (max_diff.tv_sec != 0) {
+        logger(LOG_WARN, "Event loop running %li.%09li seconds late",
+            max_diff.tv_sec, max_diff.tv_nsec);
     }
 
     // Update the timer now that the event queue was processed
