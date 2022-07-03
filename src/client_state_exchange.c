@@ -185,12 +185,30 @@ bool client_queue_edge_exg(client_t *c)
 {
     oshpacket_edge_t *pkt = NULL;
     size_t count = 0;
+    size_t min_hops = 0;
     bool success;
 
     logger_debug(DBG_STATEEXG, "%s: %s: Searching edges to exchange",
         c->addrw, c->id->name);
-    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
-        const node_id_t *src_node = oshd.node_tree[i];
+
+    // We have to exchange edges from the closest to the farthest nodes (from
+    // our point of view) to prevent sending orphan edges to the other node
+    //
+    // If we don't we can end up in a situation where all the edges sent in a
+    // single packet are orphan (from the remote node's point of view), and it
+    // will erroneously clear them right after processing the packet
+    for (size_t i = oshd.node_tree_count; i > 0; --i) {
+        const node_id_t *src_node = oshd.node_tree_ordered_hops[i - 1];
+
+        // This should never happen
+        if (src_node->hops_count < min_hops) {
+            logger(LOG_CRIT, "%s:%i: %s: invalid hops count ordering",
+                __FILE__, __LINE__, __func__);
+            abort();
+        }
+
+        if (src_node->hops_count > min_hops)
+            min_hops = src_node->hops_count;
 
         for (ssize_t j = 0; j < src_node->edges_count; ++j)
             append_edge(&pkt, &count, src_node, src_node->edges[j], c->id);
