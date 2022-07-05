@@ -13,4 +13,9 @@
 #error "Platform detection is broken"
 #endif
 
+// But at least one should match
+#if !PLATFORM_IS_LINUX && !PLATFORM_IS_WINDOWS
+#warning "No platform was recognized"
+#endif
+
 #endif
