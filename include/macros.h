@@ -15,8 +15,12 @@
     #define PLATFORM_IS_WINDOWS 1
 #endif
 
+#if defined(__APPLE__)
+    #define PLATFORM_IS_MACOS 1
+#endif
+
 // This macro should always equal to 1
-#define PLATFORM_COUNT (PLATFORM_IS_LINUX + PLATFORM_IS_WINDOWS)
+#define PLATFORM_COUNT (PLATFORM_IS_LINUX + PLATFORM_IS_WINDOWS + PLATFORM_IS_MACOS)
 
 // We can only have one platform defined
 #if PLATFORM_COUNT > 1
