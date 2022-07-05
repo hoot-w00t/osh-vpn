@@ -92,8 +92,15 @@ static void event_process_queued(void)
             break;
 
         // Remember delays bigger than 10 seconds
-        if (diff.tv_sec >= 10 && max_diff.tv_sec <= 0)
+        // If the event's trigger_at value is 0 the delay is incorrect because
+        // it is not relative to the current time
+        if (   diff.tv_sec >= 10
+            && max_diff.tv_sec <= 0
+            && event_queue_head->trigger_at.tv_sec != 0
+            && event_queue_head->trigger_at.tv_nsec != 0)
+        {
             max_diff = diff;
+        }
 
         event = event_queue_head;
 
