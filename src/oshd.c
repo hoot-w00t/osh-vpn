@@ -293,7 +293,18 @@ void oshd_loop(void)
     logger_debug(DBG_OSHD, "Entering main loop");
     while (oshd.run || oshd.clients_count) {
         // Poll for events on all sockets and the TUN/TAP device
+        // If timed events use a timerfd they will be triggered by an aio_poll()
+        // callback
+        // Otherwise we have to call the event_process_queued() function each
+        // iteration and we timeout aio_poll() for the next timed event
+#ifdef EVENTS_USE_TIMERFD
         events = aio_poll(oshd.aio, poll_timeout);
+#else
+        // FIXME: Handle poll_timeout
+        event_process_queued();
+        events = aio_poll(oshd.aio, event_get_timeout_ms());
+#endif
+
         if (events < 0) {
             oshd_stop();
             break;

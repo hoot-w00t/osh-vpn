@@ -234,6 +234,12 @@ if (CYGWIN)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE")
 endif()
 
+option(DISABLE_EVENTS_TIMERFD "Don't use timerfd for timed events even if it is available" OFF)
+check_include_file("sys/timerfd.h" timerfd_available)
+if (timerfd_available AND NOT DISABLE_EVENTS_TIMERFD)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DEVENTS_USE_TIMERFD")
+endif()
+
 # Linker flags
 if (CheckLinkerFlagPath STREQUAL "NOTFOUND")
     message(STATUS "Skipping linker flags because CheckLinkerFlag was not found")

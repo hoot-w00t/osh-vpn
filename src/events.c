@@ -6,41 +6,50 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+
+#ifdef EVENTS_USE_TIMERFD
 #include <sys/timerfd.h>
 
-static event_t *event_queue_head = NULL;
 static aio_event_t *event_queue_aio = NULL;
+#endif
+
+static event_t *event_queue_head = NULL;
 
 // When this is true update_timer_interval() does not update the timer interval
 // This is to avoid useless/redundant updates while processing the event queue
 static bool timer_update_lock = false;
+static struct timespec timer_next_timeout;
 
 // Update timerfd interval
 // If there is at least one queued event, calculate the delay after which the
 // first event should trigger and set the timerfd's interval to this delay
 static bool update_timer_interval(void)
 {
-    struct itimerspec aio_timer;
     struct timespec now;
-    struct timespec diff;
 
     // Don't update the timerfd timeout if it was locked, or there are no
-    // events queued, or if there is no AIO event (this case should not happen
-    // but just in case)
-    if (timer_update_lock || !event_queue_head || !event_queue_aio)
+    // events queued
+    if (timer_update_lock || !event_queue_head)
         return false;
 
     // Get the current time
     oshd_gettime(&now);
 
     // Calculate the remaining time before the next event should occur
-    timespecsub(&event_queue_head->trigger_at, &now, &diff);
+    timespecsub(&event_queue_head->trigger_at, &now, &timer_next_timeout);
+
+#ifdef EVENTS_USE_TIMERFD
+    struct itimerspec aio_timer;
+
+    // Make sure that an AIO event exists before trying to access it
+    if (!event_queue_aio)
+        return false;
 
     // We aren't using the timerfd's it_interval
     aio_timer.it_interval.tv_sec = 0;
     aio_timer.it_interval.tv_nsec = 0;
 
-    if (diff.tv_sec < 0) {
+    if (timer_next_timeout.tv_sec < 0) {
         // If the remaining time is negative then the event should have already
         // been processed, set the timeout to the shortest delay
         aio_timer.it_value.tv_sec = 0;
@@ -48,8 +57,8 @@ static bool update_timer_interval(void)
     } else {
         // Otherwise set the timeout to the remaining time before the event
         // should trigger
-        aio_timer.it_value.tv_sec = diff.tv_sec;
-        aio_timer.it_value.tv_nsec = diff.tv_nsec;
+        aio_timer.it_value.tv_sec = timer_next_timeout.tv_sec;
+        aio_timer.it_value.tv_nsec = timer_next_timeout.tv_nsec;
     }
 
     // Arm the timer with the new timeout
@@ -61,14 +70,16 @@ static bool update_timer_interval(void)
             aio_timer.it_value.tv_nsec);
         return false;
     }
+#endif
 
     logger_debug(DBG_EVENTS, "Updated timer timeout to %li.%09lis",
-        aio_timer.it_value.tv_sec, aio_timer.it_value.tv_nsec);
+        timer_next_timeout.tv_sec, timer_next_timeout.tv_nsec);
+
     return true;
 }
 
 // Process all events in the event queue that should trigger
-static void event_process_queued(void)
+void event_process_queued(void)
 {
     event_t *event;
     struct timespec now;
@@ -136,6 +147,7 @@ static void event_process_queued(void)
     update_timer_interval();
 }
 
+#ifdef EVENTS_USE_TIMERFD
 // Handle timerfd expiring (processes the event queue)
 static void event_aio_process(aio_event_t *event)
 {
@@ -177,6 +189,7 @@ bool event_init(void)
         return false;
     }
 
+    memset(&timer_next_timeout, 0, sizeof(timer_next_timeout));
     event_queue_aio = aio_event_add_inl(oshd.aio,
         timerfd,
         AIO_READ,
@@ -188,6 +201,22 @@ bool event_init(void)
         event_aio_error);
     return true;
 }
+#else
+time_t event_get_timeout_ms(void)
+{
+    if (timer_next_timeout.tv_sec < 0)
+        return 0;
+
+    return    (timer_next_timeout.tv_sec  * 1000)
+            + (timer_next_timeout.tv_nsec / 1000000);
+}
+
+bool event_init(void)
+{
+    memset(&timer_next_timeout, 0, sizeof(timer_next_timeout));
+    return true;
+}
+#endif
 
 // Return an allocated event_t
 event_t *event_create(

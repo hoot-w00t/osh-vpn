@@ -50,6 +50,11 @@ struct event {
     event_t *next;
 };
 
+#ifndef EVENTS_USE_TIMERFD
+void event_process_queued(void);
+time_t event_get_timeout_ms(void);
+#endif
+
 bool event_init(void);
 
 event_t *event_create(
