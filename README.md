@@ -54,6 +54,7 @@ You can change those options by running `cmake .. -D<option>=<value>`
 | `ENABLE_UNIT_TESTS` | `OFF`         | Build unit tests, they can be run with `ctest --output-on-failure` or directly with `./oshd_tests`. These unit tests are made using [Criterion](https://github.com/Snaipe/Criterion) |
 | `DISABLE_EPOLL`     | `OFF`         | Disable the use of `epoll` even when it is available, falls back to `poll` |
 | `ENABLE_SYSTEMD`    | `OFF`         | Configure systemd service files |
+| `DISABLE_EVENTS_TIMERFD` | `OFF`    | Disable the use of `timerfd` for timed events even when it is available |
 
 ## Installing
 It is possible to install Osh with `sudo make install` after compiling.
