@@ -283,6 +283,7 @@ void oshd_loop(void)
     event_queue_periodic_ping();
     event_queue_expire_endpoints();
     event_queue_expire_routes();
+    event_queue_expire_seen_brd_ids();
     if (oshd.automatic_connections)
         event_queue_automatic_connections();
 

@@ -3,13 +3,11 @@
 
 #include "client.h"
 
-#ifndef seen_brd_id_maxsize
-#define seen_brd_id_maxsize (256)
-#endif
-
-#if (seen_brd_id_maxsize < 1)
-#error "seen_brd_id_maxsize must be a positive value"
-#endif
+// Structure holding the recently seen broadcast IDs
+struct node_brd_id {
+    oshpacket_brd_id_t brd_id;
+    struct timespec seen_at;
+};
 
 typedef struct node_id node_id_t;
 
@@ -50,7 +48,7 @@ struct node_id {
 
     // Array of the most recently received broadcast IDs
     // This is used to ignore broadcast packets which we already processed
-    oshpacket_brd_id_t seen_brd_id[seen_brd_id_maxsize];
+    struct node_brd_id *seen_brd_id;
     size_t seen_brd_id_count;
 
     // true if the node ID is our ID (name == oshd.name)
@@ -79,6 +77,9 @@ void node_tree_dump(void);
 void node_tree_update(void);
 
 bool node_valid_name(const char *name);
-bool node_has_seen_brd_id(node_id_t *nid, const oshpacket_brd_id_t brd_id);
+
+void node_brd_id_push(node_id_t *nid, const oshpacket_brd_id_t brd_id);
+void node_brd_id_pop(node_id_t *nid, size_t amount);
+bool node_brd_id_was_seen(node_id_t *nid, const oshpacket_brd_id_t brd_id);
 
 #endif

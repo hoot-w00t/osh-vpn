@@ -129,6 +129,7 @@ set(OSHD_SOURCES
     src/events/dynamic_ip_conflict.c
     src/events/expire_endpoints.c
     src/events/expire_routes.c
+    src/events/expire_seen_brd_ids.c
     src/events/handshake_renew.c
     src/events/handshake_timeout.c
     src/events/node_auth_timeout.c

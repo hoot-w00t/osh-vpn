@@ -85,6 +85,7 @@ void node_id_free(node_id_t *nid)
     free(nid->pubkey_raw);
     free(nid->edges);
     endpoint_group_free(nid->endpoints);
+    free(nid->seen_brd_id);
     free(nid);
 }
 
@@ -465,25 +466,47 @@ bool node_valid_name(const char *name)
            && name_len == strspn(name, valid_charset);
 }
 
+// Push the broadcast ID to the end of the seen broadcast IDs array
+void node_brd_id_push(node_id_t *nid, const oshpacket_brd_id_t brd_id)
+{
+    const size_t idx = nid->seen_brd_id_count;
+
+    nid->seen_brd_id_count += 1;
+    nid->seen_brd_id = xreallocarray(nid->seen_brd_id,
+        nid->seen_brd_id_count, sizeof(struct node_brd_id));
+    nid->seen_brd_id[idx].brd_id = brd_id;
+    oshd_gettime(&nid->seen_brd_id[idx].seen_at);
+}
+
+// Pop the first broadcast IDs from the array
+void node_brd_id_pop(node_id_t *nid, size_t amount)
+{
+    if (amount >= nid->seen_brd_id_count) {
+        free(nid->seen_brd_id);
+        nid->seen_brd_id = NULL;
+        nid->seen_brd_id_count = 0;
+        return;
+    }
+
+    nid->seen_brd_id_count -= amount;
+    memmove(nid->seen_brd_id, nid->seen_brd_id + amount,
+        nid->seen_brd_id_count * sizeof(struct node_brd_id));
+    nid->seen_brd_id = xreallocarray(nid->seen_brd_id,
+        nid->seen_brd_id_count, sizeof(struct node_brd_id));
+}
+
 // Returns true if the broadcast ID was seen already
 // The ID will be marked as seen if it was not
-bool node_has_seen_brd_id(node_id_t *nid, const oshpacket_brd_id_t brd_id)
+bool node_brd_id_was_seen(node_id_t *nid, const oshpacket_brd_id_t brd_id)
 {
-    for (size_t i = 0; i < nid->seen_brd_id_count; ++i) {
+    for (size_t i = nid->seen_brd_id_count; i > 0; --i) {
         // If any value in the seen_brd_id array is the same as brd_id it means
         // that we have already seen and processed this packet
-        if (nid->seen_brd_id[i] == brd_id)
+        if (nid->seen_brd_id[i - 1].brd_id == brd_id)
             return true;
     }
 
-    // Shift all values in the array and insert the new broadcast ID
-    memmove(nid->seen_brd_id + 1, nid->seen_brd_id + 0,
-        sizeof(nid->seen_brd_id) - sizeof(oshpacket_brd_id_t));
-
-    nid->seen_brd_id[0] = brd_id;
-
-    if (nid->seen_brd_id_count < seen_brd_id_maxsize)
-        nid->seen_brd_id_count += 1;
-
+    // The broadcast ID was not seen before
+    node_brd_id_push(nid, brd_id);
     return false;
 }

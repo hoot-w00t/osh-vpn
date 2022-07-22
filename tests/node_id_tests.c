@@ -17,45 +17,51 @@ static void free_node_tree(void)
     init_node_tree();
 }
 
-Test(node_has_seen_brd_id, test_list,
+Test(node_brd_id_was_seen, test_list,
     .init = init_node_tree,
     .fini = free_node_tree)
 {
-    const oshpacket_brd_id_t brd_id_test_count = seen_brd_id_maxsize * 8;
+    const oshpacket_brd_id_t test_count = 8192;
     oshpacket_brd_id_t brd_id;
+    oshpacket_brd_id_t popped;
     size_t count = 0;
     node_id_t *nid;
 
+    // Initialize dummy node
     init_node_tree();
     nid = node_id_add("test_brd_id");
     cr_assert_not_null(nid);
 
-    cr_assert_eq(sizeof(nid->seen_brd_id), sizeof(oshpacket_brd_id_t) * seen_brd_id_maxsize);
-    for (size_t i = 0; i < seen_brd_id_maxsize; ++i)
-        cr_assert_eq(nid->seen_brd_id[i], 0);
+    // Make sure that the seen_brd_id array is properly initialized
+    cr_assert_null(nid->seen_brd_id);
     cr_assert_eq(nid->seen_brd_id_count, 0);
-    cr_assert_eq(count, 0);
-    cr_assert_geq(brd_id_test_count, seen_brd_id_maxsize);
-    cr_assert_eq(brd_id_test_count % seen_brd_id_maxsize, 0);
 
-    for (brd_id = 1; brd_id <= brd_id_test_count; ++brd_id) {
-        cr_assert_eq(node_has_seen_brd_id(nid, brd_id), false);
-        if (count < seen_brd_id_maxsize)
-            count += 1;
+    // Try seeing test_count broadcast IDs
+    for (brd_id = 1; brd_id <= test_count; ++brd_id) {
+        cr_assert_eq(node_brd_id_was_seen(nid, brd_id), false);
+        count += 1;
         cr_assert_eq(nid->seen_brd_id_count, count);
 
-        for (size_t i = 0; i < count; ++i) {
-            for (int j = 0; j < 8; ++j)
-                cr_assert_eq(node_has_seen_brd_id(nid, brd_id - i), true);
-        }
-        for (size_t i = 0; i < count; ++i)
-            cr_assert_eq(nid->seen_brd_id[i], brd_id - i);
-        for (size_t i = count; i < seen_brd_id_maxsize; ++i)
-            cr_assert_eq(nid->seen_brd_id[i], 0);
+        for (size_t i = nid->seen_brd_id_count; i > 0; --i)
+            cr_assert_eq(nid->seen_brd_id[i - 1].brd_id, i);
     }
 
-    for (brd_id = brd_id_test_count - seen_brd_id_maxsize; brd_id <= brd_id_test_count; ++brd_id)
-        cr_assert_eq(node_has_seen_brd_id(nid, brd_id), false);
+    for (popped = 1; popped <= test_count; ++popped) {
+        node_brd_id_pop(nid, 1);
+        cr_assert_eq(nid->seen_brd_id_count, test_count - popped);
+
+        for (size_t i = nid->seen_brd_id_count; i > 0; --i)
+            cr_assert_eq(nid->seen_brd_id[i - 1].brd_id, popped + i);
+    }
+
+    cr_assert_null(nid->seen_brd_id);
+    cr_assert_eq(nid->seen_brd_id_count, 0);
+
+    for (size_t i = 0; i < 1024; ++i) {
+        node_brd_id_pop(nid, i);
+        cr_assert_null(nid->seen_brd_id);
+        cr_assert_eq(nid->seen_brd_id_count, 0);
+    }
 
     free_node_tree();
 }

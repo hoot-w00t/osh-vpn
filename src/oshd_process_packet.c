@@ -83,7 +83,7 @@ bool oshd_process_packet(client_t *c, void *packet)
     if (hdr->flags.s.broadcast) {
         // If the packet is a broadcast we will check if we have seen it
         // before and drop it if that's the case
-        if (node_has_seen_brd_id(src, hdr->dest.broadcast.id)) {
+        if (node_brd_id_was_seen(src, hdr->dest.broadcast.id)) {
             logger_debug(DBG_SOCKETS,
                 "%s: %s: Ignoring duplicated %s broadcast %" PRI_BRD_ID " from %s",
                 c->addrw, c->id->name, def->name, hdr->dest.broadcast.id, src->name);

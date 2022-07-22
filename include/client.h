@@ -68,6 +68,11 @@
 #define HANDSHAKE_RENEW_INTERVAL (3600)
 #endif
 
+#ifndef NODE_BRD_ID_TIMEOUT
+// Time in seconds after which a broadcast ID can be forgotten
+#define NODE_BRD_ID_TIMEOUT (30)
+#endif
+
 typedef struct client client_t;
 
 // We need to manually define the event_t type for the client_t structure to

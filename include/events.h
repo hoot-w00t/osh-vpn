@@ -76,6 +76,7 @@ void event_queue_dynamic_ip_conflict(node_id_t *s1, node_id_t *s2,
     const netaddr_t *addr);
 void event_queue_expire_endpoints(void);
 void event_queue_expire_routes(void);
+void event_queue_expire_seen_brd_ids(void);
 void event_queue_handshake_renew(client_t *c);
 void event_queue_handshake_timeout(client_t *c, time_t timeout_delay);
 void event_queue_node_auth_timeout(client_t *c, time_t timeout_delay);
