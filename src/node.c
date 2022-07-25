@@ -143,18 +143,26 @@ void node_id_del_edge(node_id_t *src, node_id_t *dest)
 }
 
 // Load a remote public key for *nid
-// If a public key was already loaded it will not be loaded
+// If a public key was already loaded it will be replaced only if pubkey_local
+// is false; local public keys cannot be replaced
 bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
     size_t pubkey_size)
 {
-    if (nid->pubkey) {
-        logger_debug(DBG_AUTHENTICATION, "Ignoring new public key for %s: One is already loaded", nid->name);
+    EVP_PKEY *new_key;
+
+    if (nid->pubkey_local) {
+        logger_debug(DBG_AUTHENTICATION,
+            "Ignoring new public key for %s: A local public key is already loaded",
+            nid->name);
         return true;
     }
 
-    if (!(nid->pubkey = pkey_load_ed25519_pubkey(pubkey, pubkey_size)))
+    new_key = pkey_load_ed25519_pubkey(pubkey, pubkey_size);
+    if (!new_key)
         return false;
 
+    pkey_free(nid->pubkey);
+    nid->pubkey = new_key;
     free(nid->pubkey_raw);
     nid->pubkey_raw = xmemdup(pubkey, pubkey_size);
     nid->pubkey_raw_size = pubkey_size;
