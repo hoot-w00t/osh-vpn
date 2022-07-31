@@ -23,7 +23,7 @@ bool random_bytes(void *buf, size_t buf_size)
     }
 
     while (total < buf_size) {
-        if ((rbytes = read(fd, buf + total, buf_size - total)) <= 0) {
+        if ((rbytes = read(fd, ((uint8_t *) buf) + total, buf_size - total)) <= 0) {
             if (errno == EINTR)
                 continue;
 

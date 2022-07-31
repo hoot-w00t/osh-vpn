@@ -71,7 +71,7 @@ void *netbuffer_reserve(netbuffer_t *nbuf, size_t data_size)
 
     // The data pointer can change during reallocation so we need to calculate
     // it after it was done
-    dataptr = nbuf->data + nbuf->data_size;
+    dataptr = ((uint8_t *) nbuf->data) + nbuf->data_size;
     nbuf->data_size += data_size;
 
     logger_debug(DBG_NETBUFFER, "Netbuffer %p: Reserved %zu bytes (%p)",
@@ -130,7 +130,7 @@ size_t netbuffer_pop(netbuffer_t *nbuf, size_t size)
             nbuf, size, nbuf->data_size);
 
         nbuf->data_size -= size;
-        memmove(nbuf->data, nbuf->data + size, nbuf->data_size);
+        memmove(nbuf->data, ((uint8_t *) nbuf->data) + size, nbuf->data_size);
     }
     return nbuf->data_size;
 }

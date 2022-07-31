@@ -479,7 +479,7 @@ static bool client_queue_packet_fragmented(
 {
     const size_t max_entries = OSHPACKET_PAYLOAD_MAXSIZE / entry_size;
     size_t remaining_entries = payload_size / entry_size;
-    const void *curr_buf = payload;
+    const uint8_t *curr_buf = payload;
 
     while (remaining_entries > 0) {
         size_t entries;

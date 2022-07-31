@@ -20,11 +20,11 @@ Test(oshpacket_hdr_t, oshpacket_hdr_sizes)
 Test(oshpacket_hdr_t, oshpacket_hdr_macros)
 {
     oshpacket_hdr_t hdr;
-    void *ptr = (void *) &hdr;
+    uint8_t *ptr = (uint8_t *) &hdr;
 
-    cr_assert_eq(ptr, (void *) OSHPACKET_HDR(&hdr));
-    cr_assert_eq(ptr + OSHPACKET_PUBLIC_HDR_SIZE, (void *) OSHPACKET_PRIVATE_HDR(&hdr));
-    cr_assert_eq(ptr + OSHPACKET_HDR_SIZE,        (void *) OSHPACKET_PAYLOAD(&hdr));
+    cr_assert_eq(ptr, (uint8_t *) OSHPACKET_HDR(&hdr));
+    cr_assert_eq(ptr + OSHPACKET_PUBLIC_HDR_SIZE, (uint8_t *) OSHPACKET_PRIVATE_HDR(&hdr));
+    cr_assert_eq(ptr + OSHPACKET_HDR_SIZE,        (uint8_t *) OSHPACKET_PAYLOAD(&hdr));
 
     cr_assert_eq(OSHPACKET_HDR(&hdr),         OSHPACKET_HDR_CONST(&hdr));
     cr_assert_eq(OSHPACKET_PRIVATE_HDR(&hdr), OSHPACKET_PRIVATE_HDR_CONST(&hdr));
@@ -173,5 +173,5 @@ Test(oshpacket_devmode_t, check_dynamic_devmode_packet_struct)
     oshpacket_devmode_dynamic_t *dyn = (oshpacket_devmode_dynamic_t *) buf;
 
     cr_assert_eq(sizeof(*regular), sizeof(dyn->devmode_pkt));
-    cr_assert_eq(&dyn->network_name, ((void *) regular) + sizeof(*regular));
+    cr_assert_eq(&dyn->network_name, ((uint8_t *) regular) + sizeof(*regular));
 }

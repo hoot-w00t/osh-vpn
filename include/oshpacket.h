@@ -210,8 +210,8 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 // Maximum size of a packet (including the header)
 #define OSHPACKET_MAXSIZE  (OSHPACKET_HDR_SIZE + OSHPACKET_PAYLOAD_MAXSIZE)
 
-#define _OSHPACKET_OFFSET(pkt, offset)      (((void *) (pkt)) + (offset))
-#define _OSHPACKET_OFFSET_CONST(pkt, offset) (((const void *) (pkt)) + (offset))
+#define _OSHPACKET_OFFSET(pkt, offset)       ((void *) (((uint8_t *) (pkt)) + (offset)))
+#define _OSHPACKET_OFFSET_CONST(pkt, offset) ((const void *) (((const uint8_t *) (pkt)) + (offset)))
 
 #define OSHPACKET_HDR(pkt)         ((oshpacket_hdr_t *) (pkt))
 #define OSHPACKET_PRIVATE_HDR(pkt) _OSHPACKET_OFFSET(pkt, OSHPACKET_PUBLIC_HDR_SIZE)

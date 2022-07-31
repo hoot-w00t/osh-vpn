@@ -16,7 +16,7 @@ Test(netroute_table_t, invalid_table_size)
 static void rand_bytes(void *ptr, size_t size)
 {
     for (size_t i = 0; i < size; ++i)
-        *((uint8_t *) (ptr + i)) = rand() % 256;
+        *(((uint8_t *) ptr) + i) = rand() % 256;
 }
 
 static void rand_addr(netaddr_t *addr)

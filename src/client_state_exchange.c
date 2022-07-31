@@ -33,7 +33,7 @@ static bool queue_exg_fragmented(client_t *c, oshpacket_type_t type,
             send_count = max_payload_count;
 
         if (!client_queue_packet_exg(c, type,
-                payload + (i * def->payload_size),
+                ((const uint8_t *) payload) + (i * def->payload_size),
                 send_count * def->payload_size))
         {
             return false;

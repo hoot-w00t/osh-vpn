@@ -34,7 +34,7 @@ uint32_t murmur3_32(const void *key, const uint32_t key_len,
     // Read blocks of 32 bits
     for (uint32_t i = (key_len / 4); i != 0; --i) {
         memcpy(&k, key, sizeof(k));
-        key += sizeof(k);
+        key = ((const uint8_t *) key) + sizeof(k);
 
         hash ^= murmur3_32_mix(k);
         hash = ROTL32(hash, 13);
