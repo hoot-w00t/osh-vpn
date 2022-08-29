@@ -1,6 +1,7 @@
 #ifndef _OSH_OSHPACKET_H
 #define _OSH_OSHPACKET_H
 
+#include "macros_bitfields.h"
 #include "crypto/cipher.h"
 #include "netaddr.h"
 #include "device_mode.h"
@@ -87,14 +88,7 @@ typedef struct __attribute__((__packed__)) oshpacket_hdr {
     // Private header (always encrypted except for HANDSHAKE packets)
     // If it changes OSHPACKET_PRIVATE_HDR_SIZE needs to be updated
     oshpacket_type_t type : 8;
-    union {
-        uint8_t u;
-
-        struct __attribute__((__packed__)) {
-            uint8_t broadcast : 1;
-            uint8_t _reserved : 7;
-        } s;
-    } flags;
+    uint8_t          flags;
 
     char             src_node[NODE_NAME_SIZE];
 
@@ -118,6 +112,9 @@ typedef struct __attribute__((__packed__)) oshpacket_hdr {
         } unicast;
     } dest;
 } oshpacket_hdr_t;
+
+// Bitfield of oshpacket_hdr_t->flags
+#define OSHPACKET_HDR_FLAG_BROADCAST (7)
 
 typedef struct client client_t;
 typedef struct node_id node_id_t;
@@ -219,9 +216,9 @@ typedef struct __attribute__((__packed__)) oshpacket_edge {
 typedef struct __attribute__((__packed__)) oshpacket_route {
     char owner_name[NODE_NAME_SIZE];
     netaddr_type_t type : 8;
-    netaddr_prefixlen_t prefixlen : 8;
+    netaddr_prefixlen_t prefixlen;
     netaddr_data_t addr;
-    uint8_t can_expire : 8;
+    uint8_t can_expire;
 } oshpacket_route_t;
 
 // Size of the public part of the header

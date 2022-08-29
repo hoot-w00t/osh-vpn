@@ -69,7 +69,7 @@ bool oshd_process_packet(client_t *c, void *packet)
     // If the source node is our local node, ignore the packet (it is likely a
     // broadcast looping back, but it could also be a routing error)
     if (src->local_node) {
-        if (hdr->flags.s.broadcast) {
+        if (BIT_TEST(hdr->flags, OSHPACKET_HDR_FLAG_BROADCAST)) {
             logger_debug(DBG_SOCKETS,
                 "%s: %s: Ignoring %s broadcast %" PRI_BRD_ID " looping back ",
                 c->addrw, c->id->name, def->name, hdr->dest.broadcast.id);
@@ -80,7 +80,7 @@ bool oshd_process_packet(client_t *c, void *packet)
         return true;
     }
 
-    if (hdr->flags.s.broadcast) {
+    if (BIT_TEST(hdr->flags, OSHPACKET_HDR_FLAG_BROADCAST)) {
         // If the packet is a broadcast we will check if we have seen it
         // before and drop it if that's the case
         if (node_brd_id_was_seen(src, hdr->dest.broadcast.id)) {

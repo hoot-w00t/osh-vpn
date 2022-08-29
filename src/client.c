@@ -371,7 +371,7 @@ bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
 static void hdr_init_unicast(oshpacket_hdr_t *hdr, oshpacket_type_t type)
 {
     hdr->type = type;
-    hdr->flags.u = 0;
+    hdr->flags = 0;
 }
 
 // Initialize the packet header for a broadcast
@@ -379,8 +379,8 @@ static void hdr_init_unicast(oshpacket_hdr_t *hdr, oshpacket_type_t type)
 static void hdr_init_broadcast(oshpacket_hdr_t *hdr, oshpacket_type_t type)
 {
     hdr->type = type;
-    hdr->flags.u = 0;
-    hdr->flags.s.broadcast = 1;
+    hdr->flags = 0;
+    BIT_SET(hdr->flags, OSHPACKET_HDR_FLAG_BROADCAST);
     memcpy(hdr->src_node, oshd.name, NODE_NAME_SIZE);
     memset(&hdr->dest.broadcast, 0, sizeof(hdr->dest.broadcast));
     hdr->dest.broadcast.id = random_xoshiro256();

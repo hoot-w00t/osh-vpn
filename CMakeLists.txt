@@ -179,6 +179,7 @@ set(OSHD_TESTS_SOURCES
     ${OSHD_SOURCES}
     tests/base64_tests.c
     tests/device_mode_tests.c
+    tests/macros_bitfield_tests.c
     tests/netaddr_tests.c
     tests/netbuffer_tests.c
     tests/netroute_tests.c

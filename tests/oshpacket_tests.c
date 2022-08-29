@@ -8,8 +8,7 @@ Test(oshpacket_hdr_t, oshpacket_hdr_sizes)
     cr_assert_eq(OSHPACKET_PUBLIC_HDR_SIZE + OSHPACKET_PRIVATE_HDR_SIZE, OSHPACKET_HDR_SIZE);
     cr_assert_eq(sizeof(hdr), OSHPACKET_HDR_SIZE);
     cr_assert_eq(sizeof(hdr) + OSHPACKET_PAYLOAD_MAXSIZE, OSHPACKET_MAXSIZE);
-    cr_assert_eq(sizeof(hdr.flags), sizeof(hdr.flags.u));
-    cr_assert_eq(sizeof(hdr.flags.s), sizeof(hdr.flags.u));
+    cr_assert_eq(sizeof(hdr.flags), sizeof(uint8_t));
     cr_assert_eq(sizeof(hdr.dest), sizeof(hdr.dest.unicast));
     cr_assert_eq(sizeof(hdr.dest.broadcast), sizeof(hdr.dest.unicast));
 
@@ -37,8 +36,8 @@ Test(oshpacket_hdr_t, oshpacket_hdr_flags_ordering)
     oshpacket_hdr_t hdr;
 
     memset(&hdr, 0, sizeof(hdr));
-    hdr.flags.s.broadcast = 1;
-    cr_assert_eq(hdr.flags.u, 0x80);
+    BIT_SET(hdr.flags, OSHPACKET_HDR_FLAG_BROADCAST);
+    cr_assert_eq(hdr.flags, 0x80u);
 }
 
 Test(oshpacket_hello_t, oshpacket_hello_options)
@@ -47,7 +46,10 @@ Test(oshpacket_hello_t, oshpacket_hello_options)
 
     cr_assert_eq(sizeof(packet.options), sizeof(uint32_t));
 
-    // TODO: Add bit-field ordering test
+    memset(&packet, 0, sizeof(packet));
+
+    BIT_SET(packet.options, 31);
+    cr_assert_eq(packet.options, 0x80000000u);
 }
 
 Test(oshpacket_type_valid, oshpacket_type_is_valid)
