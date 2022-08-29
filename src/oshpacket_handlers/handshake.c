@@ -95,7 +95,7 @@ static bool queue_handshakes_signature(client_t *c, const oshpacket_handshake_t 
 
     // Finally send the signature
     logger_debug(DBG_HANDSHAKE, "%s: Queuing handshake signature", c->addrw);
-    return client_queue_packet(c, c->handshake_id, HANDSHAKE_SIG,
+    return client_queue_packet_direct(c, HANDSHAKE_SIG,
         &sig_packet, sizeof(sig_packet));
 }
 

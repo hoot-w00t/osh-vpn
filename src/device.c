@@ -67,10 +67,10 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
         return;
 
     if (route->owner) {
-        // We have a client to send this packet to
-        // next_hop should always be a valid client_t
-        if (node_id_next_hop(route->owner))
-            client_queue_packet(route->owner->next_hop, route->owner, DATA, pkt, pkt_size);
+        // This can fail if we don't have a route to the destination node
+        // (which should not happen in this case as routes owned by offline
+        //  nodes are removed)
+        client_queue_packet_indirect(route->owner, DATA, pkt, pkt_size);
     } else {
         // This route is a broadcast
         client_queue_packet_broadcast(NULL, DATA, pkt, pkt_size);

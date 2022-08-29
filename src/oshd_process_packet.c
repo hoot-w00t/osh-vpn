@@ -107,8 +107,9 @@ bool oshd_process_packet(client_t *c, void *packet)
         if (!dest->local_node) {
             if (!def->can_be_forwarded) {
                 logger(LOG_WARN,
-                    "Dropping %s packet from %s to %s: This type of packet cannot be forwarded",
-                    def->name, src->name, dest->name);
+                    "Dropping %s packet from %s to %s: %s",
+                    def->name, src->name, dest->name,
+                    "This type of packet cannot be forwarded");
                 return true;
             }
 
@@ -117,8 +118,8 @@ bool oshd_process_packet(client_t *c, void *packet)
                     def->name, src->name, dest->name, dest->next_hop->id->name);
                 client_queue_packet_forward(dest->next_hop, hdr, payload, hdr->payload_size);
             } else {
-                logger(LOG_INFO, "Dropping %s packet from %s to %s: No route",
-                    def->name, src->name, dest->name);
+                logger(LOG_INFO, "Dropping %s packet from %s to %s: %s",
+                    def->name, src->name, dest->name, "No route");
             }
             return true;
         }

@@ -167,11 +167,15 @@ void client_reconnect(client_t *c);
 
 void client_finish_handshake(client_t *c);
 
-// TODO: Rename client_queue_* functions
-bool client_queue_packet(client_t *c, node_id_t *dest, oshpacket_type_t type,
+bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
+    const void *payload, const size_t payload_size);
+bool client_queue_packet_direct(client_t *c, oshpacket_type_t type,
     const void *payload, size_t payload_size);
-bool client_queue_packet_forward(client_t *c, const oshpacket_hdr_t *hdr,
+bool client_queue_packet_indirect(node_id_t *dest, oshpacket_type_t type,
     const void *payload, size_t payload_size);
+#define client_queue_packet_forward(client, hdr, payload, payload_size) \
+    client_queue_packet(client, hdr, payload, payload_size)
+
 bool client_queue_packet_broadcast(client_t *exclude, oshpacket_type_t type,
     const void *payload, size_t payload_size);
 bool client_queue_packet_broadcast_forward(client_t *exclude, const oshpacket_hdr_t *hdr,
@@ -179,7 +183,8 @@ bool client_queue_packet_broadcast_forward(client_t *exclude, const oshpacket_hd
 bool client_queue_packet_exg(client_t *c, oshpacket_type_t type,
     const void *payload, const size_t payload_size);
 
-#define client_queue_packet_empty(client, dest, type) client_queue_packet(client, dest, type, NULL, 0)
+#define client_queue_packet_empty(client, type) \
+    client_queue_packet_direct(client, type, NULL, 0)
 
 bool client_queue_handshake(client_t *c);
 void client_renew_handshake(client_t *c);

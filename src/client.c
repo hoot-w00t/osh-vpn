@@ -258,11 +258,8 @@ static bool data_packet_should_drop(client_t *c)
 //
 // Warning: If the payload is NULL but the payload size is different than 0
 //          there will be uninitialized bytes sent as the payload
-static bool client_queue_packet_internal(
-    client_t *c,
-    const oshpacket_hdr_t *hdr,
-    const void *payload,
-    const size_t payload_size)
+bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
+    const void *payload, const size_t payload_size)
 {
     const size_t packet_size = OSHPACKET_HDR_SIZE + payload_size;
     uint8_t *slot;
@@ -369,33 +366,66 @@ static bool client_queue_packet_internal(
     return true;
 }
 
-// Queue a unicast packet for another node
-// TODO: Remove *dest and use c->id instead
-bool client_queue_packet(client_t *c, node_id_t *dest, oshpacket_type_t type,
+// Initialize the packet header for a unicast
+// Source/destination nodes are not initialized here
+static void hdr_init_unicast(oshpacket_hdr_t *hdr, oshpacket_type_t type)
+{
+    hdr->type = type;
+    hdr->flags.u = 0;
+}
+
+// Initialize the packet header for a broadcast
+// Nothing else has to be initialized after calling this function
+static void hdr_init_broadcast(oshpacket_hdr_t *hdr, oshpacket_type_t type)
+{
+    hdr->type = type;
+    hdr->flags.u = 0;
+    hdr->flags.s.broadcast = 1;
+    memcpy(hdr->src_node, oshd.name, NODE_NAME_SIZE);
+    memset(&hdr->dest.broadcast, 0, sizeof(hdr->dest.broadcast));
+    hdr->dest.broadcast.id = random_xoshiro256();
+}
+
+// Queue a unicast packet for a client (direct connection only)
+bool client_queue_packet_direct(client_t *c, oshpacket_type_t type,
     const void *payload, size_t payload_size)
 {
     oshpacket_hdr_t hdr;
 
-    hdr.type = type;
-    hdr.flags.u = 0;
+    hdr_init_unicast(&hdr, type);
+
+    // If the client is authenticated, set the source and destination nodes
+    // Otherwise unauthenticated packets have those fields cleared out to
+    // prevent leaking the nodes' names
     if (c->authenticated) {
-        memcpy(hdr.src_node, oshd.name, sizeof(hdr.src_node));
+        memcpy(hdr.src_node, oshd.name, NODE_NAME_SIZE);
+        memcpy(hdr.dest.unicast.dest_node, c->id->name, NODE_NAME_SIZE);
     } else {
         memset(hdr.src_node, 0, sizeof(hdr.src_node));
-    }
-    if (dest) {
-        memcpy(hdr.dest.unicast.dest_node, dest->name, NODE_NAME_SIZE);
-    } else {
         memset(&hdr.dest.unicast, 0, sizeof(hdr.dest.unicast));
     }
-    return client_queue_packet_internal(c, &hdr, payload, payload_size);
+
+    return client_queue_packet(c, &hdr, payload, payload_size);
 }
 
-// Forward an existing packet to another client
-bool client_queue_packet_forward(client_t *c, const oshpacket_hdr_t *hdr,
+// Queue a unicast packet for a node (indirectly, using its next hop)
+// The packet is dropped if there is no route to the destination
+bool client_queue_packet_indirect(node_id_t *dest, oshpacket_type_t type,
     const void *payload, size_t payload_size)
 {
-    return client_queue_packet_internal(c, hdr, payload, payload_size);
+    client_t *next_hop = node_id_next_hop(dest);
+    oshpacket_hdr_t hdr;
+
+    if (!next_hop) {
+        logger(LOG_WARN, "Dropping %s packet for %s: No route",
+            oshpacket_type_name(type), dest->name);
+        return false;
+    }
+
+    hdr_init_unicast(&hdr, type);
+    memcpy(hdr.src_node, oshd.name, NODE_NAME_SIZE);
+    memcpy(hdr.dest.unicast.dest_node, dest->name, NODE_NAME_SIZE);
+    return client_queue_packet(next_hop, &hdr, payload, payload_size);
 }
 
 // Broadcast a packet to all authenticated direct connections
@@ -405,13 +435,7 @@ bool client_queue_packet_broadcast(client_t *exclude, oshpacket_type_t type,
 {
     oshpacket_hdr_t hdr;
 
-    hdr.type = type;
-    hdr.flags.u = 0;
-    hdr.flags.s.broadcast = 1;
-    memcpy(hdr.src_node, oshd.name, sizeof(hdr.src_node));
-    memset(&hdr.dest.broadcast, 0, sizeof(hdr.dest.broadcast));
-    hdr.dest.broadcast.id = random_xoshiro256();
-
+    hdr_init_broadcast(&hdr, type);
     logger_debug(DBG_SOCKETS,
         "Broadcasting %s packet of %zu bytes (id: %" PRI_BRD_ID ")",
         oshpacket_type_name(type), payload_size, hdr.dest.broadcast.id);
@@ -423,7 +447,7 @@ bool client_queue_packet_broadcast(client_t *exclude, oshpacket_type_t type,
             continue;
         }
 
-        client_queue_packet_internal(oshd.clients[i], &hdr, payload, payload_size);
+        client_queue_packet(oshd.clients[i], &hdr, payload, payload_size);
     }
 
     return true;
@@ -447,7 +471,7 @@ bool client_queue_packet_broadcast_forward(client_t *exclude, const oshpacket_hd
             continue;
         }
 
-        client_queue_packet_internal(oshd.clients[i], hdr, payload, payload_size);
+        client_queue_packet(oshd.clients[i], hdr, payload, payload_size);
     }
 
     return true;
@@ -460,19 +484,13 @@ bool client_queue_packet_exg(client_t *c, oshpacket_type_t type,
 {
     oshpacket_hdr_t hdr;
 
-    hdr.type = type;
-    hdr.flags.u = 0;
-    hdr.flags.s.broadcast = 1;
-    memcpy(hdr.src_node, oshd.name, sizeof(hdr.src_node));
-    memset(&hdr.dest.broadcast, 0, sizeof(hdr.dest.broadcast));
-    hdr.dest.broadcast.id = random_xoshiro256();
-
+    hdr_init_broadcast(&hdr, type);
     logger_debug(DBG_SOCKETS,
         "%s: %s: Queuing state exchange %s packet of %zu bytes (id: %" PRI_BRD_ID ")",
         c->addrw, c->id->name, oshpacket_type_name(type), payload_size,
         hdr.dest.broadcast.id);
 
-    return client_queue_packet_internal(c, &hdr, payload, payload_size);
+    return client_queue_packet(c, &hdr, payload, payload_size);
 }
 
 // Queue packet with a fragmented payload
@@ -522,7 +540,7 @@ static bool client_queue_packet_fragmented(
                 "%s: %s: Queuing fragmented %s packet with %zu entries (%zu bytes)",
                 c->addrw, c->id->name, oshpacket_type_name(type), entries, size);
 
-            if (!client_queue_packet(c, c->id, type, curr_buf, size))
+            if (!client_queue_packet_direct(c, type, curr_buf, size))
                 return false;
         }
 
@@ -652,7 +670,7 @@ bool client_queue_handshake(client_t *c)
            &packet, sizeof(packet));
 
     logger_debug(DBG_HANDSHAKE, "%s: Queuing local handshake packet", c->addrw);
-    return client_queue_packet(c, c->id, HANDSHAKE, &packet, sizeof(packet));
+    return client_queue_packet_direct(c, HANDSHAKE, &packet, sizeof(packet));
 }
 
 // Queue a HANDSHAKE packet to renew the encryption keys
@@ -682,12 +700,12 @@ bool client_queue_devmode(client_t *c)
         netaddr_cpy_data(&packet.prefix4, &oshd.dynamic_prefix4);
         packet.prefixlen4 = oshd.dynamic_prefixlen4;
 
-        return client_queue_packet(c, c->id, DEVMODE, &packet, sizeof(packet));
+        return client_queue_packet_direct(c, DEVMODE, &packet, sizeof(packet));
     } else {
         oshpacket_devmode_t packet;
 
         packet.devmode = oshd.device_mode;
-        return client_queue_packet(c, c->id, DEVMODE, &packet, sizeof(packet));
+        return client_queue_packet_direct(c, DEVMODE, &packet, sizeof(packet));
     }
 }
 
@@ -695,7 +713,7 @@ bool client_queue_devmode(client_t *c)
 bool client_queue_goodbye(client_t *c)
 {
     client_graceful_disconnect(c);
-    return client_queue_packet_empty(c, c->id, GOODBYE);
+    return client_queue_packet_empty(c, GOODBYE);
 }
 
 // Queue PING request
@@ -709,13 +727,13 @@ bool client_queue_ping(client_t *c)
 
     oshd_gettime(&c->rtt_ping);
     c->rtt_await = true;
-    return client_queue_packet_empty(c, c->id, PING);
+    return client_queue_packet_empty(c, PING);
 }
 
 // Queue PONG request
 bool client_queue_pong(client_t *c)
 {
-    return client_queue_packet_empty(c, c->id, PONG);
+    return client_queue_packet_empty(c, PONG);
 }
 
 // Broadcast a node's public key

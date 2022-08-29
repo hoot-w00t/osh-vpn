@@ -16,8 +16,7 @@ static bool queue_hello(client_t *c)
     packet.options = htonl(packet.options);
 
     logger_debug(DBG_HANDSHAKE, "%s: Queuing HELLO packet", c->addrw);
-    return client_queue_packet(c, c->handshake_id, HELLO,
-        &packet, sizeof(packet));
+    return client_queue_packet_direct(c, HELLO, &packet, sizeof(packet));
 }
 
 bool oshpacket_handler_handshake_sig(client_t *c,
