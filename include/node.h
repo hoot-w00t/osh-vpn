@@ -61,6 +61,11 @@ struct node_id {
     bool visited;
 };
 
+bool node_id_gen_hash(const node_id_t *nid, const uint8_t *salt,
+    size_t salt_size, uint8_t *hash);
+
+node_id_t *node_id_find_by_hash(const uint8_t *hash,
+    const uint8_t *salt, size_t salt_size);
 node_id_t *node_id_find(const char *name);
 node_id_t *node_id_find_local(void);
 node_id_t *node_id_add(const char *name);

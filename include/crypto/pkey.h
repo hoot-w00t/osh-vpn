@@ -11,10 +11,10 @@ EVP_PKEY *pkey_generate_x25519(void);
 
 bool pkey_derive(EVP_PKEY *privkey, EVP_PKEY *pubkey, uint8_t **shared_secret,
     size_t *shared_secret_size);
-bool pkey_sign(EVP_PKEY *privkey, const uint8_t *data, size_t data_size,
+bool pkey_sign(EVP_PKEY *privkey, const void *data, size_t data_size,
     uint8_t **sig, size_t *sig_size);
-bool pkey_verify(EVP_PKEY *pubkey, const uint8_t *data, size_t data_size,
-    const uint8_t *sig, size_t sig_size);
+bool pkey_verify(EVP_PKEY *pubkey, const void *data, size_t data_size,
+    const void *sig, size_t sig_size);
 
 bool pkey_save_privkey_pem(EVP_PKEY *pkey, const char *filename);
 bool pkey_save_privkey(const EVP_PKEY *privkey, uint8_t **dest, size_t *dest_size);

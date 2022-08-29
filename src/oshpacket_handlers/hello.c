@@ -1,156 +1,17 @@
 #include "oshd.h"
 #include "logger.h"
-#include <string.h>
 
-bool oshpacket_handler_hello_challenge(client_t *c, oshpacket_hdr_t *hdr,
-    void *payload)
+// Returns true if the client's handshake_id is already authenticated on another
+// direct connection
+static bool already_has_another_connection(client_t *c)
 {
-    char name[NODE_NAME_SIZE + 1];
+    logger_debug(DBG_HANDSHAKE, "%s: Checking for other direct connections", c->addrw);
 
-    memset(name, 0, sizeof(name));
-    memcpy(name, hdr->src_node, NODE_NAME_SIZE);
-    if (!node_valid_name(name)) {
-        logger(LOG_ERR, "%s: Authentication failed: Invalid name", c->addrw);
-        return client_queue_hello_end(c);
-    }
-
-    node_id_t *id = node_id_find(name);
-
-    if (!id) {
-        // We don't know this node so we can't authenticate it
-        logger(LOG_ERR, "%s: Authentication failed: Unknown node %s",
-            c->addrw, name);
-        return client_queue_hello_end(c);
-    }
-
-    if (id->local_node) {
-        // Disconnect the client if it tries to authenticate as our local node
-        logger(LOG_ERR, "%s: Authentication failed: Tried to authenticate as myself",
-            c->addrw);
-        return client_queue_hello_end(c);
-    }
-
-    c->hello_id = id;
-
-    uint8_t *sig;
-    size_t sig_size;
-    oshpacket_hello_response_t response;
-
-    // Sign the challenge using our private key
-    logger_debug(DBG_AUTHENTICATION, "%s: %s: Signing challenge",
-        c->addrw, c->hello_id->name);
-    if (!pkey_sign(oshd.privkey,
-                   (uint8_t *) payload, sizeof(oshpacket_hello_challenge_t),
-                   &sig, &sig_size))
-    {
-        logger(LOG_ERR, "%s: %s: Failed to sign the HELLO challenge",
-            c->addrw, c->hello_id->name);
-        return client_queue_hello_end(c);
-    }
-
-    // Make sure that the signature size is the same as the response packet expects
-    if (sig_size != sizeof(response.sig)) {
-        free(sig);
-        logger(LOG_ERR, "%s: %s: Signature size is invalid (%zu bytes)",
-            c->addrw, c->hello_id->name, sig_size);
-        return client_queue_hello_end(c);
-    }
-
-    // Initialize and queue the response packet
-    memcpy(response.sig, sig, sizeof(response.sig));
-    free(sig);
-
-    return client_queue_packet(c, NULL, HELLO_RESPONSE, &response,
-        sizeof(oshpacket_hello_response_t));
-}
-
-bool oshpacket_handler_hello_response(client_t *c, __attribute__((unused)) oshpacket_hdr_t *hdr,
-    void *payload)
-{
-    const oshpacket_hello_response_t *packet = (const oshpacket_hello_response_t *) payload;
-
-    if (!c->hello_chall) {
-        // If we don't have a hello_chall packet, authentication cannot proceed
-        logger(LOG_ERR, "%s: Received HELLO_RESPONSE but no HELLO_CHALLENGE was sent",
-            c->addrw);
-        return client_queue_hello_end(c);
-    }
-
-    if (!c->hello_id) {
-        // If there is no hello_id, authentication cannot proceed either
-        logger(LOG_ERR, "%s: Received HELLO_RESPONSE but the node is unknown",
-            c->addrw);
-        return client_queue_hello_end(c);
-    }
-
-    if (!c->hello_id->pubkey) {
-        // If we don't have a public key to verify the HELLO signature,
-        // we can't authenticate the node
-        logger(LOG_ERR, "%s: Authentication failed: No public key for %s",
-            c->addrw, c->hello_id->name);
-        return client_queue_hello_end(c);
-    }
-
-    // If the public key is local we will always use it, but if it is a remote
-    // key and remote authentication is not authorized then we can't
-    // authenticate the node
-    if (!c->hello_id->pubkey_local && !oshd.remote_auth) {
-        logger(LOG_ERR, "%s: Authentication failed: No local public key for %s",
-            c->addrw, c->hello_id->name);
-        return client_queue_hello_end(c);
-    }
-
-    logger_debug(DBG_AUTHENTICATION, "%s: %s has a %s public key",
-        c->addrw, c->hello_id->name,
-        c->hello_id->pubkey_local ? "local" : "remote");
-
-    // If the signature verification succeeds then the node is authenticated
-    logger_debug(DBG_AUTHENTICATION, "%s: Verifying signature from %s",
-        c->addrw, c->hello_id->name);
-    c->hello_auth = pkey_verify(c->hello_id->pubkey,
-        (uint8_t *) c->hello_chall, sizeof(oshpacket_hello_challenge_t),
-        packet->sig, sizeof(packet->sig));
-
-    // If the node is not authenticated, the signature verification failed
-    // The remote node did not sign the data using the private key
-    // associated with the public key we have
-    if (!c->hello_auth) {
-        logger(LOG_ERR, "%s: Authentication failed: Failed to verify signature from %s",
-            c->addrw, c->hello_id->name);
-        return client_queue_hello_end(c);
-    }
-    logger_debug(DBG_AUTHENTICATION, "%s: Valid signature from %s",
-        c->addrw, c->hello_id->name);
-
-    // After authenticating we should always have the initial handshake packet
-    // We must verify the signature to prevent MITM attacks
-    if (c->unauth_handshake) {
-        c->hello_auth = pkey_verify(c->hello_id->pubkey,
-            c->unauth_handshake->keys.both, sizeof(c->unauth_handshake->keys.both),
-            c->unauth_handshake->sig, sizeof(c->unauth_handshake->sig));
-    } else {
-        c->hello_auth = false;
-    }
-
-    free(c->unauth_handshake);
-    c->unauth_handshake = NULL;
-
-    if (!c->hello_auth) {
-        logger(LOG_ERR,
-            "%s: %s: Handshake signature verification failed",
-            c->addrw, c->hello_id->name);
-        return client_queue_hello_end(c);
-    }
-    logger_debug(DBG_HANDSHAKE, "%s: %s: Valid handshake signature",
-        c->addrw, c->hello_id->name);
-
-    if (c->hello_id->node_socket) {
-        // Disconnect the client if the node is already authenticated
-        logger(LOG_WARN, "%s: Another socket is already authenticated as %s",
-            c->addrw, c->hello_id->name);
-
-        // This client should not be used
-        c->hello_auth = false;
+    // If we already have another direct connection with this node we will keep
+    // it and disconnect this client
+    if (c->handshake_id->node_socket && c->handshake_id->node_socket != c) {
+        logger(LOG_WARN, "%s: Another socket is already authenticated as %s (%s)",
+            c->addrw, c->handshake_id->name, c->handshake_id->node_socket->addrw);
 
         // If the node has some reconnection endpoints we will transfer those to
         // the existing connection to prevent duplicate connections (which would
@@ -159,37 +20,33 @@ bool oshpacket_handler_hello_response(client_t *c, __attribute__((unused)) oshpa
             // Add this client's reconnection endpoints to the other node's
             logger(LOG_INFO, "%s: Moving reconnection endpoints to %s (%s)",
                 c->addrw,
-                c->hello_id->name,
-                c->hello_id->node_socket->addrw);
-            endpoint_group_add_group(c->hello_id->endpoints,
+                c->handshake_id->name,
+                c->handshake_id->node_socket->addrw);
+            endpoint_group_add_group(c->handshake_id->endpoints,
                 c->reconnect_endpoints);
 
             // Disable reconnection for this client
             client_reconnect_disable(c);
         }
-        return client_queue_hello_end(c);
+        return true;
     }
-    return client_queue_hello_end(c);
+    return false;
 }
 
-bool oshpacket_handler_hello_end(client_t *c, __attribute__((unused)) oshpacket_hdr_t *hdr,
-    void *payload)
+// Finish the handshake and authenticate the client
+static void finish_authentication(client_t *c)
 {
-    const oshpacket_hello_end_t *packet = (const oshpacket_hello_end_t *) payload;
-
-    if (!c->hello_auth || !packet->hello_success) {
-        logger(LOG_ERR, "%s: Authentication did not succeed on both nodes",
-            c->addrw);
-        return c->finish_and_disconnect;
-    }
-
     node_id_t *me = node_id_find_local();
 
-    // The remote node is now authenticated
+    logger_debug(DBG_HANDSHAKE, "%s: Finishing authentication", c->addrw);
 
-    c->authenticated = c->hello_auth;
-    c->id = c->hello_id;
+    // Mark the client as authenticated
+    c->authenticated = c->handshake_valid_signature;
+    c->id = c->handshake_id;
     c->id->node_socket = c;
+
+    // Finish the handshake
+    client_finish_handshake(c);
 
     // Add the new connection with the other node
     node_id_add_edge(me, c->id);
@@ -213,15 +70,12 @@ bool oshpacket_handler_hello_end(client_t *c, __attribute__((unused)) oshpacket_
     // We are no longer actively trying to connect to these endpoints
     endpoint_group_set_is_connecting(c->id->endpoints, false);
 
-    // Cleanup the temporary hello variables
-    c->hello_id = NULL;
-    free(c->hello_chall);
-    c->hello_chall = NULL;
+    logger(LOG_INFO, "%s: %s: Authenticated successfully", c->addrw, c->id->name);
+}
 
-    logger(LOG_INFO, "%s: %s: Authenticated successfully", c->addrw,
-        c->id->name);
-
-    // Make sure that we are our device modes are compatible
+static bool queue_state_exchange(client_t *c)
+{
+    // Make sure that our device modes are compatible
     if (!client_queue_devmode(c))
         return false;
 
@@ -237,8 +91,8 @@ bool oshpacket_handler_hello_end(client_t *c, __attribute__((unused)) oshpacket_
     // Broadcast all the information we know about the mesh to the other node
     // This syncs both nodes' maps of the mesh along with other relevant
     // information (routes, endpoints, etc)
-    // If both nodes share a common edge this could be skipped as they should
-    // already be in sync
+    // TODO: If both nodes share a common edge this could be skipped as all the
+    //       information should already be synced to other nodes
     if (!client_queue_edge_exg(c))
         return false;
     if (!client_queue_route_exg(c))
@@ -255,4 +109,48 @@ bool oshpacket_handler_hello_end(client_t *c, __attribute__((unused)) oshpacket_
 
     // Update the client's latency
     return client_queue_ping(c);
+}
+
+// Swap all network byte order values in the payload to host byte order
+static void hello_ntoh(oshpacket_hello_t *hello)
+{
+    hello->options = ntohl(hello->options);
+}
+
+bool oshpacket_handler_hello(client_t *c,
+    __attribute__((unused)) oshpacket_hdr_t *hdr, void *payload)
+{
+    const oshpacket_hello_t *hello = (const oshpacket_hello_t *) payload;
+
+    // Make sure that the handshake is in progress
+    if (!c->handshake_in_progress || !c->handshake_id) {
+        logger(LOG_ERR, "%s: Received HELLO but the handshake is not in progress", c->addrw);
+        return false;
+    }
+
+    // If we were not able to verify the other node's signature, it either means
+    // that we failed this step, or that the other node skipped sending us the
+    // handshake signature
+    // Either way we could not authenticate the remote node
+    if (!c->handshake_valid_signature) {
+        logger(LOG_ERR, "%s: Failed to authenticate the remote node", c->addrw);
+        return false;
+    }
+    logger_debug(DBG_HANDSHAKE, "%s: Successfully authenticated the remote node", c->addrw);
+
+    // Convert the payload values to host byte order
+    hello_ntoh((oshpacket_hello_t *) payload);
+
+    logger_debug(DBG_HANDSHAKE, "%s: Remote options 0x%08X", c->addrw, hello->options);
+
+    // At this point both nodes have authenticated
+
+    // Check if we already have another direct connection to this node, if we do
+    // this connection will be closed
+    if (already_has_another_connection(c))
+        return false;
+
+    finish_authentication(c);
+
+    return queue_state_exchange(c);
 }

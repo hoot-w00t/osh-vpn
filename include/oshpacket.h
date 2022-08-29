@@ -26,26 +26,34 @@
 #define X25519_KEY_SIZE ED25519_KEY_SIZE
 #endif
 
-#ifndef HELLO_SIG_SIZE
-#define HELLO_SIG_SIZE ED25519_SIG_SIZE
+#ifndef NODE_PUBKEY_SIZE
+#define NODE_PUBKEY_SIZE ED25519_KEY_SIZE
 #endif
 
-#ifndef HANDSHAKE_KEY_SIZE
-#define HANDSHAKE_KEY_SIZE X25519_KEY_SIZE
+#ifndef HANDSHAKE_PUBKEY_SIZE
+#define HANDSHAKE_PUBKEY_SIZE NODE_PUBKEY_SIZE
 #endif
 
-#ifndef PUBLIC_KEY_SIZE
-#define PUBLIC_KEY_SIZE ED25519_KEY_SIZE
+#ifndef HANDSHAKE_SIG_SIZE
+#define HANDSHAKE_SIG_SIZE ED25519_SIG_SIZE
+#endif
+
+#ifndef HANDSHAKE_ECDH_KEY_SIZE
+#define HANDSHAKE_ECDH_KEY_SIZE X25519_KEY_SIZE
+#endif
+
+// The node ID hash is a SHA3-512
+#define NODE_ID_HASH_SIZE (64)
+#if (NODE_ID_HASH_SIZE > EVP_MAX_MD_SIZE)
+#error "NODE_ID_HASH_SIZE is bigger than the maximum message digest size"
 #endif
 
 #define OSHPACKET_PAYLOAD_MAXSIZE (2048)
 
 typedef enum oshpacket_type {
     HANDSHAKE = 0,
-    HANDSHAKE_END,
-    HELLO_CHALLENGE,
-    HELLO_RESPONSE,
-    HELLO_END,
+    HANDSHAKE_SIG,
+    HELLO,
     DEVMODE,
     GOODBYE,
     PING,
@@ -134,18 +142,6 @@ typedef struct oshpacket {
     size_t payload_size;
 } oshpacket_t;
 
-typedef struct __attribute__((__packed__)) oshpacket_hello_challenge {
-    uint8_t challenge[OSHPACKET_PAYLOAD_MAXSIZE];
-} oshpacket_hello_challenge_t;
-
-typedef struct __attribute__((__packed__)) oshpacket_hello_response {
-    uint8_t sig[HELLO_SIG_SIZE];
-} oshpacket_hello_response_t;
-
-typedef struct __attribute__((__packed__)) oshpacket_hello_end {
-    uint8_t hello_success;
-} oshpacket_hello_end_t;
-
 typedef struct __attribute__((__packed__)) oshpacket_devmode {
     device_mode_t devmode : 8;
 } oshpacket_devmode_t;
@@ -160,22 +156,52 @@ typedef struct __attribute__((__packed__)) oshpacket_devmode_dynamic {
 } oshpacket_devmode_dynamic_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_handshake {
-    // Public X25519 keys to compute a shared secret
-    union {
-        struct __attribute__((__packed__)) {
-            uint8_t send[HANDSHAKE_KEY_SIZE];
-            uint8_t recv[HANDSHAKE_KEY_SIZE];
-        } k;
-        uint8_t both[HANDSHAKE_KEY_SIZE * 2];
-    } keys;
+    // The sender node's name and public key (hashed with the random salt)
+    struct __attribute__((__packed__)) {
+        uint8_t id_hash[NODE_ID_HASH_SIZE];
+        uint8_t id_salt[64];
+    } sender;
 
-    // Signature of both public keys
-    uint8_t sig[HELLO_SIG_SIZE];
+    // Public X25519 keys to compute a shared secret
+    struct __attribute__((__packed__)) {
+        uint8_t send[HANDSHAKE_ECDH_KEY_SIZE];
+        uint8_t recv[HANDSHAKE_ECDH_KEY_SIZE];
+    } ecdh_keys;
+
+    // Additional unique random data
+    uint8_t nonce[64];
 } oshpacket_handshake_t;
+
+// This structure is constructed locally and never sent over the network
+typedef struct __attribute__((__packed__)) oshpacket_handshake_sig_data {
+    // Note: initiator/receiver refers to the value of client_t->initiator
+
+    // Raw handshake packets from both nodes
+    oshpacket_handshake_t initiator_handshake;
+    oshpacket_handshake_t receiver_handshake;
+
+    // The initiator node's name and public key
+    char initiator_name[NODE_NAME_SIZE];
+    uint8_t initiator_pubkey[HANDSHAKE_PUBKEY_SIZE];
+
+    // The receiver node's name and public key
+    char receiver_name[NODE_NAME_SIZE];
+    uint8_t receiver_pubkey[HANDSHAKE_PUBKEY_SIZE];
+} oshpacket_handshake_sig_data_t;
+
+typedef struct __attribute__((__packed__)) oshpacket_handshake_sig {
+    // Signature of oshpacket_handshake_sig_data_t
+    uint8_t sig[HANDSHAKE_SIG_SIZE];
+} oshpacket_handshake_sig_t;
+
+typedef struct __attribute__((__packed__)) oshpacket_hello {
+    // Bitfield of options for this connection
+    uint32_t options;
+} oshpacket_hello_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_pubkey {
     char node_name[NODE_NAME_SIZE];
-    uint8_t node_pubkey[PUBLIC_KEY_SIZE];
+    uint8_t node_pubkey[NODE_PUBKEY_SIZE];
 } oshpacket_pubkey_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_endpoint {
@@ -224,6 +250,11 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 static inline bool oshpacket_type_valid(oshpacket_type_t type)
 {
     return (type >= 0) && (type < _LAST_OSHPACKET_TYPE_ENTRY);
+}
+
+static inline bool oshpacket_type_can_be_unencrypted(oshpacket_type_t type)
+{
+    return type == HANDSHAKE;
 }
 
 const char *oshpacket_type_name(oshpacket_type_t type);

@@ -31,6 +31,25 @@ Test(oshpacket_hdr_t, oshpacket_hdr_macros)
     cr_assert_eq(OSHPACKET_PAYLOAD(&hdr),     OSHPACKET_PAYLOAD_CONST(&hdr));
 }
 
+// The bit-field should be ordered from MSB to LSB
+Test(oshpacket_hdr_t, oshpacket_hdr_flags_ordering)
+{
+    oshpacket_hdr_t hdr;
+
+    memset(&hdr, 0, sizeof(hdr));
+    hdr.flags.s.broadcast = 1;
+    cr_assert_eq(hdr.flags.u, 0x80);
+}
+
+Test(oshpacket_hello_t, oshpacket_hello_options)
+{
+    oshpacket_hello_t packet;
+
+    cr_assert_eq(sizeof(packet.options), sizeof(uint32_t));
+
+    // TODO: Add bit-field ordering test
+}
+
 Test(oshpacket_type_valid, oshpacket_type_is_valid)
 {
     for (oshpacket_type_t i = 0; i < _LAST_OSHPACKET_TYPE_ENTRY; ++i)

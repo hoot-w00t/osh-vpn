@@ -45,7 +45,7 @@ static size_t automatic_connections_remaining(size_t max_tries)
 static time_t automatic_connections_next_retry_delay(void)
 {
     const size_t tree_count = oshd.node_tree_count - 1;
-    const time_t max_ep_delay = oshd.reconnect_delay_max + NODE_AUTH_TIMEOUT;
+    const time_t max_ep_delay = oshd.reconnect_delay_max + HANDSHAKE_TIMEOUT;
     time_t delay = 0;
 
     // Sum the maximum delay for all endpoints in the tree

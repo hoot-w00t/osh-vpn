@@ -50,15 +50,10 @@
 #error "CLIENT_SENDQ_DATA_SIZE cannot be less than or equal to zero"
 #endif
 
-#ifndef NODE_AUTH_TIMEOUT
-// Time in seconds to authenticate a client, if it is not authenticated after this
-// delay, drop the connection
-#define NODE_AUTH_TIMEOUT (30)
-#endif
-
 #ifndef HANDSHAKE_TIMEOUT
 // Time in seconds to complete a handshake, if the handshake does not end after
-// this delay the connection is dropped
+// this delay the connection is dropped (also serves as the authentication
+// timeout)
 #define HANDSHAKE_TIMEOUT (30)
 #endif
 
@@ -106,22 +101,27 @@ struct client {
                         // authenticated
 
     // Timed events linked to clients
-    event_t *auth_timeout_event; // (node_auth_timeout)
     event_t *handshake_renew_event;
     event_t *handshake_timeout_event;
 
-    // This is the node ID the remote socket pretends to be, used only during
-    // authentication in HELLO packets
-    node_id_t *hello_id;
+    // This variable is true after a local handshake is created and sent to the
+    // other node
+    // It is set back to false once the handshake is over to prevent overlaps
+    bool handshake_in_progress;
 
-    // This is the local node's challenge packet sent to the other node during
-    // authentication, it is kept in memory to verify the signed challenge data
-    // by the remote node
-    oshpacket_hello_challenge_t *hello_chall;
+    // This is the node ID the remote socket pretends to be
+    // This is used only for and during the handshake
+    node_id_t *handshake_id;
 
-    // This is the result of the authentication process, if this is true and the
-    // the other node also succeeds we will then finish the authentication
-    bool hello_auth;
+    // This is the node's handshake signature data, it is filled in and used
+    // during the handshake
+    // This data will be signed with the local node's private key, and will also
+    // be used to verify the signature of the remote node to authenticate it
+    oshpacket_handshake_sig_data_t *handshake_sig_data;
+
+    // This will be true if the handshake signature verification succeeds
+    // (meaning we were able to authenticate the remote node)
+    bool handshake_valid_signature;
 
     // X25519 keys and ciphers to encrypt/decrypt traffic
     // The send cipher will be used to encrypt outgoing packets
@@ -131,13 +131,6 @@ struct client {
     EVP_PKEY *recv_key;
     cipher_t *recv_cipher;
     cipher_t *recv_cipher_next;
-
-    // This is set to true when sending a handshake to the node, it is set to
-    // false after the handshake is done to prevent overlaps
-    bool handshake_in_progress;
-
-    // This pointer holds a copy of the first unauthenticated handshake packet
-    oshpacket_handshake_t *unauth_handshake;
 
     // If this is true disconnect and remove the client after the send queue is
     // empty. Used for GOODBYE packets
@@ -172,6 +165,8 @@ void client_reconnect_disable(client_t *c);
 void client_reconnect_endpoints_next(endpoint_group_t *reconnect_endpoints, time_t delay);
 void client_reconnect(client_t *c);
 
+void client_finish_handshake(client_t *c);
+
 // TODO: Rename client_queue_* functions
 bool client_queue_packet(client_t *c, node_id_t *dest, oshpacket_type_t type,
     const void *payload, size_t payload_size);
@@ -187,10 +182,7 @@ bool client_queue_packet_exg(client_t *c, oshpacket_type_t type,
 #define client_queue_packet_empty(client, dest, type) client_queue_packet(client, dest, type, NULL, 0)
 
 bool client_queue_handshake(client_t *c);
-bool client_queue_handshake_end(client_t *c);
 void client_renew_handshake(client_t *c);
-bool client_queue_hello_challenge(client_t *c);
-bool client_queue_hello_end(client_t *c);
 bool client_queue_devmode(client_t *c);
 bool client_queue_goodbye(client_t *c);
 bool client_queue_ping(client_t *c);

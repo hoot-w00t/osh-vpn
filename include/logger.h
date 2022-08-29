@@ -23,7 +23,6 @@ typedef enum debug_what {
     DBG_CONF,
     DBG_SOCKETS,
     DBG_EVENTS,
-    DBG_AUTHENTICATION,
     DBG_ENCRYPTION,
     DBG_HANDSHAKE,
     DBG_STATEEXG,

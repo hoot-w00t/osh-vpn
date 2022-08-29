@@ -132,13 +132,13 @@ set(OSHD_SOURCES
     src/events/expire_seen_brd_ids.c
     src/events/handshake_renew.c
     src/events/handshake_timeout.c
-    src/events/node_auth_timeout.c
     src/events/periodic_ping.c
     src/oshpacket_handlers/data.c
     src/oshpacket_handlers/devmode.c
     src/oshpacket_handlers/edge.c
     src/oshpacket_handlers/endpoint.c
     src/oshpacket_handlers/goodbye.c
+    src/oshpacket_handlers/handshake_sig.c
     src/oshpacket_handlers/handshake.c
     src/oshpacket_handlers/hello.c
     src/oshpacket_handlers/ping_pong.c

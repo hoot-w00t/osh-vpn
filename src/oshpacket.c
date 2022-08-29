@@ -35,40 +35,22 @@ static const oshpacket_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = sizeof(oshpacket_handshake_t)
     },
     {
-        .type = HANDSHAKE_END,
-        .name = "HANDSHAKE_END",
-        .handler_unauth = unauth_handler_reject,
-        .handler = oshd_process_handshake_end,
+        .type = HANDSHAKE_SIG,
+        .name = "HANDSHAKE_SIG",
+        .handler_unauth = oshpacket_handler_handshake_sig,
+        .handler = oshpacket_handler_handshake_sig_auth,
         .can_be_forwarded = false,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
-        .payload_size = 0
+        .payload_size = sizeof(oshpacket_handshake_sig_t)
     },
     {
-        .type = HELLO_CHALLENGE,
-        .name = "HELLO_CHALLENGE",
-        .handler_unauth = oshpacket_handler_hello_challenge,
+        .type = HELLO,
+        .name = "HELLO",
+        .handler_unauth = oshpacket_handler_hello,
         .handler = handler_reject,
         .can_be_forwarded = false,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
-        .payload_size = sizeof(oshpacket_hello_challenge_t)
-    },
-    {
-        .type = HELLO_RESPONSE,
-        .name = "HELLO_RESPONSE",
-        .handler_unauth = oshpacket_handler_hello_response,
-        .handler = handler_reject,
-        .can_be_forwarded = false,
-        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
-        .payload_size = sizeof(oshpacket_hello_response_t)
-    },
-    {
-        .type = HELLO_END,
-        .name = "HELLO_END",
-        .handler_unauth = oshpacket_handler_hello_end,
-        .handler = handler_reject,
-        .can_be_forwarded = false,
-        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
-        .payload_size = sizeof(oshpacket_hello_end_t)
+        .payload_size = sizeof(oshpacket_hello_t)
     },
     {
         .type = DEVMODE,

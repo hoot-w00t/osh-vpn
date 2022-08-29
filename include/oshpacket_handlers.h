@@ -34,16 +34,16 @@ bool oshpacket_handler_handshake(client_t *c,
     oshpacket_hdr_t *hdr, void *payload);
 bool oshpacket_handler_handshake_auth(client_t *c, node_id_t *src,
     oshpacket_hdr_t *hdr, void *payload);
-bool oshd_process_handshake_end(client_t *c, node_id_t *src,
+
+// handshake_sig.c
+bool oshpacket_handler_handshake_sig(client_t *c,
+    oshpacket_hdr_t *hdr, void *payload);
+bool oshpacket_handler_handshake_sig_auth(client_t *c, node_id_t *src,
     oshpacket_hdr_t *hdr, void *payload);
 
 // hello.c
-bool oshpacket_handler_hello_challenge(client_t *c, oshpacket_hdr_t *hdr,
-    void *payload);
-bool oshpacket_handler_hello_response(client_t *c, oshpacket_hdr_t *hdr,
-    void *payload);
-bool oshpacket_handler_hello_end(client_t *c, oshpacket_hdr_t *hdr,
-    void *payload);
+bool oshpacket_handler_hello(client_t *c,
+    oshpacket_hdr_t *hdr, void *payload);
 
 // ping_pong.c
 bool oshpacket_handler_ping(client_t *c, node_id_t *src,

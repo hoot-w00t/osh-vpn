@@ -101,7 +101,7 @@ error:
 // Sign data using privkey, dynamically allocates the signature buffer
 // This function signs as a one-shot, it only calculates the signature, nothing
 // is hashed
-bool pkey_sign(EVP_PKEY *privkey, const uint8_t *data, size_t data_size,
+bool pkey_sign(EVP_PKEY *privkey, const void *data, size_t data_size,
     uint8_t **sig, size_t *sig_size)
 {
     EVP_MD_CTX *mctx = EVP_MD_CTX_new();
@@ -142,8 +142,8 @@ error:
 // Verify signed data using pubkey
 // Returns true if the signature is valid, false if it is invalid or if an error
 // occurs
-bool pkey_verify(EVP_PKEY *pubkey, const uint8_t *data, size_t data_size,
-    const uint8_t *sig, size_t sig_size)
+bool pkey_verify(EVP_PKEY *pubkey, const void *data, size_t data_size,
+    const void *sig, size_t sig_size)
 {
     EVP_MD_CTX *mctx = EVP_MD_CTX_new();
     EVP_PKEY_CTX *pctx = NULL;

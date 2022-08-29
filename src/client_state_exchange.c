@@ -56,7 +56,7 @@ bool client_queue_pubkey_exg(client_t *c)
         if (   !oshd.node_tree[i]->online
             || !oshd.node_tree[i]->pubkey
             || !oshd.node_tree[i]->pubkey_raw
-            ||  oshd.node_tree[i]->pubkey_raw_size != PUBLIC_KEY_SIZE)
+            ||  oshd.node_tree[i]->pubkey_raw_size != NODE_PUBKEY_SIZE)
         {
             continue;
         }
@@ -65,7 +65,7 @@ bool client_queue_pubkey_exg(client_t *c)
             c->addrw, c->id->name, oshd.node_tree[i]->name);
 
         memcpy(pkt[count].node_name, oshd.node_tree[i]->name, NODE_NAME_SIZE);
-        memcpy(pkt[count].node_pubkey, oshd.node_tree[i]->pubkey_raw, PUBLIC_KEY_SIZE);
+        memcpy(pkt[count].node_pubkey, oshd.node_tree[i]->pubkey_raw, NODE_PUBKEY_SIZE);
         count += 1;
     }
 

@@ -29,7 +29,7 @@ bool oshpacket_handler_pubkey(
             return false;
         }
 
-        logger_debug(DBG_AUTHENTICATION, "%s: %s: Loading public key for %s",
+        logger_debug(DBG_HANDSHAKE, "%s: %s: Loading public key for %s",
             c->addrw, c->id->name, node_name);
         if (!node_id_set_pubkey(id, pubkeys[i].node_pubkey,
                 sizeof(pubkeys[i].node_pubkey)))

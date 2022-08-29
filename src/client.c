@@ -77,12 +77,10 @@ void client_destroy(client_t *c)
     // Cancel any events linked to this client
     event_cancel(c->handshake_renew_event);
     event_cancel(c->handshake_timeout_event);
-    event_cancel(c->auth_timeout_event);
 
     client_disconnect(c);
 
-    free(c->unauth_handshake);
-    free(c->hello_chall);
+    free(c->handshake_sig_data);
     free(c->io.recvbuf);
 
     netbuffer_free(c->io.sendq);
@@ -107,10 +105,10 @@ client_t *client_init(int fd, bool initiator, const netaddr_t *addr, uint16_t po
     c->io.recvbuf = xalloc(CLIENT_RECVBUF_SIZE);
     c->io.sendq = netbuffer_create(CLIENT_SENDQ_MIN_SIZE, CLIENT_SENDQ_ALIGNMENT);
 
-    // Queue the authentication timeout event
-    // When it triggers if the client is not authenticated it will be
-    // disconnected
-    event_queue_node_auth_timeout(c, NODE_AUTH_TIMEOUT);
+    // Queue the handshake timeout event
+    // This event will terminate the connection if the authentication did not
+    // succeed
+    event_queue_handshake_timeout(c, HANDSHAKE_TIMEOUT);
 
     return c;
 }
@@ -214,6 +212,18 @@ void client_reconnect(client_t *c)
             client_reconnect_endpoints(c->reconnect_endpoints, c->reconnect_delay);
         }
     }
+}
+
+// Mark the client's handshake as finished, this resets all variables used
+// during the handshake
+void client_finish_handshake(client_t *c)
+{
+    logger_debug(DBG_HANDSHAKE, "%s: Handshake finished", c->addrw);
+    c->handshake_in_progress = false;
+    c->handshake_id = NULL;
+    c->handshake_valid_signature = false;
+    free(c->handshake_sig_data);
+    c->handshake_sig_data = NULL;
 }
 
 // Returns true if the DATA packet should be dropped (when the send queue is
@@ -322,7 +332,7 @@ static bool client_queue_packet_internal(
             return false;
         }
 
-    } else if (hdr->type == HANDSHAKE) {
+    } else if (oshpacket_type_can_be_unencrypted(hdr->type)) {
         // The socket does not have a send cipher yet but the packet is a
         // HANDSHAKE, we only allow this type of packet to be sent unencrypted
         // as it will initialize encryption ciphers
@@ -360,6 +370,7 @@ static bool client_queue_packet_internal(
 }
 
 // Queue a unicast packet for another node
+// TODO: Remove *dest and use c->id instead
 bool client_queue_packet(client_t *c, node_id_t *dest, oshpacket_type_t type,
     const void *payload, size_t payload_size)
 {
@@ -367,7 +378,11 @@ bool client_queue_packet(client_t *c, node_id_t *dest, oshpacket_type_t type,
 
     hdr.type = type;
     hdr.flags.u = 0;
-    memcpy(hdr.src_node, oshd.name, sizeof(hdr.src_node));
+    if (c->authenticated) {
+        memcpy(hdr.src_node, oshd.name, sizeof(hdr.src_node));
+    } else {
+        memset(hdr.src_node, 0, sizeof(hdr.src_node));
+    }
     if (dest) {
         memcpy(hdr.dest.unicast.dest_node, dest->name, NODE_NAME_SIZE);
     } else {
@@ -519,12 +534,92 @@ static bool client_queue_packet_fragmented(
     return true;
 }
 
+// Generate ECDH keypair into *key (*key must be NULL)
+// Export the public key to *pubkey
+static bool handshake_generate_ecdh_key(const client_t *c, EVP_PKEY **key,
+    uint8_t *pubkey, size_t pubkey_size)
+{
+    uint8_t *tmp_pubkey;
+    size_t tmp_pubkey_size;
+
+    // Generate the Curve25519 keypair
+    *key = pkey_generate_x25519();
+    if (*key == NULL)
+        return false;
+
+    // Export the public key
+    if (!pkey_save_pubkey(*key, &tmp_pubkey, &tmp_pubkey_size))
+        return false;
+
+    // Verify that the buffer sizes match
+    if (tmp_pubkey_size != pubkey_size) {
+        logger(LOG_CRIT,
+            "%s: Invalid handshake ECDH public key size (%zu but expected %zu)",
+            c->addrw, tmp_pubkey_size, pubkey_size);
+        free(tmp_pubkey);
+        return false;
+    }
+
+    // Copy the public key
+    memcpy(pubkey, tmp_pubkey, pubkey_size);
+    free(tmp_pubkey);
+    return true;
+}
+
+// Generate ECDH send/recv keys for the client and copy the public keys to the
+// handshake packet
+static bool handshake_generate_ecdh_keys(client_t *c, oshpacket_handshake_t *pkt)
+{
+    logger_debug(DBG_HANDSHAKE, "%s: Generating ECDH send_key", c->addrw);
+    if (!handshake_generate_ecdh_key(c, &c->send_key, pkt->ecdh_keys.send, sizeof(pkt->ecdh_keys.send)))
+        return false;
+
+    logger_debug(DBG_HANDSHAKE, "%s: Generating ECDH recv_key", c->addrw);
+    if (!handshake_generate_ecdh_key(c, &c->recv_key, pkt->ecdh_keys.recv, sizeof(pkt->ecdh_keys.recv)))
+        return false;
+
+    return true;
+}
+
+// Generate handshake nonce
+static bool handshake_generate_nonce(const client_t *c, oshpacket_handshake_t *pkt)
+{
+    logger_debug(DBG_HANDSHAKE, "%s: Generating nonce", c->addrw);
+    if (!random_bytes(pkt->nonce, sizeof(pkt->nonce))) {
+        logger(LOG_ERR, "%s: Failed to generate handshake nonce", c->addrw);
+        return false;
+    }
+    return true;
+}
+
+// Generate handshake ID salt and hash
+static bool handshake_generate_sender_id(const client_t *c, oshpacket_handshake_t *pkt)
+{
+    const node_id_t *me = node_id_find_local();
+    uint8_t sender_id_hash[EVP_MAX_MD_SIZE];
+
+    logger_debug(DBG_HANDSHAKE, "%s: Generating sender ID salt", c->addrw);
+    if (!random_bytes(pkt->sender.id_salt, sizeof(pkt->sender.id_salt))) {
+        logger(LOG_ERR, "%s: Failed to generate handshake sender ID salt", c->addrw);
+        return false;
+    }
+
+    logger_debug(DBG_HANDSHAKE, "%s: Generating sender ID hash", c->addrw);
+    if (!node_id_gen_hash(me, pkt->sender.id_salt, sizeof(pkt->sender.id_salt), sender_id_hash)) {
+        logger(LOG_ERR, "%s: Failed to generate handshake sender ID hash", c->addrw);
+        return false;
+    }
+    memcpy(pkt->sender.id_hash, sender_id_hash, NODE_ID_HASH_SIZE);
+
+    return true;
+}
+
 // Queue HANDSHAKE request
 bool client_queue_handshake(client_t *c)
 {
     oshpacket_handshake_t packet;
 
-    logger_debug(DBG_HANDSHAKE, "Creating HANDSHAKE packet for %s", c->addrw);
+    logger_debug(DBG_HANDSHAKE, "%s: Creating handshake packet", c->addrw);
     if (c->handshake_in_progress) {
         logger(LOG_ERR,
             "%s: Failed to create HANDSHAKE: Another one is in progress",
@@ -532,122 +627,46 @@ bool client_queue_handshake(client_t *c)
         return false;
     }
 
-    // We are now currently shaking hands
-    // After completion c->send_key/recv_key will be freed and NULLed
+    // The handshake has now started
     c->handshake_in_progress = true;
 
-    // Generate random keys
-    logger_debug(DBG_HANDSHAKE, "%s: Generating send_key", c->addrw);
-    if (!(c->send_key = pkey_generate_x25519()))
+    if (!handshake_generate_ecdh_keys(c, &packet))
         return false;
-    logger_debug(DBG_HANDSHAKE, "%s: Generating recv_key", c->addrw);
-    if (!(c->recv_key = pkey_generate_x25519()))
+    if (!handshake_generate_nonce(c, &packet))
+        return false;
+    if (!handshake_generate_sender_id(c, &packet))
         return false;
 
-    uint8_t *pubkey;
-    size_t pubkey_size;
+    // Timeout the connection if the handshake does not complete fast enough
+    // When this is the initial handshake the timeout will already be queued by
+    // client_init and this one will be ignored
+    event_queue_handshake_timeout(c, HANDSHAKE_TIMEOUT);
 
-    // Export the keys to the packet
-    logger_debug(DBG_HANDSHAKE, "%s: Exporting send_key", c->addrw);
-    if (!pkey_save_pubkey(c->send_key, &pubkey, &pubkey_size))
-        return false;
-    if (pubkey_size != sizeof(packet.keys.k.send)) {
-        free(pubkey);
-        logger(LOG_ERR, "%s: send_key size is invalid (%zu, but expected %zu)",
-            c->addrw, pubkey_size, sizeof(packet.keys.k.send));
-        return false;
-    }
-    memcpy(packet.keys.k.send, pubkey, pubkey_size);
-    free(pubkey);
+    logger_debug(DBG_HANDSHAKE, "%s: Allocating handshake signature data", c->addrw);
+    free(c->handshake_sig_data);
+    c->handshake_sig_data = xzalloc(sizeof(oshpacket_handshake_sig_data_t));
 
-    logger_debug(DBG_HANDSHAKE, "%s: Exporting recv_key", c->addrw);
-    if (!pkey_save_pubkey(c->recv_key, &pubkey, &pubkey_size))
-        return false;
-    if (pubkey_size != sizeof(packet.keys.k.recv)) {
-        free(pubkey);
-        logger(LOG_ERR, "%s: recv_key size is invalid (%zu, but expected %zu)",
-            c->addrw, pubkey_size, sizeof(packet.keys.k.recv));
-        return false;
-    }
-    memcpy(packet.keys.k.recv, pubkey, pubkey_size);
-    free(pubkey);
+    logger_debug(DBG_HANDSHAKE, "%s: Copying local handshake to signature data", c->addrw);
+    memcpy(c->initiator ? &c->handshake_sig_data->initiator_handshake
+                        : &c->handshake_sig_data->receiver_handshake,
+           &packet, sizeof(packet));
 
-    // Sign the keys
-    uint8_t *sig;
-    size_t sig_size;
-
-    if (!pkey_sign(oshd.privkey,
-            packet.keys.both, sizeof(packet.keys.both),
-            &sig, &sig_size))
-    {
-        logger(LOG_ERR, "%s: Failed to sign handshake keys", c->addrw);
-        return false;
-    }
-
-    if (sig_size != sizeof(packet.sig)) {
-        free(sig);
-        logger(LOG_ERR, "%s: Invalid handshake signature size (%zu bytes)",
-            c->addrw, sig_size);
-        return false;
-    }
-
-    memcpy(packet.sig, sig, sizeof(packet.sig));
-    free(sig);
-
-    // If we are authenticateed we need to handle handshake timeouts
-    // When unauthenticated the authentication timeout event takes care of this
-    if (c->authenticated)
-        event_queue_handshake_timeout(c, HANDSHAKE_TIMEOUT);
-
+    logger_debug(DBG_HANDSHAKE, "%s: Queuing local handshake packet", c->addrw);
     return client_queue_packet(c, c->id, HANDSHAKE, &packet, sizeof(packet));
-}
-
-// Queue HANDSHAKE_END packet
-bool client_queue_handshake_end(client_t *c)
-{
-    return client_queue_packet_empty(c, c->id, HANDSHAKE_END);
 }
 
 // Queue a HANDSHAKE packet to renew the encryption keys
 // If a handshake is already in progress, nothing is done
-// If packet cannot be queued the connection is terminated
+// If the packet cannot be queued the connection is terminated
 void client_renew_handshake(client_t *c)
 {
     if (!c->handshake_in_progress) {
-        if (!client_queue_handshake(c))
+        logger_debug(DBG_HANDSHAKE, "%s: Initiating handshake renewal", c->addrw);
+        if (!client_queue_handshake(c)) {
+            logger(LOG_ERR, "%s: Failed to renew handshake", c->addrw);
             aio_event_del(c->aio_event);
+        }
     }
-}
-
-// Queue HELLO_CHALLENGE request
-bool client_queue_hello_challenge(client_t *c)
-{
-    free(c->hello_chall);
-    c->hello_chall = xalloc(sizeof(oshpacket_hello_challenge_t));
-
-    if (!random_bytes(c->hello_chall->challenge, sizeof(c->hello_chall->challenge)))
-        return false;
-
-    return client_queue_packet(c, NULL, HELLO_CHALLENGE, c->hello_chall,
-        sizeof(oshpacket_hello_challenge_t));
-}
-
-// Queue HELLO_END packet
-bool client_queue_hello_end(client_t *c)
-{
-    oshpacket_hello_end_t packet;
-
-    if (c->hello_auth) {
-        logger_debug(DBG_AUTHENTICATION, "%s: Successful HELLO_END",
-            c->addrw);
-        packet.hello_success = 1;
-    } else {
-        logger_debug(DBG_AUTHENTICATION, "%s: Failed HELLO_END",
-            c->addrw);
-        packet.hello_success = 0;
-        client_graceful_disconnect(c);
-    }
-    return client_queue_packet(c, NULL, HELLO_END, &packet, sizeof(packet));
 }
 
 // Queue DEVMODE packet
@@ -706,16 +725,16 @@ bool client_queue_pubkey_broadcast(client_t *exclude, node_id_t *id)
 
     if (   !id->pubkey
         || !id->pubkey_raw
-        || id->pubkey_raw_size != PUBLIC_KEY_SIZE)
+        || id->pubkey_raw_size != NODE_PUBKEY_SIZE)
     {
         logger(LOG_ERR, "Failed to broadcast public key of %s: No public key",
             id->name);
         return false;
     }
 
-    logger_debug(DBG_AUTHENTICATION, "Public keys exchange: Broadcasting %s", id->name);
+    logger_debug(DBG_HANDSHAKE, "Broadcasting public key of %s", id->name);
     memcpy(packet.node_name, id->name, NODE_NAME_SIZE);
-    memcpy(packet.node_pubkey, id->pubkey_raw, PUBLIC_KEY_SIZE);
+    memcpy(packet.node_pubkey, id->pubkey_raw, NODE_PUBKEY_SIZE);
 
     return client_queue_packet_broadcast(exclude, PUBKEY, &packet, sizeof(packet));
 }

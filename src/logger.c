@@ -14,7 +14,6 @@ static const char *debug_names[debug_what_size] = {
     "conf",
     "sockets",
     "events",
-    "authentication",
     "encryption",
     "handshake",
     "stateexg",
