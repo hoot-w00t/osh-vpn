@@ -56,17 +56,15 @@ static void client_disconnect(client_t *c)
     client_reconnect(c);
 }
 
-// Free all send/recv keys and ciphers and reset their values to NULL
+// Free all ECDH keys and ciphers and reset their values to NULL
 static void client_reset_ciphers(client_t *c)
 {
-    pkey_free(c->send_key);
+    pkey_free(c->ecdh_key);
     cipher_free(c->send_cipher);
-    pkey_free(c->recv_key);
     cipher_free(c->recv_cipher);
     cipher_free(c->recv_cipher_next);
-    c->send_key = NULL;
+    c->ecdh_key = NULL;
     c->send_cipher = NULL;
-    c->recv_key = NULL;
     c->recv_cipher = NULL;
     c->recv_cipher_next = NULL;
 }
@@ -218,12 +216,20 @@ void client_reconnect(client_t *c)
 // during the handshake
 void client_finish_handshake(client_t *c)
 {
-    logger_debug(DBG_HANDSHAKE, "%s: Handshake finished", c->addrw);
+    if (c->handshake_in_progress)
+        logger_debug(DBG_HANDSHAKE, "%s: Handshake finished", c->addrw);
+
     c->handshake_in_progress = false;
     c->handshake_id = NULL;
     c->handshake_valid_signature = false;
     free(c->handshake_sig_data);
     c->handshake_sig_data = NULL;
+    c->handshake_sig_data_complete = false;
+    if (c->recv_cipher_next) {
+        logger(LOG_CRIT,
+            "%s: Handshake finished but recv_cipher_next was not used",
+            c->addrw);
+    }
 }
 
 // Returns true if the DATA packet should be dropped (when the send queue is
@@ -584,21 +590,6 @@ static bool handshake_generate_ecdh_key(const client_t *c, EVP_PKEY **key,
     return true;
 }
 
-// Generate ECDH send/recv keys for the client and copy the public keys to the
-// handshake packet
-static bool handshake_generate_ecdh_keys(client_t *c, oshpacket_handshake_t *pkt)
-{
-    logger_debug(DBG_HANDSHAKE, "%s: Generating ECDH send_key", c->addrw);
-    if (!handshake_generate_ecdh_key(c, &c->send_key, pkt->ecdh_keys.send, sizeof(pkt->ecdh_keys.send)))
-        return false;
-
-    logger_debug(DBG_HANDSHAKE, "%s: Generating ECDH recv_key", c->addrw);
-    if (!handshake_generate_ecdh_key(c, &c->recv_key, pkt->ecdh_keys.recv, sizeof(pkt->ecdh_keys.recv)))
-        return false;
-
-    return true;
-}
-
 // Generate handshake nonce
 static bool handshake_generate_nonce(const client_t *c, oshpacket_handshake_t *pkt)
 {
@@ -648,7 +639,8 @@ bool client_queue_handshake(client_t *c)
     // The handshake has now started
     c->handshake_in_progress = true;
 
-    if (!handshake_generate_ecdh_keys(c, &packet))
+    logger_debug(DBG_HANDSHAKE, "%s: Generating ECDH key", c->addrw);
+    if (!handshake_generate_ecdh_key(c, &c->ecdh_key, packet.ecdh_pubkey, sizeof(packet.ecdh_pubkey)))
         return false;
     if (!handshake_generate_nonce(c, &packet))
         return false;

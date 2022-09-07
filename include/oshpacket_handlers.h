@@ -35,6 +35,10 @@ bool oshpacket_handler_handshake(client_t *c,
 bool oshpacket_handler_handshake_auth(client_t *c, node_id_t *src,
     oshpacket_hdr_t *hdr, void *payload);
 
+// handshake_end.c
+bool oshpacket_handler_handshake_end(client_t *c, node_id_t *src,
+    oshpacket_hdr_t *hdr, void *payload);
+
 // handshake_sig.c
 bool oshpacket_handler_handshake_sig(client_t *c,
     oshpacket_hdr_t *hdr, void *payload);

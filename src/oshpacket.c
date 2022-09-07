@@ -44,6 +44,15 @@ static const oshpacket_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = sizeof(oshpacket_handshake_sig_t)
     },
     {
+        .type = HANDSHAKE_END,
+        .name = "HANDSHAKE_END",
+        .handler_unauth = unauth_handler_reject,
+        .handler = oshpacket_handler_handshake_end,
+        .can_be_forwarded = false,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
+        .payload_size = 0
+    },
+    {
         .type = HELLO,
         .name = "HELLO",
         .handler_unauth = oshpacket_handler_hello,

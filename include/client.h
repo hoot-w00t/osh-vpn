@@ -119,16 +119,18 @@ struct client {
     // be used to verify the signature of the remote node to authenticate it
     oshpacket_handshake_sig_data_t *handshake_sig_data;
 
+    // Set to true after all fields of the signature data are filled in
+    bool handshake_sig_data_complete;
+
     // This will be true if the handshake signature verification succeeds
     // (meaning we were able to authenticate the remote node)
     bool handshake_valid_signature;
 
-    // X25519 keys and ciphers to encrypt/decrypt traffic
+    // ECDH key and ciphers to encrypt/decrypt traffic
     // The send cipher will be used to encrypt outgoing packets
     // The recv cipher will be used to decrypt incoming packets
-    EVP_PKEY *send_key;
+    EVP_PKEY *ecdh_key;
     cipher_t *send_cipher;
-    EVP_PKEY *recv_key;
     cipher_t *recv_cipher;
     cipher_t *recv_cipher_next;
 

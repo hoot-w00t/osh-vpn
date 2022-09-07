@@ -1,7 +1,5 @@
 #include "oshd.h"
 #include "logger.h"
-#include "events.h"
-#include "crypto/hash.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -39,6 +37,9 @@ static void handshake_copy_to_sig_data(client_t *c, const oshpacket_handshake_t 
         c->addrw, "receiver ID");
     memcpy(c->handshake_sig_data->receiver_name, nid_receiver->name, NODE_NAME_SIZE);
     memcpy(c->handshake_sig_data->receiver_pubkey, nid_receiver->pubkey_raw, HANDSHAKE_PUBKEY_SIZE);
+
+    // The handshake signature data is now fully initialized
+    c->handshake_sig_data_complete = true;
 }
 
 // Sign the client's handshake_sig_data using the daemon's private key
@@ -97,26 +98,6 @@ static bool queue_handshakes_signature(client_t *c, const oshpacket_handshake_t 
     logger_debug(DBG_HANDSHAKE, "%s: Queuing handshake signature", c->addrw);
     return client_queue_packet_direct(c, HANDSHAKE_SIG,
         &sig_packet, sizeof(sig_packet));
-}
-
-// Load remote node's ECDH public keys
-static bool handshake_load_ecdh_pubkeys(client_t *c, const oshpacket_handshake_t *handshake,
-    EVP_PKEY **send_pubkey, EVP_PKEY **recv_pubkey)
-{
-    logger_debug(DBG_HANDSHAKE, "%s: Loading remote public ECDH keys", c->addrw);
-    *send_pubkey = pkey_load_x25519_pubkey(handshake->ecdh_keys.send,
-        sizeof(handshake->ecdh_keys.send));
-    *recv_pubkey = pkey_load_x25519_pubkey(handshake->ecdh_keys.recv,
-        sizeof(handshake->ecdh_keys.recv));
-
-    if (*send_pubkey == NULL || *recv_pubkey == NULL) {
-        logger(LOG_ERR, "%s: Handshake failed: Failed to load remote ECDH public keys", c->addrw);
-        pkey_free(*send_pubkey);
-        pkey_free(*recv_pubkey);
-        return false;
-    }
-
-    return true;
 }
 
 bool oshpacket_handler_handshake(client_t *c, __attribute__((unused)) oshpacket_hdr_t *hdr,
@@ -184,133 +165,10 @@ bool oshpacket_handler_handshake(client_t *c, __attribute__((unused)) oshpacket_
             return false;
     }
 
-    // Load the remote node's public keys
-    EVP_PKEY *r_send_pubkey;
-    EVP_PKEY *r_recv_pubkey;
-
-    if (!handshake_load_ecdh_pubkeys(c, handshake, &r_send_pubkey, &r_recv_pubkey))
-        return false;
-
-    // Calculate the shared secret for both keys
-    // Each node sends its own send_pubkey and recv_pubkey, so in order to link
-    // them correctly we need to calculate our own send key with the other
-    // node's recv key, the same applies for our recv key
-    uint8_t *send_secret;
-    uint8_t *recv_secret;
-    size_t send_secret_size;
-    size_t recv_secret_size;
-    bool secret_success = true;
-
-    logger_debug(DBG_HANDSHAKE, "%s: Computing send_secret", c->addrw);
-    if (pkey_derive(c->send_key, r_recv_pubkey, &send_secret, &send_secret_size)) {
-        logger_debug(DBG_HANDSHAKE, "%s: Computing recv_secret", c->addrw);
-        if (!pkey_derive(c->recv_key, r_send_pubkey, &recv_secret, &recv_secret_size)) {
-            secret_success = false;
-            free(send_secret);
-        }
-    } else {
-        secret_success = false;
-    }
-
-    // We no longer need the public keys now
-    pkey_free(c->send_key);
-    pkey_free(c->recv_key);
-    c->send_key = NULL;
-    c->recv_key = NULL;
-    pkey_free(r_send_pubkey);
-    pkey_free(r_recv_pubkey);
-
-    // All the above if statements are here to prevent memory leaks
-    if (!secret_success) {
-        logger(LOG_ERR, "%s: Handshake failed: Failed to compute secrets",
-            c->addrw);
-        return false;
-    }
-
-    // We now calculate the SHA3-512 hashes of the two secrets which we will use
-    // to create the keys and IV of our ciphers
-    uint8_t send_hash[EVP_MAX_MD_SIZE];
-    uint8_t recv_hash[EVP_MAX_MD_SIZE];
-    unsigned int send_hash_size;
-    unsigned int recv_hash_size;
-
-    logger_debug(DBG_HANDSHAKE, "%s: Hashing shared secrets", c->addrw);
-    if (   !hash_sha3_512(send_secret, send_secret_size, send_hash, &send_hash_size)
-        || !hash_sha3_512(recv_secret, recv_secret_size, recv_hash, &recv_hash_size))
-    {
-        free(send_secret);
-        free(recv_secret);
-        logger(LOG_ERR, "%s: Handshake failed: Failed to hash secrets",
-            c->addrw);
-        return false;
-    }
-    free(send_secret);
-    free(recv_secret);
-
-    // Create the send/recv ciphers using the two hashes
-    logger_debug(DBG_HANDSHAKE, "%s: Creating send_cipher", c->addrw);
-    cipher_t *new_send_cipher = cipher_create_aes_256_gcm(
-            true, send_hash, 32, send_hash + 32, 12);
-
-    logger_debug(DBG_HANDSHAKE, "%s: Creating recv_cipher", c->addrw);
-    cipher_t *new_recv_cipher = cipher_create_aes_256_gcm(
-            false, recv_hash, 32, recv_hash + 32, 12);
-
-    if (!new_send_cipher || !new_recv_cipher) {
-        logger(LOG_ERR, "%s: Handshake failed: Failed to create ciphers",
-            c->addrw);
-        cipher_free(new_send_cipher);
-        cipher_free(new_recv_cipher);
-        return false;
-    }
-
-    // If we don't have any ciphers yet we will use the ones we just generated
-    // But if we do, we will have to wait until we receive the HANDSHAKE_SIG
-    // packet from the other node before using the new recv cipher, as it will
-    // be the last packet sent using the old recv cipher
-    // This allows us to renew the encryption keys without disrupting
-    // communications
-    if (c->send_cipher && c->recv_cipher) {
-        // Ciphers were in use before
-
-        // Send the signature now with the old send cipher before replacing it
-        if (!queue_handshakes_signature(c, handshake))
-            return false;
-
-        // Start using the new send cipher immediately
-        logger_debug(DBG_HANDSHAKE, "%s: Replacing old send cipher with the new one",
-            c->addrw);
-        cipher_free(c->send_cipher);
-        c->send_cipher = new_send_cipher;
-
-        // Keep the new recv cipher on the side for now
-        logger_debug(DBG_HANDSHAKE, "%s: Storing new recv cipher", c->addrw);
-        c->recv_cipher_next = new_recv_cipher;
-    } else {
-        // No ciphers were in use before
-        logger_debug(DBG_HANDSHAKE, "%s: Using both ciphers immediately",
-            c->addrw);
-
-        // This is basically a no-op because both ciphers should be NULL, but
-        // just in case one isn't
-        cipher_free(c->send_cipher);
-        cipher_free(c->recv_cipher);
-
-        // We start using our ciphers immediately
-        c->send_cipher = new_send_cipher;
-        c->recv_cipher = new_recv_cipher;
-
-        // Send the signature now that we have setup the ciphers
-        if (!queue_handshakes_signature(c, handshake))
-            return false;
-    }
-
-    // After the initial handshake we want to renew the encryption keys
-    // regularly
-    // The function will re-queue the event if it already exists
-    event_queue_handshake_renew(c);
-
-    return true;
+    // Sign the handshakes and send the signature
+    // The handshake will finish after we receive and can verify the other
+    // node's signature
+    return queue_handshakes_signature(c, handshake);
 }
 
 bool oshpacket_handler_handshake_auth(

@@ -43,6 +43,10 @@
 #define HANDSHAKE_ECDH_KEY_SIZE X25519_KEY_SIZE
 #endif
 
+#ifndef HANDSHAKE_NONCE_SIZE
+#define HANDSHAKE_NONCE_SIZE (64)
+#endif
+
 // The node ID hash is a SHA3-512
 #define NODE_ID_HASH_SIZE (64)
 #if (NODE_ID_HASH_SIZE > EVP_MAX_MD_SIZE)
@@ -54,6 +58,7 @@
 typedef enum oshpacket_type {
     HANDSHAKE = 0,
     HANDSHAKE_SIG,
+    HANDSHAKE_END,
     HELLO,
     DEVMODE,
     GOODBYE,
@@ -159,15 +164,21 @@ typedef struct __attribute__((__packed__)) oshpacket_handshake {
         uint8_t id_salt[64];
     } sender;
 
-    // Public X25519 keys to compute a shared secret
-    struct __attribute__((__packed__)) {
-        uint8_t send[HANDSHAKE_ECDH_KEY_SIZE];
-        uint8_t recv[HANDSHAKE_ECDH_KEY_SIZE];
-    } ecdh_keys;
+    // Public X25519 key to compute a shared secret
+    uint8_t ecdh_pubkey[HANDSHAKE_ECDH_KEY_SIZE];
 
     // Additional unique random data
-    uint8_t nonce[64];
+    uint8_t nonce[HANDSHAKE_NONCE_SIZE];
 } oshpacket_handshake_t;
+
+// This structure is constructed locally and used as the output of the HKDF
+typedef struct __attribute__((packed)) handshake_hkdf_keys {
+    uint8_t initiator_cipher_key[CIPHER_KEY_SIZE];
+    uint8_t initiator_cipher_iv[CIPHER_IV_SIZE];
+
+    uint8_t receiver_cipher_key[CIPHER_KEY_SIZE];
+    uint8_t receiver_cipher_iv[CIPHER_IV_SIZE];
+} handshake_hkdf_keys_t;
 
 // This structure is constructed locally and never sent over the network
 typedef struct __attribute__((__packed__)) oshpacket_handshake_sig_data {
@@ -251,7 +262,7 @@ static inline bool oshpacket_type_valid(oshpacket_type_t type)
 
 static inline bool oshpacket_type_can_be_unencrypted(oshpacket_type_t type)
 {
-    return type == HANDSHAKE;
+    return type == HANDSHAKE || type == HANDSHAKE_SIG;
 }
 
 const char *oshpacket_type_name(oshpacket_type_t type);
