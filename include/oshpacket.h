@@ -262,7 +262,7 @@ static inline bool oshpacket_type_valid(oshpacket_type_t type)
 
 static inline bool oshpacket_type_can_be_unencrypted(oshpacket_type_t type)
 {
-    return type == HANDSHAKE || type == HANDSHAKE_SIG;
+    return type == HANDSHAKE || type == HANDSHAKE_SIG || type == GOODBYE;
 }
 
 const char *oshpacket_type_name(oshpacket_type_t type);

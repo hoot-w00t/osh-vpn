@@ -273,8 +273,16 @@ bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
     // Drop packet if its size exceeds the limit
     if (packet_size > OSHPACKET_MAXSIZE) {
         logger(LOG_ERR,
-            "%s: Dropping %s packet of %zu bytes (exceeds size limit)",
-            c->addrw, oshpacket_type_name(hdr->type), packet_size);
+            "%s: Dropping %s packet of %zu bytes (%s)", c->addrw,
+            oshpacket_type_name(hdr->type), packet_size, "exceeds size limit");
+        return false;
+    }
+
+    // Drop packet if the client is planned to disconnect
+    if (c->finish_and_disconnect) {
+        logger_debug(DBG_SOCKETS,
+            "%s: Dropping %s packet of %zu bytes (%s)", c->addrw,
+            oshpacket_type_name(hdr->type), packet_size, "goodbye");
         return false;
     }
 
@@ -357,13 +365,6 @@ bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
         logger(LOG_CRIT, "%s: Cannot queue unencrypted %s packet",
             c->addrw, oshpacket_type_name(hdr->type));
         netbuffer_cancel(c->io.sendq, packet_size);
-
-        // GOODBYE packets should close the connection so if there's no data
-        // queued after a failed GOODBYE we can remove the client
-        if (hdr->type == GOODBYE) {
-            if (netbuffer_data_size(c->io.sendq) == 0)
-                aio_event_del(c->aio_event);
-        }
 
         return false;
     }
@@ -701,11 +702,13 @@ bool client_queue_devmode(client_t *c)
     }
 }
 
-// Queue GOODBYE request
+// Queue GOODBYE request and gracefully disconnect the client
 bool client_queue_goodbye(client_t *c)
 {
+    bool success = client_queue_packet_empty(c, GOODBYE);
+
     client_graceful_disconnect(c);
-    return client_queue_packet_empty(c, GOODBYE);
+    return success;
 }
 
 // Queue PING request

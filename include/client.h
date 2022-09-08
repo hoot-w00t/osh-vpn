@@ -134,8 +134,9 @@ struct client {
     cipher_t *recv_cipher;
     cipher_t *recv_cipher_next;
 
-    // If this is true disconnect and remove the client after the send queue is
-    // empty. Used for GOODBYE packets
+    // When this is set to true, disconnect and remove the client after the
+    // send queue is emptied (graceful disconnection)
+    // No more packets will be received or queued
     bool finish_and_disconnect;
 
     // Remote "address:port" string
