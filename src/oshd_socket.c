@@ -149,6 +149,11 @@ static void client_aio_read(aio_event_t *event)
                     return;
                 }
 
+                // If finish_and_disconnect is true the client is gracefully
+                // disconnecting, ignore any other packets
+                if (c->finish_and_disconnect)
+                    break;
+
                 // Prepare to process the next packet
                 c->io.recvd_hdr = false;
 
