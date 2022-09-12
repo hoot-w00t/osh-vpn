@@ -134,6 +134,7 @@ set(OSHD_SOURCES
     src/events/handshake_renew.c
     src/events/handshake_timeout.c
     src/events/periodic_ping.c
+    src/netutil/icmp.c
     src/oshpacket_handlers/data.c
     src/oshpacket_handlers/devmode.c
     src/oshpacket_handlers/edge.c

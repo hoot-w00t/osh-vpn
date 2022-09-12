@@ -1,7 +1,9 @@
 #include "logger.h"
 #include "xalloc.h"
 #include "tuntap.h"
+#include "netaddr.h"
 #include "macros.h"
+#include "netutil.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,6 +31,15 @@ typedef struct tt_data_win {
     pthread_mutex_t pollfd_cond_mtx; // Mutex for the condition
     void *read_ol;  // TUN/TAP overlapped structure for reading
     void *write_ol; // TUN/TAP overlapped structure for writing
+
+    pthread_mutex_t write_mtx; // Mutex used by tuntap_write()
+
+    struct netaddr_data_mac mac_int; // The device's MAC address
+    struct netaddr_data_mac mac_ext; // Generic MAC address for TUN emulation
+
+    bool tun_emu; // true if the device is supposed to operate at layer 3
+                  // Enables an emulation layer to provide this transparently
+    uint8_t tun_pkt[TUNTAP_BUFSIZE]; // TUN packet buffer
 } tt_data_win_t;
 #define tuntap_data(tt) ((tt_data_win_t *) (tt)->data.ptr)
 
@@ -80,6 +91,175 @@ static bool tuntap_device_enable(tuntap_t *tuntap)
     return true;
 }
 
+// Retrieve the device's MAC address
+static bool tuntap_device_get_mac(tuntap_t *tuntap)
+{
+    DWORD len;
+
+    if (!DeviceIoControl(tuntap_data(tuntap)->device_handle, TAP_WIN_IOCTL_GET_MAC,
+            NULL, 0,
+            &tuntap_data(tuntap)->mac_int, sizeof(tuntap_data(tuntap)->mac_int),
+            &len, NULL))
+    {
+        logger(LOG_CRIT, "Failed to get TUN/TAP device's MAC address %s: %s",
+            tuntap->dev_name, win_strerror_last());
+        return false;
+    }
+
+    if (len != sizeof(tuntap_data(tuntap)->mac_int)) {
+        logger(LOG_CRIT, "Invalid MAC address from TUN/TAP device %s",
+            tuntap->dev_name);
+        return false;
+    }
+
+    // Generate a different valid MAC address for TUN emulation
+    memcpy(&tuntap_data(tuntap)->mac_ext, &tuntap_data(tuntap)->mac_int,
+        sizeof(tuntap_data(tuntap)->mac_int));
+    tuntap_data(tuntap)->mac_ext.addr[3] ^= 0xFF;
+    tuntap_data(tuntap)->mac_ext.addr[4] ^= 0xFF;
+    tuntap_data(tuntap)->mac_ext.addr[5] ^= 0xFF;
+
+    return true;
+}
+
+// Check if the packet is an ARP IPv4 request
+// This also checks if the source protocol address is zeroed out:
+//   Windows sends a few probes targeting its own IP address to check
+//   for conflicts and sets the sender protocol address to 0.0.0.0 on
+//   those probes
+static bool is_arp_v4req(const struct arp_v4r *pkt, const size_t pkt_size)
+{
+    if (   pkt_size               != sizeof(*pkt)
+        || pkt->hw_type           != htons(1)
+        || pkt->proto_type        != htons(0x0800)
+        || pkt->hw_addr_length    != sizeof(pkt->sender_hw_addr)
+        || pkt->proto_addr_length != sizeof(pkt->sender_proto_addr)
+        || pkt->operation         != htons(1)
+        || pkt->sender_proto_addr == 0)
+    {
+        return false;
+    }
+    return true;
+}
+
+// Write a reply packet to *arp_reply
+static void make_arp_v4reply(
+    struct arp_v4r *arp_reply,
+    const struct arp_v4r *arp_req,
+    const struct netaddr_data_mac *reply_mac_addr)
+{
+    // Copy identical fields
+    arp_reply->hw_type = arp_req->hw_type;
+    arp_reply->proto_type = arp_req->proto_type;
+    arp_reply->hw_addr_length = arp_req->hw_addr_length;
+    arp_reply->proto_addr_length = arp_req->proto_addr_length;
+
+    // Operation type 2 is a reply
+    arp_reply->operation = htons(2);
+
+    // Swap existing addresses copy the queried MAC address
+    memcpy(arp_reply->target_hw_addr, arp_req->sender_hw_addr, sizeof(arp_req->sender_hw_addr));
+    memcpy(arp_reply->sender_hw_addr, reply_mac_addr, sizeof(*reply_mac_addr));
+    arp_reply->sender_proto_addr = arp_req->target_proto_addr;
+    arp_reply->target_proto_addr = arp_req->sender_proto_addr;
+}
+
+// Check if the IPv6 packet is an ICMP6 Neighbor Sollicitation
+static bool is_ipv6_icmp_ns(const struct ipv6_icmp_ns_pkt *pkt,
+    const size_t pkt_size)
+{
+    if (pkt_size < sizeof(*pkt))
+        return false;
+
+    return    pkt->hdr.next_header == IPPROTO_ICMPV6
+           && pkt->icmp.type == 135;
+}
+
+// Write a reply neighbor advertisement to *reply
+static void make_ipv6_icmp_na(
+    struct ipv6_icmp_na_pkt *reply,
+    const struct ipv6_icmp_ns_pkt *req,
+    const struct netaddr_data_mac *reply_mac_addr)
+{
+    struct ipv6_pseudo hdr_pseudo;
+
+    // Initialize the header (re-using identical values from the source packet)
+    memcpy(&reply->hdr, &req->hdr, sizeof(req->hdr));
+    reply->hdr.payload_length = htons(sizeof(reply->icmp));
+    reply->hdr.hop_limit = 255;
+    memcpy(reply->hdr.src_addr, req->icmp.target_address, 16);
+    memcpy(reply->hdr.dst_addr, req->hdr.src_addr, 16);
+
+    // Create the neighbor advertisement
+    reply->icmp.type = 136;
+    reply->icmp.code = 0;
+    reply->icmp.checksum = 0;
+    reply->icmp.flags = htonl(0x60000000); // Sollicited + Override
+    memcpy(reply->icmp.target_address, req->icmp.target_address, 16);
+    reply->icmp.mac_addr_type = 2;
+    reply->icmp.length = 1;
+    memcpy(reply->icmp.mac_addr, reply_mac_addr, sizeof(*reply_mac_addr));
+
+    // Initialize the pseudo header for the checksum
+    memcpy(&hdr_pseudo.dst, reply->hdr.dst_addr, 16);
+    memcpy(&hdr_pseudo.src, reply->hdr.src_addr, 16);
+    hdr_pseudo.length = reply->hdr.payload_length;
+    hdr_pseudo.next = htonl(IPPROTO_ICMPV6);
+
+    // Compute the checksum
+    reply->icmp.checksum = icmp6_checksum(&hdr_pseudo, &reply->icmp,
+        sizeof(reply->icmp));
+}
+
+// Returns true if the packet is TUN-compatible and can be read by tuntap_read()
+// This function also handles ARP/NDP probes/replies
+static bool tun_handle(tuntap_t *tuntap, uint16_t ether_type,
+    const void *packet, size_t packet_size)
+{
+    switch (ether_type) {
+    case 0x0800: // IPv4
+        return true;
+
+    case 0x86DD: // IPv6
+    {
+        if (!is_ipv6_icmp_ns(packet, packet_size))
+            return true;
+
+        struct ipv6_icmp_na_pkt icmp6_na;
+
+        // Create and write the neighbor advertisement
+        logger_debug(DBG_TUNTAP, "Replying to neighbor sollicitation of %zu bytes", packet_size);
+        make_ipv6_icmp_na(&icmp6_na, packet, &tuntap_data(tuntap)->mac_ext);
+        tuntap_write(tuntap, &icmp6_na, sizeof(icmp6_na));
+        return false;
+    }
+
+    case 0x0806: // ARP
+    {
+        const struct arp_v4r *arp_req = (const struct arp_v4r *) packet;
+
+        // If the ARP packet is not a MAC/IPv4 probe, ignore itx
+        if (!is_arp_v4req(arp_req, packet_size)) {
+            logger_debug(DBG_TUNTAP, "Ignored ARP packet of %zu bytes", packet_size);
+            return false;
+        }
+
+        struct arp_v4r arp_reply;
+
+        // Create and write the ARP reply
+        logger_debug(DBG_TUNTAP, "Replying to ARP request of %zu bytes", packet_size);
+        make_arp_v4reply(&arp_reply, arp_req, &tuntap_data(tuntap)->mac_ext);
+        tuntap_write(tuntap, &arp_reply, sizeof(arp_reply));
+        return false;
+    }
+
+    default: // Drop all other protocols
+        logger_debug(DBG_TUNTAP, "Dropped packet of %zu bytes (ether type: 0x%04X)",
+            packet_size, ether_type);
+        return false;
+    }
+}
+
 // Read from the device handle and write the data to the pollfd pipe
 #define pollfd_hdr_size (sizeof(DWORD))
 static void *tuntap_pollfd_thread(void *data)
@@ -87,7 +267,7 @@ static void *tuntap_pollfd_thread(void *data)
     tuntap_t *tuntap = (tuntap_t *) data;
     OVERLAPPED *ol = (OVERLAPPED *) tuntap_data(tuntap)->read_ol;
 
-    uint8_t _buf[pollfd_hdr_size + 2048];
+    uint8_t _buf[pollfd_hdr_size + TUNTAP_BUFSIZE];
     uint8_t *buf = _buf + pollfd_hdr_size;
     DWORD buf_size = sizeof(_buf) - pollfd_hdr_size;
     DWORD read_bytes;
@@ -116,6 +296,19 @@ static void *tuntap_pollfd_thread(void *data)
                     tuntap->dev_name, win_strerror(err));
                 break;
             }
+        }
+
+        if (tuntap_data(tuntap)->tun_emu) {
+            const uint16_t ether_type = ntohs(*((uint16_t *) &buf[12]));
+
+            if (read_bytes <= 14)
+                continue;
+
+            read_bytes -= 14;
+            memmove(buf, buf + 14, read_bytes);
+
+            if (!tun_handle(tuntap, ether_type, buf, read_bytes))
+                continue;
         }
 
         // Write the packet's size
@@ -189,12 +382,6 @@ retry_write:
 
 tuntap_t *tuntap_open(const char *devname, bool tap)
 {
-    // The tap-windows6 driver only supports TAP (layer 2) mode
-    if (!tap) {
-        logger(LOG_CRIT, "TUN devices are not yet supported on Windows");
-        return NULL;
-    }
-
     // We cannot create a TAP device on the fly, it must already exist so we
     // need to have its name to find and open it
     if (!devname || strlen(devname) == 0) {
@@ -317,6 +504,10 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
     tuntap->data.ptr = xzalloc(sizeof(tt_data_win_t));
     data = tuntap_data(tuntap);
 
+    // The tap-windows6 driver only supports TAP (layer 2) mode, so in order to
+    // work with a TUN network Osh will translate between both layers
+    data->tun_emu = !tap;
+
     // Set the handle
     data->device_handle = adapter_handle;
 
@@ -360,6 +551,17 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
         return NULL;
     }
 
+    // Get the device's MAC address
+    if (!tuntap_device_get_mac(tuntap)) {
+        tuntap_close(tuntap);
+        return NULL;
+    }
+
+    // Initialize destination/source MAC addresses of the TUN packets
+    // These don't change so we can initialize them here
+    memcpy(data->tun_pkt + 0, &data->mac_int, sizeof(data->mac_int));
+    memcpy(data->tun_pkt + 6, &data->mac_ext, sizeof(data->mac_ext));
+
     int err;
 
     // Initialize the pollfd mutex
@@ -381,6 +583,14 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
     err = pthread_mutex_init(&data->pollfd_cond_mtx, NULL);
     if (err) {
         logger(LOG_CRIT, "Failed to create pollfd condition mutex: %s", strerror(err));
+        tuntap_close(tuntap);
+        return NULL;
+    }
+
+    // Initialize tuntap_write() mutex
+    err = pthread_mutex_init(&data->write_mtx, NULL);
+    if (err) {
+        logger(LOG_CRIT, "Failed to create tuntap_write() mutex: %s", strerror(err));
         tuntap_close(tuntap);
         return NULL;
     }
@@ -446,6 +656,7 @@ void tuntap_close(tuntap_t *tuntap)
     pthread_mutex_destroy(&data->pollfd_mtx);
     pthread_cond_destroy(&data->pollfd_cond);
     pthread_mutex_destroy(&data->pollfd_cond_mtx);
+    pthread_mutex_destroy(&data->write_mtx);
 
     // Free the tuntap data
     free(tuntap->data.ptr);
@@ -537,10 +748,42 @@ end:
     return success;
 }
 
-bool tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size)
+static bool _unsafe_tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size)
 {
     OVERLAPPED *ol = (OVERLAPPED *) tuntap_data(tuntap)->write_ol;
     DWORD written_bytes;
+
+    if (tuntap_data(tuntap)->tun_emu) {
+        // Make sure that we won't overflow
+        if ((14 + packet_size) > sizeof(tuntap_data(tuntap)->tun_pkt)) {
+            logger(LOG_CRIT, "tuntap_write: packet_size is too big for the TUN packet buffer");
+            return false;
+        }
+
+        // Initialize fake Ethernet frame header
+        // Destination/source MAC addresses don't change and are already
+        // initialized in tuntap_open()
+
+        // Ether type
+        switch (((const uint8_t *) packet)[0] >> 4) {
+        case 4: // IPv4
+            *((uint16_t *) &tuntap_data(tuntap)->tun_pkt[12]) = htons(0x0800);
+            break;
+        case 6: // IPv6
+            *((uint16_t *) &tuntap_data(tuntap)->tun_pkt[12]) = htons(0x86DD);
+            break;
+        default: // Any other value defaults to an ARP packet
+            *((uint16_t *) &tuntap_data(tuntap)->tun_pkt[12]) = htons(0x0806);
+            break;
+        }
+
+        // Append the actual packet
+        memcpy(tuntap_data(tuntap)->tun_pkt + 14, packet, packet_size);
+
+        // Use the encapsulated packet
+        packet = tuntap_data(tuntap)->tun_pkt;
+        packet_size += 14;
+    }
 
     // Reset the overlapped event handle
     ResetEvent(ol->hEvent);
@@ -569,6 +812,28 @@ bool tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size)
             return false;
         }
     }
+}
+
+bool tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size)
+{
+    bool result;
+    int err;
+
+    err = pthread_mutex_lock(&tuntap_data(tuntap)->write_mtx);
+    if (err) {
+        logger(LOG_CRIT, "tuntap_write: Failed to lock mutex: %s", strerror(err));
+        return false;
+    }
+
+    result = _unsafe_tuntap_write(tuntap, packet, packet_size);
+
+    err = pthread_mutex_unlock(&tuntap_data(tuntap)->write_mtx);
+    if (err) {
+        logger(LOG_CRIT, "tuntap_write: Failed to unlock mutex: %s", strerror(err));
+        return false;
+    }
+
+    return result;
 }
 
 int tuntap_pollfd(tuntap_t *tuntap)
