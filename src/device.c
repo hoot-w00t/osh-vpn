@@ -5,10 +5,20 @@
 #include "random.h"
 #include "logger.h"
 #include "macros.h"
+#include "xalloc.h"
 #include "crypto/hash.h"
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+
+#if (TUNTAP_BUFSIZE > OSHPACKET_PAYLOAD_MAXSIZE)
+#warning "TUNTAP_BUFSIZE is bigger than OSHPACKET_PAYLOAD_MAXSIZE, this may lead to packet loss"
+#endif
+
+// AIO userdata structure for the TUN/TAP device
+typedef struct device_aio_data {
+    uint8_t buf[TUNTAP_BUFSIZE];
+} device_aio_data_t;
 
 // Error callback for the TUN/TAP device
 // Stops the daemon on any error
@@ -20,32 +30,33 @@ static void device_aio_error(aio_event_t *event, aio_poll_event_t revents)
     oshd_stop();
 }
 
-// Read callback the TUN/TAP device
+// Read callback of the TUN/TAP device
 // Read available packets from the device and route them on the network
 // TODO: Refactor this to use the TUN/TAP device from userdata instead of the
 //       global one
 //       Not sure why Osh would ever need to manage multiple TUN/TAP devices but
 //       it would be cleaner anyways
-static void device_aio_read(__attribute__((unused)) aio_event_t *event)
+static void device_aio_read(aio_event_t *event)
 {
+    node_id_t *me = node_id_find_local();
+    device_aio_data_t *data = (device_aio_data_t *) event->userdata;
+    size_t pkt_size;
+    netpacket_t pkt_hdr;
+    const netroute_t *route;
+
     // Only process packets from the TUN/TAP device if the daemon is running
     if (!oshd.run)
         return;
 
-    size_t pkt_size;
-    uint8_t pkt[OSHPACKET_PAYLOAD_MAXSIZE];
-    netpacket_t pkt_hdr;
-    const netroute_t *route;
-    node_id_t *me = node_id_find_local();
-
-    if (!tuntap_read(oshd.tuntap, pkt, sizeof(pkt), &pkt_size)) {
+    if (!tuntap_read(oshd.tuntap, data->buf, sizeof(data->buf), &pkt_size)) {
         oshd_stop();
         return;
     }
+    if (pkt_size == 0)
+        return;
 
-    if (pkt_size == 0) return;
-
-    if (!netpacket_from_data(&pkt_hdr, pkt, oshd.tuntap->is_tap)) {
+    // Decode the packet's header
+    if (!netpacket_from_data(&pkt_hdr, data->buf, oshd.tuntap->is_tap)) {
         logger(LOG_CRIT, "%s: Failed to parse network packet",
             oshd.tuntap->dev_name);
         return;
@@ -70,10 +81,10 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
         // This can fail if we don't have a route to the destination node
         // (which should not happen in this case as routes owned by offline
         //  nodes are removed)
-        client_queue_packet_data(route->owner, pkt, pkt_size);
+        client_queue_packet_data(route->owner, data->buf, pkt_size);
     } else {
         // This route is a broadcast
-        client_queue_packet_data_broadcast(NULL, pkt, pkt_size);
+        client_queue_packet_data_broadcast(NULL, data->buf, pkt_size);
     }
 
     if (logger_is_debugged(DBG_TUNTAP)) {
@@ -89,15 +100,23 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
     }
 }
 
+static void device_aio_del(aio_event_t *event)
+{
+    free(event->userdata);
+
+    // The TUN/TAP device itself is not closed here because it is not tied to
+    // this event
+}
+
 // Add an aio event for the TUN/TAP device
 void device_add(tuntap_t *tuntap)
 {
     aio_event_add_inl(oshd.aio,
         tuntap_pollfd(tuntap),
         AIO_READ,
+        xzalloc(sizeof(device_aio_data_t)),
         NULL,
-        NULL,
-        NULL,
+        device_aio_del,
         device_aio_read,
         NULL,
         device_aio_error);

@@ -5,6 +5,15 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#ifndef TUNTAP_BUFSIZE
+// Maximum size of a single TUN/TAP packet (maximum supported MTU)
+#define TUNTAP_BUFSIZE 1500
+#endif
+
+#if (TUNTAP_BUFSIZE <= 0)
+#error "TUNTAP_BUFSIZE must be a positive value"
+#endif
+
 typedef union tuntap_data {
     void *ptr;
     int fd;
