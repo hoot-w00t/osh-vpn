@@ -265,6 +265,12 @@ static inline bool oshpacket_type_can_be_unencrypted(oshpacket_type_t type)
     return type == HANDSHAKE || type == HANDSHAKE_SIG || type == GOODBYE;
 }
 
+// Should queue management be applied for this packet type
+static inline bool oshpacket_type_is_qm(oshpacket_type_t type)
+{
+    return type == DATA;
+}
+
 const char *oshpacket_type_name(oshpacket_type_t type);
 const oshpacket_t *oshpacket_lookup(oshpacket_type_t type);
 bool oshpacket_payload_size_valid(const oshpacket_t *def,

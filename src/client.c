@@ -232,9 +232,10 @@ void client_finish_handshake(client_t *c)
     }
 }
 
-// Returns true if the DATA packet should be dropped (when the send queue is
+// Queue management
+// Returns true if the packet should be dropped (when the send queue is too
 // full or filling up too fast)
-static bool data_packet_should_drop(client_t *c)
+static bool qm_packet_should_drop(const client_t *c)
 {
     if (netbuffer_data_size(c->io.sendq) >= CLIENT_SENDQ_DATA_SIZE_MIN) {
         const size_t random_drop_above = rand() % CLIENT_SENDQ_DATA_SIZE_MAX;
@@ -286,17 +287,12 @@ bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
         return false;
     }
 
-    // Drop DATA packets if the send queue exceeds a limit
-    // This is a very basic way to handle network congestion, but without it the
-    // send queue can accumulate an infinite amount of packets and this could
-    // create a denial of service between two nodes until we can catch up and
-    // the send queue flushes all of its data (this could take days in the worst
-    // cases)
-    if (   hdr->type == DATA
-        && data_packet_should_drop(c))
+    // Apply queue management for relevant packets to limit network congestion
+    if (   oshpacket_type_is_qm(hdr->type)
+        && qm_packet_should_drop(c))
     {
-        logger_debug(DBG_TUNTAP, "%s: Dropping %s packet of %zu bytes",
-            c->addrw, oshpacket_type_name(hdr->type), payload_size);
+        logger_debug(DBG_TUNTAP, "%s: Dropping %s packet of %zu bytes (%s)",
+            c->addrw, oshpacket_type_name(hdr->type), payload_size, "qm");
         return false;
     }
 
@@ -479,6 +475,32 @@ bool client_queue_packet_broadcast_forward(client_t *exclude, const oshpacket_hd
         }
 
         client_queue_packet(oshd.clients[i], hdr, payload, payload_size);
+    }
+
+    return true;
+}
+
+// Queue a unicast DATA packet for a node (indirectly)
+bool client_queue_packet_data(node_id_t *dest, const void *payload,
+    const size_t payload_size)
+{
+    return client_queue_packet_indirect(dest, DATA, payload, payload_size);
+}
+
+// Broadcast a DATA packet for all nodes (indirectly)
+// This function uses client_queue_packet_data to unicast the same payload to
+// all nodes (except *exclude if it is not NULL)
+bool client_queue_packet_data_broadcast(node_id_t *exclude, const void *payload,
+    const size_t payload_size)
+{
+    node_id_t *nid;
+
+    for (size_t i = 1; i < oshd.node_tree_count; ++i) {
+        nid = oshd.node_tree[i];
+        if (!nid->online || nid == exclude)
+            continue;
+
+        client_queue_packet_data(nid, payload, payload_size);
     }
 
     return true;

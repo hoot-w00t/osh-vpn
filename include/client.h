@@ -183,6 +183,10 @@ bool client_queue_packet_broadcast(client_t *exclude, oshpacket_type_t type,
     const void *payload, size_t payload_size);
 bool client_queue_packet_broadcast_forward(client_t *exclude, const oshpacket_hdr_t *hdr,
     const void *payload, size_t payload_size);
+bool client_queue_packet_data(node_id_t *dest, const void *payload,
+    const size_t payload_size);
+bool client_queue_packet_data_broadcast(node_id_t *exclude, const void *payload,
+    const size_t payload_size);
 bool client_queue_packet_exg(client_t *c, oshpacket_type_t type,
     const void *payload, const size_t payload_size);
 

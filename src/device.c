@@ -70,10 +70,10 @@ static void device_aio_read(__attribute__((unused)) aio_event_t *event)
         // This can fail if we don't have a route to the destination node
         // (which should not happen in this case as routes owned by offline
         //  nodes are removed)
-        client_queue_packet_indirect(route->owner, DATA, pkt, pkt_size);
+        client_queue_packet_data(route->owner, pkt, pkt_size);
     } else {
         // This route is a broadcast
-        client_queue_packet_broadcast(NULL, DATA, pkt, pkt_size);
+        client_queue_packet_data_broadcast(NULL, pkt, pkt_size);
     }
 
     if (logger_is_debugged(DBG_TUNTAP)) {
