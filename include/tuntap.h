@@ -7,7 +7,7 @@
 
 #ifndef TUNTAP_BUFSIZE
 // Maximum size of a single TUN/TAP packet (maximum supported MTU)
-#define TUNTAP_BUFSIZE 1500
+#define TUNTAP_BUFSIZE 1518
 #endif
 
 #if (TUNTAP_BUFSIZE <= 0)
