@@ -141,12 +141,27 @@ aio_t *aio_create(void)
 void aio_free(aio_t *aio)
 {
     if (aio) {
+        // It is safer to use aio_event_del() instead of directly freeing the
+        // events as it prevents an event's delete handler from re-queuing its
+        // own deletion
+
         // Ensure that no events are left alone before deleting everything
         aio_process_queue(aio);
 
-        // Free all events
+        // Queue all events for deletion
         for (size_t i = 0; i < aio->events_count; ++i)
-            aio_event_free(aio->events[i]);
+            aio_event_del(aio->events[i]);
+
+        // Actually delete all events
+        aio_process_queue(aio);
+
+        // If this happens then one of the delete handlers must have created and
+        // added a new event to the AIO, this should not happen as the events'
+        // resources will not be freed
+        if (aio->queue_head) {
+            logger(LOG_CRIT, "%s: %s", __func__,
+                "queue_head is not NULL after deleting all events");
+        }
 
         // Free and reset the list of events
         free(aio->events);
