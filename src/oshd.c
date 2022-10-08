@@ -145,14 +145,14 @@ bool oshd_init(void)
     }
 
     // Add all nodes' endpoints
-    for (size_t i = 0; i < oshd.remote_count; ++i) {
+    for (size_t i = 0; i < oshd.conf_endpoints_count; ++i) {
         // This should never happen
-        if (!oshd.remote_endpoints[i]->has_owner)
+        if (!oshd.conf_endpoints[i]->has_owner)
             continue;
 
-        node_id_t *nid = node_id_add(oshd.remote_endpoints[i]->owner_name);
+        node_id_t *nid = node_id_add(oshd.conf_endpoints[i]->owner_name);
 
-        endpoint_group_add_group(nid->endpoints, oshd.remote_endpoints[i]);
+        endpoint_group_add_group(nid->endpoints, oshd.conf_endpoints[i]);
     }
 
     // Add manually configured local routes
@@ -248,9 +248,9 @@ void oshd_free(void)
     oshd.clients_count = 0;
     oshd.clients = NULL;
 
-    for (size_t i = 0; i < oshd.remote_count; ++i)
-        endpoint_group_free(oshd.remote_endpoints[i]);
-    free(oshd.remote_endpoints);
+    for (size_t i = 0; i < oshd.conf_endpoints_count; ++i)
+        endpoint_group_free(oshd.conf_endpoints[i]);
+    free(oshd.conf_endpoints);
 
     oshd_cmd_unset_all();
 
@@ -285,7 +285,7 @@ void oshd_loop(void)
     if (oshd.discoverendpoints)
         oshd_discover_local_endpoints();
 
-    // Queue the connections to our remotes
+    // Queue the connections to our endpoints
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
         if (oshd.node_tree[i]->local_node || oshd.node_tree[i]->endpoints->count == 0)
             continue;

@@ -206,11 +206,11 @@ static bool oshd_param_keystrust(ecp_t *ecp)
     return true;
 }
 
-// ShareRemotes
-static bool oshd_param_shareremotes(__attribute__((unused)) ecp_t *ecp)
+// ShareEndpoints
+static bool oshd_param_shareendpoints(__attribute__((unused)) ecp_t *ecp)
 {
-    oshd.shareremotes = true;
-    logger_debug(DBG_CONF, "Enabled ShareRemotes");
+    oshd.shareendpoints = true;
+    logger_debug(DBG_CONF, "Enabled ShareEndpoints");
     return true;
 }
 
@@ -332,27 +332,27 @@ static bool oshd_param_excludedevice(ecp_t *ecp)
 
 // Return the endpoint group of a node
 // Creates an empty one if it doesn't exist yet
-static endpoint_group_t *get_remote_group(const char *node_name)
+static endpoint_group_t *get_endpoint_group(const char *node_name)
 {
-    for (size_t i = 0; i < oshd.remote_count; ++i) {
-        if (   oshd.remote_endpoints[i]->has_owner
-            && !strcmp(oshd.remote_endpoints[i]->owner_name, node_name))
+    for (size_t i = 0; i < oshd.conf_endpoints_count; ++i) {
+        if (   oshd.conf_endpoints[i]->has_owner
+            && !strcmp(oshd.conf_endpoints[i]->owner_name, node_name))
         {
             // The node already has an endpoint group
-            return oshd.remote_endpoints[i];
+            return oshd.conf_endpoints[i];
         }
     }
 
     // The node does not have an endpoint group, create it
-    oshd.remote_count += 1;
-    oshd.remote_endpoints = xreallocarray(oshd.remote_endpoints,
-        oshd.remote_count, sizeof(endpoint_group_t *));
-    oshd.remote_endpoints[oshd.remote_count - 1] = endpoint_group_create(node_name);
-    return oshd.remote_endpoints[oshd.remote_count - 1];
+    oshd.conf_endpoints_count += 1;
+    oshd.conf_endpoints = xreallocarray(oshd.conf_endpoints,
+        oshd.conf_endpoints_count, sizeof(endpoint_group_t *));
+    oshd.conf_endpoints[oshd.conf_endpoints_count - 1] = endpoint_group_create(node_name);
+    return oshd.conf_endpoints[oshd.conf_endpoints_count - 1];
 }
 
-// Remote
-static bool oshd_param_remote(ecp_t *ecp)
+// Endpoint
+static bool oshd_param_endpoint(ecp_t *ecp)
 {
     char *addr;
     char *port;
@@ -377,7 +377,7 @@ static bool oshd_param_remote(ecp_t *ecp)
     for (; *port == ' ' || *port == '\t'; ++port);
 
     // Get the selected node's endpoints
-    group = get_remote_group(oshd_conf_selected_node());
+    group = get_endpoint_group(oshd_conf_selected_node());
 
     // Convert the port value to a number
     port_no = (*port) ? ((uint16_t) atoi(port)) : OSHD_DEFAULT_PORT;
@@ -712,7 +712,7 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "NetworkName", .type = VALUE_REQUIRED, &oshd_param_networkname },
     { .name = "DynamicAddr", .type = VALUE_REQUIRED, &oshd_param_dynamicaddr },
     { .name = "KeysTrust", .type = VALUE_REQUIRED, &oshd_param_keystrust },
-    { .name = "ShareRemotes", .type = VALUE_NONE, &oshd_param_shareremotes },
+    { .name = "ShareEndpoints", .type = VALUE_NONE, &oshd_param_shareendpoints },
     { .name = "DiscoverEndpoints", .type = VALUE_NONE, &oshd_param_discoverendpoints },
     { .name = "AutomaticConnections", .type = VALUE_NONE, &oshd_param_automaticconnections },
     { .name = "AutomaticConnectionsInterval", .type = VALUE_REQUIRED, &oshd_param_automaticconnectionsinterval },
@@ -723,7 +723,7 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "ExcludeDevice", .type = VALUE_REQUIRED, &oshd_param_excludedevice },
     { .name = "DevUp", .type = VALUE_REQUIRED, &oshd_param_command },
     { .name = "DevDown", .type = VALUE_REQUIRED, &oshd_param_command },
-    { .name = "Remote", .type = VALUE_REQUIRED, &oshd_param_remote },
+    { .name = "Endpoint", .type = VALUE_REQUIRED, &oshd_param_endpoint },
     { .name = "ReconnectDelayMin", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymin },
     { .name = "ReconnectDelayMax", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymax },
     { .name = "ConnectionsLimit", .type = VALUE_REQUIRED, &oshd_param_connectionslimit },

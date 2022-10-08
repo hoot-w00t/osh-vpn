@@ -223,7 +223,7 @@ bool endpoint_group_del_expired(endpoint_group_t *group)
                 deleted = true;
             } else {
                 endpoint_refresh(group, endpoint);
-                if (oshd.shareremotes)
+                if (oshd.shareendpoints)
                     client_queue_endpoint_broadcast(NULL, endpoint, group);
             }
         }

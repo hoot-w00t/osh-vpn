@@ -66,9 +66,9 @@ typedef struct oshd {
     // local keys will be used
     bool remote_auth;
 
-    // true if the remotes loaded from the configuration file should be shared
+    // true if the endpoints loaded from the configuration file should be shared
     // with other nodes on the network
-    bool shareremotes;
+    bool shareendpoints;
 
     // true if local endpoints should be discovered
     bool discoverendpoints;
@@ -89,9 +89,9 @@ typedef struct oshd {
     uint16_t server_port; // TCP server port
     bool server_enabled;  // true if the TCP server will be opened and used
 
-    // List of remote endpoints to connect to
-    endpoint_group_t **remote_endpoints;
-    size_t remote_count;
+    // List of endpoints to connect to (from the configuration)
+    endpoint_group_t **conf_endpoints;
+    size_t conf_endpoints_count;
 
     // Array of the clients, all our direct connections
     client_t **clients;

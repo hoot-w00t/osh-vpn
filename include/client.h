@@ -139,7 +139,7 @@ struct client {
     // No more packets will be received or queued
     bool finish_and_disconnect;
 
-    // Remote "address:port" string
+    // Endpoint "address:port" string
     char addrw[128];
 
     // If *reconnect_endpoints is not NULL, contains one or multiple endpoints

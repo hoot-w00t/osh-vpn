@@ -106,7 +106,7 @@ static bool client_queue_endpoint_exg_internal(client_t *c,
 }
 
 // Exchange all known endpoints with the client
-// Endpoints from the configuration file will be skipped if ShareRemotes is
+// Endpoints from the configuration file will be skipped if ShareEndpoints is
 // not enabled
 // TODO: Rewrite this function to send multiple endpoints in a single payload
 bool client_queue_endpoint_exg(client_t *c)
@@ -115,9 +115,9 @@ bool client_queue_endpoint_exg(client_t *c)
         endpoint_group_t *group = oshd.node_tree[i]->endpoints;
 
         foreach_endpoint(endpoint, group) {
-            // If ShareRemotes was not set in the configuration file,
+            // If ShareEndpoints was not set in the configuration file,
             // endpoints that don't expire will not be shared
-            if (!endpoint->can_expire && !oshd.shareremotes)
+            if (!endpoint->can_expire && !oshd.shareendpoints)
                 continue;
 
             if (!client_queue_endpoint_exg_internal(c, endpoint, group))
