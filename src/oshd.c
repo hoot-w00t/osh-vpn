@@ -144,6 +144,17 @@ bool oshd_init(void)
         nid->pubkey_local = true;
     }
 
+    // Add all nodes' endpoints
+    for (size_t i = 0; i < oshd.remote_count; ++i) {
+        // This should never happen
+        if (!oshd.remote_endpoints[i]->has_owner)
+            continue;
+
+        node_id_t *nid = node_id_add(oshd.remote_endpoints[i]->owner_name);
+
+        endpoint_group_add_group(nid->endpoints, oshd.remote_endpoints[i]);
+    }
+
     // Add manually configured local routes
     for (size_t i = 0; i < oshd.conf_routes_size; ++i) {
         netroute_add(oshd.route_table, &oshd.conf_routes[i].addr,
@@ -275,8 +286,12 @@ void oshd_loop(void)
         oshd_discover_local_endpoints();
 
     // Queue the connections to our remotes
-    for (size_t i = 0; i < oshd.remote_count; ++i) {
-        oshd_connect_queue(oshd.remote_endpoints[i], oshd.reconnect_delay_min);
+    for (size_t i = 0; i < oshd.node_tree_count; ++i) {
+        if (oshd.node_tree[i]->local_node || oshd.node_tree[i]->endpoints->count == 0)
+            continue;
+
+        event_queue_connect(oshd.node_tree[i]->endpoints,
+            oshd.reconnect_delay_min, EVENT_QUEUE_NOW);
     }
 
     // Osh actually starts

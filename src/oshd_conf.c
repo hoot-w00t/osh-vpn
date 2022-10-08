@@ -29,6 +29,7 @@ typedef struct oshd_conf {
     ec_t *ec;
     ecp_t *iter;
     char *filename;
+    char selected_node[NODE_NAME_SIZE + 1];
 } oshd_conf_t;
 
 // Buffer to store configuration error messages from handlers
@@ -49,25 +50,27 @@ static size_t oshd_conf_count = 0;
 // Push configuration file on the stack
 static void oshd_conf_push(ec_t *ec, ecp_t *iter, const char *filename)
 {
-    logger_debug(DBG_CONF, "Pushing '%s' (new count: %zu)",
-        filename, oshd_conf_count + 1);
-    oshd_conf = xreallocarray(oshd_conf, oshd_conf_count + 1,
-        sizeof(oshd_conf_t));
-    oshd_conf[oshd_conf_count].ec = ec;
-    oshd_conf[oshd_conf_count].iter = iter;
-    oshd_conf[oshd_conf_count].filename = xstrdup(filename);
     oshd_conf_count += 1;
+    logger_debug(DBG_CONF, "Pushing '%s' (new count: %zu)",
+        filename, oshd_conf_count);
+    oshd_conf = xreallocarray(oshd_conf, oshd_conf_count, sizeof(oshd_conf_t));
+
+    conf_curr.ec = ec;
+    conf_curr.iter = iter;
+    conf_curr.filename = xstrdup(filename);
+    memset(conf_curr.selected_node, 0, sizeof(conf_curr.selected_node));
 }
 
 // Pop configuration file from the stack
 static void oshd_conf_pop(void)
 {
     if (oshd_conf_count > 0) {
+        logger_debug(DBG_CONF, "Popping '%s' (old count: %zu)",
+            conf_curr.filename, oshd_conf_count);
+        ec_destroy(conf_curr.ec);
+        free(conf_curr.filename);
+
         oshd_conf_count -= 1;
-        logger_debug(DBG_CONF, "Popping '%s' (new count: %zu)",
-            oshd_conf[oshd_conf_count].filename, oshd_conf_count);
-        ec_destroy(oshd_conf[oshd_conf_count].ec);
-        free(oshd_conf[oshd_conf_count].filename);
         oshd_conf = xreallocarray(oshd_conf, oshd_conf_count,
             sizeof(oshd_conf_t));
     }
@@ -95,6 +98,42 @@ static bool oshd_conf_load(const char *filename)
     }
 
     oshd_conf_push(ec, ec->head, filename);
+    return true;
+}
+
+// Returns true if a valid Node is selected
+static bool oshd_conf_has_selected_node(void)
+{
+    return strlen(conf_curr.selected_node) != 0;
+}
+
+// Returns true if a valid Node is selected
+// If not the error message is set here
+static bool oshd_conf_require_selected_node(const ecp_t *ecp)
+{
+    if (oshd_conf_has_selected_node())
+        return true;
+    set_error("Missing '%s' parameter for '%s'", "Node", ecp_name(ecp));
+    return false;
+}
+
+// Returns the selected node
+static const char *oshd_conf_selected_node(void)
+{
+    return conf_curr.selected_node;
+}
+
+// Set the selected node
+static bool oshd_conf_select_node(const char *name)
+{
+    if (!node_valid_name(name)) {
+        // TODO: Print the invalid character in the error
+        set_error("Invalid node name");
+        return false;
+    }
+    memset(conf_curr.selected_node, 0, sizeof(conf_curr.selected_node));
+    strncpy(conf_curr.selected_node, name, NODE_NAME_SIZE);
+    logger_debug(DBG_CONF, "Selected node '%s'", oshd_conf_selected_node());
     return true;
 }
 
@@ -291,76 +330,67 @@ static bool oshd_param_excludedevice(ecp_t *ecp)
     return true;
 }
 
+// Return the endpoint group of a node
+// Creates an empty one if it doesn't exist yet
+static endpoint_group_t *get_remote_group(const char *node_name)
+{
+    for (size_t i = 0; i < oshd.remote_count; ++i) {
+        if (   oshd.remote_endpoints[i]->has_owner
+            && !strcmp(oshd.remote_endpoints[i]->owner_name, node_name))
+        {
+            // The node already has an endpoint group
+            return oshd.remote_endpoints[i];
+        }
+    }
+
+    // The node does not have an endpoint group, create it
+    oshd.remote_count += 1;
+    oshd.remote_endpoints = xreallocarray(oshd.remote_endpoints,
+        oshd.remote_count, sizeof(endpoint_group_t *));
+    oshd.remote_endpoints[oshd.remote_count - 1] = endpoint_group_create(node_name);
+    return oshd.remote_endpoints[oshd.remote_count - 1];
+}
+
 // Remote
 static bool oshd_param_remote(ecp_t *ecp)
 {
-    const char remote_separator[] = ",";
+    char *addr;
+    char *port;
+    uint16_t port_no;
+    endpoint_group_t *group;
+    const endpoint_t *endpoint;
 
-    // Duplicate the value to use it with strtok
-    char *tokens = xstrdup(ecp_value(ecp));
-    char *token = strtok(tokens, remote_separator);
+    if (!oshd_conf_require_selected_node(ecp))
+        return false;
 
-    // Add the new empty endpoint group
-    oshd.remote_endpoints = xreallocarray(oshd.remote_endpoints,
-        oshd.remote_count + 1, sizeof(endpoint_group_t *));
-    oshd.remote_endpoints[oshd.remote_count] = endpoint_group_create(NULL);
+    // Copy the address to parse it
+    addr = xstrdup(ecp_value(ecp));
+    port = addr;
 
-    logger_debug(DBG_CONF, "Remote: Processing tokens from '%s'", ecp_value(ecp));
+    // Get to the end of the address
+    for (; *port && *port != ' ' && *port != '\t'; ++port);
 
-    // Iterate through all tokens to add multiple endpoints to this group
-    for (; token; token = strtok(NULL, remote_separator)) {
-        // Skip whitespaces before the endpoint address
-        size_t addr_off = 0;
-        for (; token[addr_off] == ' ' || token[addr_off] == '\t'; ++addr_off);
-        if (!token[addr_off]) {
-            logger_debug(DBG_CONF, "Remote: Skipping empty token '%s'", token);
-            continue;
-        }
+    // End the address
+    if (*port) *port++ = 0;
 
-        // Duplicate the address
-        char *addr = xstrdup(token + addr_off);
-        char *port = addr;
+    // Skip the whitespaces to get to the start of the port (if there is one)
+    for (; *port == ' ' || *port == '\t'; ++port);
 
-        logger_debug(DBG_CONF, "Remote: Processing token '%s'", addr);
+    // Get the selected node's endpoints
+    group = get_remote_group(oshd_conf_selected_node());
 
-        // Skip the address to get to the next value (separated with whitespaces)
-        for (; *port && *port != ' ' && *port != '\t'; ++port);
+    // Convert the port value to a number
+    port_no = (*port) ? ((uint16_t) atoi(port)) : OSHD_DEFAULT_PORT;
 
-        // If there are still characters after the address, separate the address and
-        // port values
-        if (*port) *port++ = '\0';
+    // Add the endpoint to the group
+    endpoint = endpoint_group_add(group, addr, port_no, NETAREA_UNK, false);
 
-        // Go to the start of the second parameter, skipping whitespaces
-        for (; *port == ' ' || *port == '\t'; ++port);
+    logger_debug(DBG_CONF, "%s endpoint %s:%u for %s",
+        endpoint ? "Added" : "Ignored", addr, port_no,
+        oshd_conf_selected_node());
 
-        // Convert the port value to a number
-        uint16_t port_nb = (*port) ? ((uint16_t) atoi(port)) : OSHD_DEFAULT_PORT;
-
-        // Add the endpoint to the group
-        netaddr_t naddr;
-        netarea_t area;
-
-        if (!netaddr_lookup(&naddr, addr)) {
-            area = NETAREA_UNK;
-        } else {
-            area = netaddr_area(&naddr);
-        }
-        if (endpoint_group_add(oshd.remote_endpoints[oshd.remote_count],
-                addr, port_nb, area, false))
-        {
-            logger_debug(DBG_CONF, "Remote: %s:%u (%s) added",
-                addr, port_nb, netarea_name(area));
-        } else {
-            logger_debug(DBG_CONF, "Remote: %s:%u (%s) ignored",
-                addr, port_nb, netarea_name(area));
-        }
-
-        // Free the temporary address
-        free(addr);
-    }
-
-    oshd.remote_count += 1;
-    free(tokens);
+    // Free the temporary address
+    free(addr);
     return true;
 }
 
@@ -579,22 +609,10 @@ end:
 // PublicKey
 static bool oshd_param_publickey(ecp_t *ecp)
 {
-    char *node_name = xstrdup(ecp_value(ecp));
-    char *pubkey64 = node_name;
-    bool success;
+    if (!oshd_conf_require_selected_node(ecp))
+        return false;
 
-    // Get to the end of the node name
-    for (; *pubkey64 && *pubkey64 != ' ' && *pubkey64 != '\t'; ++pubkey64);
-
-    // End the node name
-    if (*pubkey64) *pubkey64++ = 0;
-
-    // Skip the whitespaces to get to the start of the public key
-    for (; *pubkey64 == ' ' || *pubkey64 == '\t'; ++pubkey64);
-
-    success = conf_pubkey_add(node_name, pubkey64);
-    free(node_name);
-    return success;
+    return conf_pubkey_add(oshd_conf_selected_node(), ecp_value(ecp));
 }
 
 // PublicKeysFile
@@ -673,6 +691,12 @@ static bool oshd_param_route(ecp_t *ecp)
     return true;
 }
 
+// Node
+static bool oshd_param_node(ecp_t *ecp)
+{
+    return oshd_conf_select_node(ecp_value(ecp));
+}
+
 // Parameters that set commands (the command name is the same as the parameter)
 static bool oshd_param_command(ecp_t *ecp)
 {
@@ -715,6 +739,7 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "PublicKey", .type = VALUE_REQUIRED, &oshd_param_publickey },
     { .name = "PublicKeysFile", .type = VALUE_REQUIRED, &oshd_param_publickeysfile },
     { .name = "Route", .type = VALUE_REQUIRED, &oshd_param_route },
+    { .name = "Node", .type = VALUE_REQUIRED, &oshd_param_node },
     { NULL, 0, NULL }
 };
 
@@ -747,6 +772,35 @@ void oshd_init_conf(void)
         memset(&oshd.dynamic_addrs[i], 0, sizeof(dynamic_addr_t));
 
     oshd.run = true;
+}
+
+// One-time configuration checks
+static bool validate_configuration(void)
+{
+    if (strlen(oshd.name) == 0) {
+        logger(LOG_ERR, "The daemon must have a name");
+        return false;
+    }
+
+    if (!oshd.privkey) {
+        logger(LOG_ERR, "The daemon must have a private key");
+        return false;
+    }
+
+    if (oshd.reconnect_delay_max < oshd.reconnect_delay_min) {
+        logger(LOG_ERR, "ReconnectDelayMax (%lis) cannot be smaller than ReconnectDelayMin (%lis)",
+            oshd.reconnect_delay_max, oshd.reconnect_delay_min);
+        return false;
+    }
+
+    if (   oshd.device_mode == MODE_DYNAMIC
+        && strlen(oshd.network_name) == 0)
+    {
+        logger(LOG_ERR, "NetworkName must be set when using the dynamic device mode");
+        return false;
+    }
+
+    return true;
 }
 
 // Load configuration file
@@ -836,30 +890,9 @@ bool oshd_load_conf(const char *filename)
     if (load_error)
         return false;
 
-    // One-shot verifications
-
-    if (strlen(oshd.name) == 0) {
-        logger(LOG_ERR, "The daemon must have a name");
+    // One-shot checks
+    if (!validate_configuration())
         return false;
-    }
-
-    if (!oshd.privkey) {
-        logger(LOG_ERR, "The daemon must have a private key");
-        return false;
-    }
-
-    if (oshd.reconnect_delay_max < oshd.reconnect_delay_min) {
-        logger(LOG_ERR, "ReconnectDelayMax (%lis) cannot be smaller than ReconnectDelayMin (%lis)",
-            oshd.reconnect_delay_max, oshd.reconnect_delay_min);
-        return false;
-    }
-
-    if (   oshd.device_mode == MODE_DYNAMIC
-        && strlen(oshd.network_name) == 0)
-    {
-        logger(LOG_ERR, "NetworkName must be set when using the dynamic device mode");
-        return false;
-    }
 
     // The configuration was loaded successfully
     return true;
