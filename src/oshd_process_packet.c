@@ -1,6 +1,44 @@
 #include "node.h"
 #include "logger.h"
 
+static bool forward_packet(const node_id_t *src_node, node_id_t *dest_node,
+    const client_t *src_client, const oshpacket_hdr_t *hdr, const void *payload,
+    const oshpacket_t *def)
+{
+    client_t *dest_client;
+
+    if (!def->can_be_forwarded) {
+        logger(LOG_WARN, "%s: %s: Dropping %s packet from %s to %s: %s",
+            src_client->addrw, src_client->id->name, def->name,
+            src_node->name, dest_node->name,
+            "This type of packet cannot be forwarded");
+        return false;
+    }
+
+    dest_client = node_id_next_hop(dest_node);
+
+    if (!dest_client) {
+        logger(LOG_INFO, "%s: %s: Dropping %s packet from %s to %s: %s",
+            src_client->addrw, src_client->id->name, def->name,
+            src_node->name, dest_node->name, "No route");
+        return true;
+    }
+
+    if (dest_client == src_client) {
+        logger(LOG_WARN, "%s: %s: Dropping %s packet from %s to %s: %s",
+            src_client->addrw, src_client->id->name, def->name,
+            src_node->name, dest_node->name, "Looping back to its sender");
+        return true;
+    }
+
+    logger_debug(DBG_ROUTING,
+        "%s: %s: Forwarding %s packet from %s to %s through %s (%s)",
+        src_client->addrw, src_client->id->name, def->name, src_node->name,
+        dest_node->name, dest_client->id->name, dest_client->addrw);
+    client_queue_packet_forward(dest_client, hdr, payload, hdr->payload_size);
+    return true;
+}
+
 // Returns true if packet was processed without an error
 // Returns false if the client should be disconnected
 bool oshd_process_packet(client_t *c, void *packet)
@@ -104,25 +142,8 @@ bool oshd_process_packet(client_t *c, void *packet)
         }
 
         // If the destination node is not the local node we'll forward this packet
-        if (!dest->local_node) {
-            if (!def->can_be_forwarded) {
-                logger(LOG_WARN,
-                    "Dropping %s packet from %s to %s: %s",
-                    def->name, src->name, dest->name,
-                    "This type of packet cannot be forwarded");
-                return true;
-            }
-
-            if (node_id_next_hop(dest)) {
-                logger_debug(DBG_ROUTING, "Forwarding %s packet from %s to %s through %s",
-                    def->name, src->name, dest->name, dest->next_hop->id->name);
-                client_queue_packet_forward(dest->next_hop, hdr, payload, hdr->payload_size);
-            } else {
-                logger(LOG_INFO, "Dropping %s packet from %s to %s: %s",
-                    def->name, src->name, dest->name, "No route");
-            }
-            return true;
-        }
+        if (!dest->local_node)
+            return forward_packet(src, dest, c, hdr, payload, def);
     }
 
     // If this packet was forwarded but shouldn't have been, drop it
