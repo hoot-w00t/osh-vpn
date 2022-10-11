@@ -58,13 +58,14 @@ endpoint_group_t *endpoint_group_create(const char *owner_name)
 // Free endpoint group and its allocated resources
 void endpoint_group_free(endpoint_group_t *group)
 {
+    if (!group)
+        return;
+
     logger_debug(DBG_ENDPOINTS, "Freeing endpoint group %p (%s)",
         group, group->owner_name);
-    if (group) {
-        endpoint_group_clear(group);
-        free(group->owner_name);
-        free(group);
-    }
+    endpoint_group_clear(group);
+    free(group->owner_name);
+    free(group);
 }
 
 // Delete all endpoints from group
