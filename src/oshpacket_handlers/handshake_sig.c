@@ -12,6 +12,17 @@ static bool queue_hello(client_t *c)
 {
     oshpacket_hello_t packet;
 
+    // If we initiated the connection but the remote node is not the one that
+    // we were expecting, gracefully disconnect
+    if (   c->initiator
+        && c->reconnect_nid
+        && c->reconnect_nid != c->handshake_id)
+    {
+        logger(LOG_WARN, "%s: Connected to %s but expected %s",
+            c->addrw, c->handshake_id->name, c->reconnect_nid->name);
+        return client_queue_goodbye(c);
+    }
+
     logger_debug(DBG_HANDSHAKE, "%s: Creating HELLO packet", c->addrw);
     memset(&packet, 0, sizeof(packet));
     logger_debug(DBG_HANDSHAKE, "%s: Local options 0x%08X", c->addrw, packet.options);
