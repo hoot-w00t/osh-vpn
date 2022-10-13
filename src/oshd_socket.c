@@ -303,37 +303,31 @@ static void oshd_add_client(client_t *c)
 }
 
 // Queue client connection (non-blocking connect)
-bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay)
+bool oshd_connect_queue(node_id_t *nid)
 {
     client_t *c;
     int client_fd;
     char d_addr[128];
     netaddr_t naddr;
     struct sockaddr_storage d_sin;
-    endpoint_t *endpoint = endpoint_group_selected(endpoints);
+    endpoint_t *endpoint;
 
-    if (endpoints->has_owner) {
-        node_id_t *id = node_id_find(endpoints->owner_name);
+    if (nid->node_socket) {
+        node_connect_end(nid, false, "Already connected (oshd_connect_queue)");
+        return false;
+    }
 
-        if (id && id->node_socket) {
-            logger(LOG_INFO,
-                "Giving up trying to reconnect to %s (already connected)",
-                id->name);
-            endpoint_group_select_first(endpoints);
-            endpoint_group_set_is_connecting(endpoints, false);
-            return false;
-        }
+    endpoint = endpoint_group_selected(nid->connect_endpoints);
+    if (!endpoint) {
+        // If this error appears the code is glitched
+        logger(LOG_ERR, "oshd_connect_queue called with no endpoint");
+        node_connect_continue(nid);
+        return false;
     }
 
     // Initialize and create a socket to connect to address:port
     memset(d_addr, 0, sizeof(d_addr));
     memset(&d_sin, 0, sizeof(d_sin));
-
-    if (!endpoint) {
-        // If this warning appears the code is glitched
-        logger(LOG_WARN, "oshd_connect_queue called with no endpoint");
-        return false;
-    }
 
     client_fd = tcp_outgoing_socket(endpoint->hostname, endpoint->port, d_addr,
         sizeof(d_addr), (struct sockaddr *) &d_sin, sizeof(d_sin));
@@ -341,7 +335,7 @@ bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay)
     if (client_fd < 0) {
         // Either the socket could not be created or there was a DNS lookup
         // error, try the next endpoint
-        client_reconnect_endpoints_next(endpoints, delay);
+        node_connect_continue(nid);
         return false;
     }
 
@@ -349,7 +343,7 @@ bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay)
     // client's socket information
     netaddr_pton(&naddr, d_addr);
     c = client_init(client_fd, true, &naddr, endpoint->port);
-    client_reconnect_to(c, endpoints, delay);
+    client_reconnect_to(c, nid);
     memcpy(&c->sin, &d_sin, sizeof(d_sin));
 
     // Set all the socket options
@@ -357,12 +351,15 @@ bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay)
 
     oshd_add_client(c);
 
-    if (endpoints->has_owner) {
-        logger(LOG_INFO, "Trying to connect to %s at %s...",
-            endpoints->owner_name, c->addrw);
+    // If d_addr != endpoint->hostname, it contained an actual hostname instead
+    // of an IP address
+    if (strcmp(d_addr, endpoint->hostname)) {
+        logger(LOG_INFO, "Trying to connect to %s at %s:%u (%s)", nid->name,
+            endpoint->hostname, endpoint->port, d_addr);
     } else {
-        logger(LOG_INFO, "Trying to connect to %s...", c->addrw);
+        logger(LOG_INFO, "Trying to connect to %s at %s...", nid->name, c->addrw);
     }
+
     return oshd_connect_async(c);
 }
 

@@ -16,16 +16,8 @@ static bool already_has_another_connection(client_t *c)
         // If the node has some reconnection endpoints we will transfer those to
         // the existing connection to prevent duplicate connections (which would
         // be refused by the remote node while the other socket is connected)
-        if (c->reconnect_endpoints) {
-            // Add this client's reconnection endpoints to the other node's
-            logger(LOG_INFO, "%s: Moving reconnection endpoints to %s (%s)",
-                c->addrw,
-                c->handshake_id->name,
-                c->handshake_id->node_socket->addrw);
-            endpoint_group_add_group(c->handshake_id->endpoints,
-                c->reconnect_endpoints);
-
-            // Disable reconnection for this client
+        if (c->reconnect_nid) {
+            node_connect_end(c->reconnect_nid, false, "Already connected (hello)");
             client_reconnect_disable(c);
         }
         return true;
@@ -52,20 +44,14 @@ static void finish_authentication(client_t *c)
     node_id_add_edge(me, c->id);
     node_tree_update();
 
-    // After successful authentication we can consider that the reconnection
-    // succeeded, reset the reconnection delay
-    client_reconnect_delay(c, oshd.reconnect_delay_min);
-
-    // Merge endpoints if the client's endpoints group is not the same as the node ID's
-    if (   c->reconnect_endpoints
-        && c->reconnect_endpoints != c->id->endpoints)
-    {
-        endpoint_group_add_group(c->id->endpoints, c->reconnect_endpoints);
-    }
+    // Ensure any connection attempt is finished with a success
+    if (c->reconnect_nid)
+        node_connect_end(c->reconnect_nid, true, NULL);
+    node_connect_end(c->id, true, NULL);
 
     // Always attach this socket's reconnection addresses to its node ID's
     // endpoints
-    client_reconnect_to(c, c->id->endpoints, oshd.reconnect_delay_min);
+    client_reconnect_to(c, c->id);
 
     // We are no longer actively trying to connect to these endpoints
     endpoint_group_set_is_connecting(c->id->endpoints, false);

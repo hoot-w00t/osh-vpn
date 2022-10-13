@@ -98,7 +98,7 @@ static time_t automatic_connections_handler(__attribute__((unused)) void *data)
 
         if (   !id->endpoints->always_retry
             && !id->node_socket
-            && !endpoint_group_is_connecting(id->endpoints)
+            && !node_connect_in_progress(id)
             && !endpoint_group_is_empty(id->endpoints)
             &&  id->pubkey
             &&  (oshd.remote_auth || id->pubkey_local)
@@ -110,7 +110,7 @@ static time_t automatic_connections_handler(__attribute__((unused)) void *data)
             // again
             oshd_gettime(&id->endpoints_next_retry);
             id->endpoints_next_retry.tv_sec += next_retry_delay;
-            event_queue_connect(id->endpoints, oshd.reconnect_delay_min, 0);
+            node_connect(id, true);
             remaining_tries -= 1;
         }
     }

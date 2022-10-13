@@ -46,6 +46,11 @@ struct node_id {
     endpoint_group_t *endpoints;
     struct timespec endpoints_next_retry;
 
+    // The connect event and endpoints used when trying to connect to the node
+    event_t *connect_event;
+    endpoint_group_t *connect_endpoints;
+    time_t connect_delay;
+
     // Array of the most recently received broadcast IDs
     // This is used to ignore broadcast packets which we already processed
     struct node_brd_id *seen_brd_id;
@@ -86,5 +91,10 @@ bool node_valid_name(const char *name);
 void node_brd_id_push(node_id_t *nid, const oshpacket_brd_id_t brd_id);
 void node_brd_id_pop(node_id_t *nid, size_t amount);
 bool node_brd_id_was_seen(node_id_t *nid, const oshpacket_brd_id_t brd_id);
+
+bool node_connect_in_progress(const node_id_t *nid);
+bool node_connect(node_id_t *nid, const bool now);
+void node_connect_continue(node_id_t *nid);
+void node_connect_end(node_id_t *nid, const bool success, const char *reason);
 
 #endif

@@ -142,12 +142,9 @@ struct client {
     // Endpoint "address:port" string
     char addrw[128];
 
-    // If *reconnect_endpoints is not NULL, contains one or multiple endpoints
-    // to try to reconnect to when this socket disconnects
-    // Reconnections will loop through all endpoints, if none works after a full
-    // loop the delay will increase
-    endpoint_group_t *reconnect_endpoints;
-    time_t reconnect_delay;
+    // If *reconnect_nid is not NULL, it points to the node to which we should
+    // try to connect to after the client is disconnected
+    node_id_t *reconnect_nid;
 
     int32_t rtt;               // RTT latency in milliseconds
     bool rtt_await;            // true while a PONG is expected to be received
@@ -161,12 +158,8 @@ void client_graceful_disconnect(client_t *c);
 void client_destroy(client_t *c);
 client_t *client_init(int fd, bool initiator, const netaddr_t *addr, uint16_t port);
 
-void client_reconnect_delay(client_t *c, time_t delay);
-void client_reconnect_to(client_t *c, endpoint_group_t *reconnect_endpoints,
-    time_t delay);
-void client_reconnect_disable(client_t *c);
-void client_reconnect_endpoints_next(endpoint_group_t *reconnect_endpoints, time_t delay);
-void client_reconnect(client_t *c);
+void client_reconnect_to(client_t *c, node_id_t *nid);
+#define client_reconnect_disable(c) client_reconnect_to(c, NULL)
 
 void client_finish_handshake(client_t *c);
 

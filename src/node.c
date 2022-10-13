@@ -1,6 +1,7 @@
 #include "node.h"
 #include "oshd.h"
 #include "logger.h"
+#include "events.h"
 #include "xalloc.h"
 #include "crypto/common.h"
 #include <stdio.h>
@@ -169,6 +170,7 @@ node_id_t *node_id_add(const char *name)
 
         strncpy(id->name, name, NODE_NAME_SIZE);
         id->endpoints = endpoint_group_create(id->name);
+        id->connect_endpoints = endpoint_group_create(id->name);
     }
     return id;
 }
@@ -176,10 +178,13 @@ node_id_t *node_id_add(const char *name)
 // Free resources allocated to *nid and the structure
 void node_id_free(node_id_t *nid)
 {
+    event_cancel(nid->connect_event);
+
     pkey_free(nid->pubkey);
     free(nid->pubkey_raw);
     free(nid->edges);
     endpoint_group_free(nid->endpoints);
+    endpoint_group_free(nid->connect_endpoints);
     free(nid->seen_brd_id);
     free(nid);
 }
@@ -612,4 +617,136 @@ bool node_brd_id_was_seen(node_id_t *nid, const oshpacket_brd_id_t brd_id)
     // The broadcast ID was not seen before
     node_brd_id_push(nid, brd_id);
     return false;
+}
+
+// Returns a valid delay within the reconnection delay limits
+static time_t reconnect_delay_limit(const time_t delay)
+{
+    if (delay < oshd.reconnect_delay_min)
+        return oshd.reconnect_delay_min;
+
+    if (delay > oshd.reconnect_delay_max)
+        return oshd.reconnect_delay_max;
+
+    return delay;
+}
+
+// Returns the next increased delay after a connection attempt failed
+static time_t reconnect_delay_next(const time_t delay)
+{
+    return reconnect_delay_limit(reconnect_delay_limit(delay) * 2);
+}
+
+// Increment the node's reconnection delay
+static void node_connect_delay_increment(node_id_t *nid)
+{
+    nid->connect_delay = reconnect_delay_next(nid->connect_delay);
+}
+
+// Initialize nid->connect_endpoints for a new connection attempt
+// Copies all the currently known valid endpoints, selects the first one
+// Returns false if there are no endpoints to connect to
+static bool node_connect_setup_endpoints(node_id_t *nid)
+{
+    endpoint_group_clear(nid->connect_endpoints);
+    endpoint_group_add_group(nid->connect_endpoints, nid->endpoints);
+    endpoint_group_select_first(nid->connect_endpoints);
+
+    return endpoint_group_selected(nid->connect_endpoints) != NULL;
+}
+
+// Returns true if a connection attempt to this node is in progress
+bool node_connect_in_progress(const node_id_t *nid)
+{
+    return endpoint_group_is_connecting(nid->connect_endpoints);
+}
+
+// Try connecting to this node
+// If now is true, the connection will be queued right away, otherwise it will
+// be queued after the minimum reconnection delay
+// Returns true if the connection attempt has successfully began
+// Returns false on any error:
+// - A connection attempt to this node is already in progress
+// - No endpoints can be used to connect
+// - We cannot authenticate this node (no public key)
+bool node_connect(node_id_t *nid, const bool now)
+{
+    // Don't queue an attempt if one is already in progress
+    if (node_connect_in_progress(nid)) {
+        logger(LOG_WARN, "Duplicate connection attempt to %s", nid->name);
+        return false;
+    }
+
+    // Authentication will fail later if we don't have the node's public key
+    if (!nid->pubkey) {
+        logger(LOG_WARN, "Cannot connect to %s: %s", nid->name, "No public key");
+        return false;
+    }
+
+    // Setup the endpoints to connect to
+    if (!node_connect_setup_endpoints(nid)) {
+        logger(LOG_WARN, "Cannot connect to %s: %s", nid->name, "No known endpoints");
+        return false;
+    }
+
+    nid->connect_delay = oshd.reconnect_delay_min;
+    endpoint_group_set_is_connecting(nid->connect_endpoints, true);
+
+    if (now) {
+        event_queue_connect(nid, EVENT_QUEUE_NOW);
+    } else {
+        event_queue_connect(nid, nid->connect_delay);
+        node_connect_delay_increment(nid);
+    }
+    return true;
+}
+
+// Continue trying to connect to a node
+void node_connect_continue(node_id_t *nid)
+{
+    // We cannot do anything if a connection attempt is not in progress
+    if (!node_connect_in_progress(nid)) {
+        logger(LOG_WARN, "Cannot continue connection attempt to %s: %s",
+            nid->name, "Not in progress");
+        return;
+    }
+
+    // Select the next endpoint in the group to try connecting to
+    if (endpoint_group_select_next(nid->connect_endpoints)) {
+        // We have another endpoint, try connecting to it now
+        event_queue_connect(nid, EVENT_QUEUE_NOW);
+    } else {
+        // All endpoints have been tried
+
+        // If we don't have to retry forever, end the attempt here
+        if (!nid->endpoints->always_retry) {
+            node_connect_end(nid, false, NULL);
+            return;
+        }
+
+        // Reset and setup the endpoints again for the next attempt
+        if (!node_connect_setup_endpoints(nid)) {
+            node_connect_end(nid, false, "No known endpoints");
+            return;
+        }
+
+        event_queue_connect(nid, nid->connect_delay);
+        node_connect_delay_increment(nid);
+    }
+}
+
+// Quit trying to connect to a node
+void node_connect_end(node_id_t *nid, const bool success, const char *reason)
+{
+    if (!success && node_connect_in_progress(nid)) {
+        if (reason) {
+            logger(LOG_WARN, "Giving up trying to connect to %s: %s", nid->name, reason);
+        } else {
+            logger(LOG_WARN, "Giving up trying to connect to %s", nid->name);
+        }
+    }
+
+    event_cancel(nid->connect_event);
+    endpoint_group_clear(nid->connect_endpoints);
+    endpoint_group_set_is_connecting(nid->connect_endpoints, false);
 }

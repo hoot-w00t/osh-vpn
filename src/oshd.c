@@ -290,8 +290,7 @@ void oshd_loop(void)
         if (oshd.node_tree[i]->local_node || oshd.node_tree[i]->endpoints->count == 0)
             continue;
 
-        event_queue_connect(oshd.node_tree[i]->endpoints,
-            oshd.reconnect_delay_min, EVENT_QUEUE_NOW);
+        node_connect(oshd.node_tree[i], true);
     }
 
     // Osh actually starts

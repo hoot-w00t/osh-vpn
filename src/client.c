@@ -53,7 +53,15 @@ static void client_disconnect(client_t *c)
         logger(LOG_WARN, "%s: Already disconnected", c->addrw);
     }
 
-    client_reconnect(c);
+    // If the client has a reconnection node, either try reconnecting or keep on
+    // trying to connect
+    if (c->reconnect_nid) {
+        if (node_connect_in_progress(c->reconnect_nid)) {
+            node_connect_continue(c->reconnect_nid);
+        } else {
+            node_connect(c->reconnect_nid, false);
+        }
+    }
 }
 
 // Free all ECDH keys and ciphers and reset their values to NULL
@@ -111,105 +119,11 @@ client_t *client_init(int fd, bool initiator, const netaddr_t *addr, uint16_t po
     return c;
 }
 
-// Returns a valid delay within the reconnection delay limits
-static time_t client_reconnect_delay_limit(time_t delay)
+// Set the node to which this client should try to reconnect to
+// If *nid is NULL reconnection will be disabled
+void client_reconnect_to(client_t *c, node_id_t *nid)
 {
-    // If delay is too small, return the minimum delay
-    if (delay < oshd.reconnect_delay_min)
-        return oshd.reconnect_delay_min;
-
-    // If it is too big, return the maximum
-    if (delay > oshd.reconnect_delay_max)
-        return oshd.reconnect_delay_max;
-
-    // Otherwise the delay is already within the limits, return it
-    return delay;
-}
-
-// Set the client's reconnection delay
-void client_reconnect_delay(client_t *c, time_t delay)
-{
-    c->reconnect_delay = client_reconnect_delay_limit(delay);
-}
-
-// Set the client's reconnection endpoints
-// Destroys the previous endpoints if there were some
-void client_reconnect_to(client_t *c, endpoint_group_t *reconnect_endpoints,
-    time_t delay)
-{
-    if (!reconnect_endpoints) {
-        // If this warning appears something in the code should be using
-        // client_reconnect_disable instead of this function, this situation
-        // should not happen
-        logger(LOG_WARN, "%s: client_reconnect_to called without any endpoints",
-            c->addrw);
-        c->reconnect_endpoints = NULL;
-    } else {
-        c->reconnect_endpoints = reconnect_endpoints;
-    }
-    client_reconnect_delay(c, delay);
-}
-
-// Disable the client's reconnection
-void client_reconnect_disable(client_t *c)
-{
-    c->reconnect_endpoints = NULL;
-    client_reconnect_delay(c, oshd.reconnect_delay_min);
-}
-
-// Queue a reconnection to one or multiple endpoints with delay seconds between
-// each loop
-// Doubles the delay for future reconnections
-static void client_reconnect_endpoints(endpoint_group_t *reconnect_endpoints, time_t delay)
-{
-    time_t event_delay = client_reconnect_delay_limit(delay);
-
-    if (endpoint_group_selected(reconnect_endpoints)) {
-        // We still have an endpoint, queue a reconnection to it
-        event_queue_connect(reconnect_endpoints, event_delay, event_delay);
-    } else {
-        // We don't have an endpoint, this means that we reached the end of the
-        // list
-        if (endpoint_group_select_first(reconnect_endpoints)) {
-            // There are endpoints in the group, maybe try to reconnect
-            if (reconnect_endpoints->always_retry) {
-                // Increment the delay and go back to the start of the list
-                event_delay = client_reconnect_delay_limit(delay * 2);
-                event_queue_connect(reconnect_endpoints, event_delay, event_delay);
-            } else {
-                logger(LOG_INFO, "Giving up trying to reconnect to %s",
-                    reconnect_endpoints->owner_name);
-                endpoint_group_set_is_connecting(reconnect_endpoints, false);
-            }
-        } else {
-            // The group is empty, there is nothing to do
-            logger(LOG_INFO, "Giving up trying to reconnect to %s (no endpoints)",
-                reconnect_endpoints->owner_name);
-            endpoint_group_set_is_connecting(reconnect_endpoints, false);
-        }
-    }
-}
-
-// Selects the next endpoint in the list before calling client_reconnect_endpoints
-void client_reconnect_endpoints_next(endpoint_group_t *reconnect_endpoints, time_t delay)
-{
-    endpoint_group_select_next(reconnect_endpoints);
-    client_reconnect_endpoints(reconnect_endpoints, delay);
-}
-
-// If the client has a reconnect_endpoints, queue a reconnection
-// If the previous reconnection was a success, start from the beginning of the
-// list, otherwise choose the next endpoint in the list
-void client_reconnect(client_t *c)
-{
-    if (c->reconnect_endpoints) {
-        if (endpoint_group_is_connecting(c->reconnect_endpoints)) {
-            client_reconnect_endpoints_next(c->reconnect_endpoints, c->reconnect_delay);
-        } else {
-            endpoint_group_select_first(c->reconnect_endpoints);
-            client_reconnect_endpoints(c->reconnect_endpoints, c->reconnect_delay);
-        }
-    }
+    c->reconnect_nid = nid;
 }
 
 // Mark the client's handshake as finished, this resets all variables used

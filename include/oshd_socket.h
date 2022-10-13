@@ -3,7 +3,7 @@
 
 #include "client.h"
 
-bool oshd_connect_queue(endpoint_group_t *endpoints, time_t delay);
+bool oshd_connect_queue(node_id_t *nid);
 void oshd_server_add(int server_fd);
 
 #endif

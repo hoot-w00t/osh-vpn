@@ -70,8 +70,7 @@ void event_cancel(event_t *event);
 void event_cancel_queue(void);
 
 void event_queue_automatic_connections(void);
-void event_queue_connect(endpoint_group_t *endpoints, time_t delay,
-    time_t event_delay);
+void event_queue_connect(node_id_t *nid, time_t delay);
 void event_queue_dynamic_ip_conflict(node_id_t *s1, node_id_t *s2,
     const netaddr_t *addr);
 void event_queue_expire_endpoints(void);
