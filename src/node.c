@@ -574,6 +574,15 @@ bool node_valid_name(const char *name)
            && name_len == strspn(name, valid_charset);
 }
 
+// Returns true if this node has a trusted public key
+// Returns false if it does not have a public key, or we don't trust it
+bool node_has_trusted_pubkey(const node_id_t *nid)
+{
+    if (!nid->pubkey)
+        return false;
+    return nid->pubkey_local || oshd.remote_auth;
+}
+
 // Push the broadcast ID to the end of the seen broadcast IDs array
 void node_brd_id_push(node_id_t *nid, const oshpacket_brd_id_t brd_id)
 {
@@ -704,8 +713,8 @@ bool node_connect(node_id_t *nid, const bool now)
     }
 
     // Authentication will fail later if we don't have the node's public key
-    if (!nid->pubkey) {
-        logger(LOG_WARN, "Cannot connect to %s: %s", nid->name, "No public key");
+    if (!node_has_trusted_pubkey(nid)) {
+        logger(LOG_WARN, "Cannot connect to %s: %s", nid->name, "No trusted public key");
         return false;
     }
 

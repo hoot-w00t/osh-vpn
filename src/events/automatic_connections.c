@@ -96,12 +96,10 @@ static time_t automatic_connections_handler(__attribute__((unused)) void *data)
         // The delta will be positive when enough time has elapsed
         timespecsub(&now, &id->endpoints_next_retry, &delta);
 
-        if (   !id->endpoints->always_retry
-            && !id->node_socket
+        if (   !id->node_socket
             && !node_connect_in_progress(id)
             && !endpoint_group_is_empty(id->endpoints)
-            &&  id->pubkey
-            &&  (oshd.remote_auth || id->pubkey_local)
+            &&  node_has_trusted_pubkey(id)
             &&  delta.tv_sec >= 0)
         {
             logger(LOG_INFO, "Automatically connecting to %s", id->name);

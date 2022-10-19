@@ -87,6 +87,7 @@ void node_tree_dump(void);
 void node_tree_update(void);
 
 bool node_valid_name(const char *name);
+bool node_has_trusted_pubkey(const node_id_t *nid);
 
 void node_brd_id_push(node_id_t *nid, const oshpacket_brd_id_t brd_id);
 void node_brd_id_pop(node_id_t *nid, size_t amount);

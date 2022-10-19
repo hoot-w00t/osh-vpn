@@ -241,15 +241,9 @@ bool oshpacket_handler_handshake_sig(client_t *c,
         return false;
     }
 
-    // Make sure that the remote node has a public key
-    if (!c->handshake_id->pubkey) {
-        logger(LOG_ERR, "%s: Handshake failed: %s", c->addrw, "No public key");
-        return false;
-    }
-
     // Make sure that the remote node's public key is trusted
     // We must verify it here even if this check is redundant
-    if (!c->handshake_id->pubkey_local && !oshd.remote_auth) {
+    if (!node_has_trusted_pubkey(c->handshake_id)) {
         logger(LOG_ERR, "%s: Handshake failed: %s", c->addrw, "No trusted public key");
         return false;
     }
