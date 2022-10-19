@@ -90,6 +90,8 @@ void endpoint_group_insert_group(endpoint_group_t *dest,
 void endpoint_group_del(endpoint_group_t *group, endpoint_t *endpoint);
 bool endpoint_group_del_expired(endpoint_group_t *group);
 
+bool endpoint_lookup(endpoint_t *endpoint, endpoint_group_t *group);
+
 endpoint_t *endpoint_group_selected(endpoint_group_t *group);
 endpoint_t *endpoint_group_select_next(endpoint_group_t *group);
 endpoint_t *endpoint_group_select_first(endpoint_group_t *group);

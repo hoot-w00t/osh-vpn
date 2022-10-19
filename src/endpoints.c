@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <netdb.h>
 
 // Determine the endpoint type of the value
 static endpoint_type_t endpoint_type_from_value(const char *value)
@@ -383,6 +384,77 @@ bool endpoint_group_del_expired(endpoint_group_t *group)
         endpoint = next;
     }
     return deleted;
+}
+
+// Lookup DNS addresses of the endpoint's value and add those after it
+// This function can delete/modify existing endpoints in the group
+// Returns false on error
+bool endpoint_lookup(endpoint_t *endpoint, endpoint_group_t *group)
+{
+    struct addrinfo *addrinfo = NULL;
+    int ai_err;
+
+    logger_debug(DBG_ENDPOINTS, "Resolving hostname %s", endpoint->value);
+    ai_err = getaddrinfo(endpoint->value, NULL, NULL, &addrinfo);
+    if (ai_err != 0) {
+        logger(LOG_ERR, "Failed to resolve %s: %s", endpoint->value, gai_strerror(ai_err));
+        return false;
+    }
+
+    endpoint_t *after = endpoint;
+    bool found;
+    netaddr_t addr;
+    char addrp[INET6_ADDRSTRLEN];
+
+    for (struct addrinfo *it = addrinfo; it != NULL; it = it->ai_next) {
+        switch (it->ai_family) {
+        case AF_INET:
+            found =    netaddr_dton(&addr, IP4, &((struct sockaddr_in *) it->ai_addr)->sin_addr)
+                    && netaddr_ntop(addrp, sizeof(addrp), &addr);
+            break;
+
+        case AF_INET6:
+            found =    netaddr_dton(&addr, IP6, &((struct sockaddr_in6 *) it->ai_addr)->sin6_addr)
+                    && netaddr_ntop(addrp, sizeof(addrp), &addr);
+            break;
+
+        default:
+            found = false;
+            break;
+        }
+
+        // If this endpoint is not compatible or could not be decoded, skip it
+        if (!found)
+            continue;
+
+        endpoint_socktype_t new_socktype = endpoint->socktype;
+
+        // Check if the endpoint already exists
+        if (endpoint_group_find(group, addrp, endpoint->port)) {
+            endpoint_t *old_endpoint = endpoint_group_find_after(after, addrp, endpoint->port);
+
+            // The endpoint already exists before the current one, skip it
+            if (!old_endpoint) {
+                logger_debug(DBG_ENDPOINTS, "%s: Ignoring looked up endpoint %s (%s)",
+                    group->debug_id, addrp, "already exists");
+                continue;
+            }
+
+            // The endpoint exists after the current one, move it here by
+            // deleting and re-inserting it
+            new_socktype |= old_endpoint->socktype;
+            endpoint_group_del(group, old_endpoint);
+        }
+
+        // Insert the new endpoint
+        logger_debug(DBG_ENDPOINTS, "%s: Inserting looked up endpoint %s:%u",
+                    group->debug_id, addrp, endpoint->port);
+        after = endpoint_group_insert_after(after, group,
+            addrp, endpoint->port, new_socktype, endpoint->can_expire);
+    }
+
+    freeaddrinfo(addrinfo);
+    return true;
 }
 
 // Returns the selected endpoint

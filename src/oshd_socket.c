@@ -325,6 +325,14 @@ bool oshd_connect_queue(node_id_t *nid)
         return false;
     }
 
+    // If the endpoint is a hostname, lookup its IP addresses and insert them to
+    // the connection group
+    if (endpoint->type == ENDPOINT_TYPE_HOSTNAME) {
+        endpoint_lookup(endpoint, nid->connect_endpoints);
+        node_connect_continue(nid);
+        return false;
+    }
+
     // Initialize and create a socket to connect to address:port
     memset(d_addr, 0, sizeof(d_addr));
     memset(&d_sin, 0, sizeof(d_sin));
@@ -350,15 +358,7 @@ bool oshd_connect_queue(node_id_t *nid)
     oshd_setsockopts(client_fd);
 
     oshd_add_client(c);
-
-    // If d_addr != endpoint->hostname, it contained an actual hostname instead
-    // of an IP address
-    if (strcmp(d_addr, endpoint->value)) {
-        logger(LOG_INFO, "Trying to connect to %s at %s:%u (%s)", nid->name,
-            endpoint->value, endpoint->port, d_addr);
-    } else {
-        logger(LOG_INFO, "Trying to connect to %s at %s...", nid->name, c->addrw);
-    }
+    logger(LOG_INFO, "Trying to connect to %s at %s...", nid->name, c->addrw);
 
     return oshd_connect_async(c);
 }
