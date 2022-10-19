@@ -335,9 +335,7 @@ static bool oshd_param_excludedevice(ecp_t *ecp)
 static endpoint_group_t *get_endpoint_group(const char *node_name)
 {
     for (size_t i = 0; i < oshd.conf_endpoints_count; ++i) {
-        if (   oshd.conf_endpoints[i]->has_owner
-            && !strcmp(oshd.conf_endpoints[i]->owner_name, node_name))
-        {
+        if (!strcmp(oshd.conf_endpoints[i]->owner_name, node_name)) {
             // The node already has an endpoint group
             return oshd.conf_endpoints[i];
         }
@@ -347,7 +345,7 @@ static endpoint_group_t *get_endpoint_group(const char *node_name)
     oshd.conf_endpoints_count += 1;
     oshd.conf_endpoints = xreallocarray(oshd.conf_endpoints,
         oshd.conf_endpoints_count, sizeof(endpoint_group_t *));
-    oshd.conf_endpoints[oshd.conf_endpoints_count - 1] = endpoint_group_create(node_name);
+    oshd.conf_endpoints[oshd.conf_endpoints_count - 1] = endpoint_group_create(node_name, "conf");
     return oshd.conf_endpoints[oshd.conf_endpoints_count - 1];
 }
 
@@ -383,7 +381,7 @@ static bool oshd_param_endpoint(ecp_t *ecp)
     port_no = (*port) ? ((uint16_t) atoi(port)) : OSHD_DEFAULT_PORT;
 
     // Add the endpoint to the group
-    endpoint = endpoint_group_add(group, addr, port_no, NETAREA_UNK, false);
+    endpoint = endpoint_group_insert_sorted(group, addr, port_no, ENDPOINT_SOCKTYPE_TCP, false);
 
     logger_debug(DBG_CONF, "%s endpoint %s:%u for %s",
         endpoint ? "Added" : "Ignored", addr, port_no,

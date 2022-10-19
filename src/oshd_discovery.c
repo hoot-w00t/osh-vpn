@@ -169,8 +169,8 @@ void oshd_discover_local_endpoints(void)
         logger_debug(DBG_ENDPOINTS, "Discovered %s endpoint: %s (%s)",
             netarea_name(area), addrw, ifa->ifa_name);
 
-        endpoint_t *endpoint = endpoint_group_add(local_id->endpoints, addrw,
-            oshd.server_port, area, true);
+        endpoint_t *endpoint = endpoint_group_insert_sorted(local_id->endpoints, addrw,
+            oshd.server_port, ENDPOINT_SOCKTYPE_TCP, true);
 
         if (endpoint)
             client_queue_endpoint_broadcast(NULL, endpoint, local_id->endpoints);

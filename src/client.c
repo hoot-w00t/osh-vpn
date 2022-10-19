@@ -695,15 +695,10 @@ bool client_queue_endpoint_broadcast(client_t *exclude, const endpoint_t *endpoi
     oshpacket_endpoint_t pkt;
     netaddr_t addr;
 
-    if (!group->has_owner) {
-        logger(LOG_ERR, "Failed to broadcast endpoint %s:%u: No owner (%s)",
-            endpoint->hostname, endpoint->port, group->owner_name);
-        return false;
-    }
-    if (!netaddr_lookup(&addr, endpoint->hostname)) {
+    if (!netaddr_lookup(&addr, endpoint->value)) {
         logger(LOG_WARN,
-            "Failed to broadcast endpoint %s:%u owned by %s (lookup failed)",
-            endpoint->hostname, endpoint->port, group->owner_name);
+            "Failed to broadcast endpoint %s:%u from group %s (lookup failed)",
+            endpoint->value, endpoint->port, group->debug_id);
         return false;
     }
 
@@ -714,8 +709,8 @@ bool client_queue_endpoint_broadcast(client_t *exclude, const endpoint_t *endpoi
     netaddr_cpy_data(&pkt.addr_data, &addr);
     pkt.port = htons(endpoint->port);
 
-    logger_debug(DBG_ENDPOINTS, "Broadcasting endpoint %s:%u owned by %s",
-        endpoint->hostname, endpoint->port, group->owner_name);
+    logger_debug(DBG_ENDPOINTS, "Broadcasting endpoint %s:%u from group %s",
+        endpoint->value, endpoint->port, group->debug_id);
     return client_queue_packet_broadcast(exclude, ENDPOINT, &pkt, sizeof(pkt));
 }
 

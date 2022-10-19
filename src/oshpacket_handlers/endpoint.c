@@ -44,8 +44,9 @@ bool oshpacket_handler_endpoint(client_t *c, __attribute__((unused)) node_id_t *
         logger_debug(DBG_ENDPOINTS, "%s: %s: Adding %s endpoint %s:%u to %s",
             c->addrw, c->id->name, netarea_name(area),
             hostname, hport, id->name);
-        endpoint_group_add(id->endpoints, hostname,
-            hport, area, true);
+
+        endpoint_group_insert_sorted(id->endpoints, hostname, hport,
+            ENDPOINT_SOCKTYPE_TCP, true);
     }
 
     return true;

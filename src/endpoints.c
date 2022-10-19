@@ -7,16 +7,71 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Determine the endpoint type of the value
+static endpoint_type_t endpoint_type_from_value(const char *value)
+{
+    netaddr_t addr;
+
+    if (netaddr_pton(&addr, value)) {
+        switch (addr.type) {
+            case IP4: return ENDPOINT_TYPE_IP4;
+            case IP6: return ENDPOINT_TYPE_IP6;
+            default : return ENDPOINT_TYPE_UNKNOWN;
+        }
+    } else {
+        return ENDPOINT_TYPE_HOSTNAME;
+    }
+}
+
+// Determine the netarea_t of the value
+static netarea_t endpoint_area_from_value(const char *value, const endpoint_type_t type)
+{
+    netaddr_t addr;
+
+    switch (type) {
+        case ENDPOINT_TYPE_IP4:
+        case ENDPOINT_TYPE_IP6:
+            return netaddr_pton(&addr, value) ? netaddr_area(&addr) : NETAREA_UNK;
+
+        default:
+            return NETAREA_UNK;
+    }
+}
+
+// Return the endpoint's priority value
+static int endpoint_calc_priority(const endpoint_t *endpoint)
+{
+    if (!endpoint->can_expire)
+        return -1;
+
+    switch (endpoint->type) {
+        case ENDPOINT_TYPE_HOSTNAME:
+            return _netarea_last;
+
+        case ENDPOINT_TYPE_IP4:
+        case ENDPOINT_TYPE_IP6:
+            return endpoint->area;
+
+        default:
+            return _netarea_last + 1;
+    }
+}
+
 // Allocate a new endpoint
-static endpoint_t *endpoint_create(const char *hostname, uint16_t port,
-    netarea_t area, bool can_expire)
+static endpoint_t *endpoint_create(const char *value, const uint16_t port,
+    const endpoint_socktype_t socktype, const bool can_expire)
 {
     endpoint_t *endpoint = xzalloc(sizeof(endpoint_t));
 
-    endpoint->hostname = xstrdup(hostname);
+    endpoint->value = xstrdup(value);
     endpoint->port = port;
-    endpoint->area = area;
+    endpoint->socktype = socktype;
     endpoint->can_expire = can_expire;
+
+    endpoint->type = endpoint_type_from_value(value);
+    endpoint->area = endpoint_area_from_value(value, endpoint->type);
+    endpoint->priority = endpoint_calc_priority(endpoint);
+
     return endpoint;
 }
 
@@ -24,34 +79,48 @@ static endpoint_t *endpoint_create(const char *hostname, uint16_t port,
 static void endpoint_free(endpoint_t *endpoint)
 {
     if (endpoint) {
-        free(endpoint->hostname);
+        free(endpoint->value);
         free(endpoint);
     }
 }
 
-// Returns true if endpoint has the same hostname and port
-static bool endpoint_eq(const endpoint_t *endpoint, const char *hostname,
-    uint16_t port)
+// Returns true if endpoint has the same value and port
+static bool endpoint_eq(const endpoint_t *endpoint, const char *value,
+    const uint16_t port)
 {
-    return    !strcmp(endpoint->hostname, hostname)
+    return    !strcmp(endpoint->value, value)
            &&  endpoint->port == port;
 }
 
-// Create an empty endpoint group
-endpoint_group_t *endpoint_group_create(const char *owner_name)
+// Refresh an endpoint
+static void endpoint_refresh(const endpoint_group_t *group, endpoint_t *endpoint)
 {
+    // Update last_refresh timestamp
+    oshd_gettime(&endpoint->last_refresh);
+    logger_debug(DBG_ENDPOINTS, "%s: Refreshed endpoint %s:%u",
+        group->debug_id, endpoint->value, endpoint->port);
+}
+
+// Returns true if the endpoint is part of the group
+static bool is_endpoint_ptr_in_group(const endpoint_t *endpoint,
+    const endpoint_group_t *group)
+{
+    foreach_endpoint_const(it, group) {
+        if (it == endpoint)
+            return true;
+    }
+    return false;
+}
+
+// Create an empty endpoint group
+endpoint_group_t *endpoint_group_create(const char *owner_name, const char *debug_id)
+{
+    const size_t debug_id_size = strlen(owner_name) + strlen(debug_id) + 2;
     endpoint_group_t *group = xzalloc(sizeof(endpoint_group_t));
 
-    if (owner_name) {
-        group->owner_name = xstrdup(owner_name);
-        group->has_owner = true;
-    } else {
-        char owner_ptr[32];
-
-        snprintf(owner_ptr, sizeof(owner_ptr), "%p", group);
-        group->owner_name = xstrdup(owner_ptr);
-        group->has_owner = false;
-    }
+    group->owner_name = xstrdup(owner_name);
+    group->debug_id = xzalloc(debug_id_size);
+    snprintf(group->debug_id, debug_id_size, "%s:%s", owner_name, debug_id);
     return group;
 }
 
@@ -61,10 +130,10 @@ void endpoint_group_free(endpoint_group_t *group)
     if (!group)
         return;
 
-    logger_debug(DBG_ENDPOINTS, "Freeing endpoint group %p (%s)",
-        group, group->owner_name);
+    logger_debug(DBG_ENDPOINTS, "%s: Freeing group", group->debug_id);
     endpoint_group_clear(group);
     free(group->owner_name);
+    free(group->debug_id);
     free(group);
 }
 
@@ -74,6 +143,8 @@ void endpoint_group_clear(endpoint_group_t *group)
     endpoint_t *i = group->head;
     endpoint_t *next;
 
+    logger_debug(DBG_ENDPOINTS, "%s: Clearing endpoints", group->debug_id);
+
     while (i) {
         next = i->next;
         endpoint_free(i);
@@ -82,64 +153,143 @@ void endpoint_group_clear(endpoint_group_t *group)
     group->head = NULL;
     group->selected = NULL;
     group->count = 0;
-
-    logger_debug(DBG_ENDPOINTS, "Cleared all endpoints from group %p (%s)",
-        group, group->owner_name);
 }
 
-// Searches for an endpoint matching hostname and port
-// Returns NULL if it cannot be found
-endpoint_t *endpoint_group_find(endpoint_group_t *group, const char *hostname,
-    uint16_t port)
+// Returns the first matching endpoint starting at element *start
+static endpoint_t *_endpoint_group_find(endpoint_t *start,
+    const char *value, const uint16_t port)
 {
-    foreach_endpoint(endpoint, group) {
-        if (endpoint_eq(endpoint, hostname, port))
-            return endpoint;
+    for (endpoint_t *it = start; it != NULL; it = it->next) {
+        if (endpoint_eq(it, value, port))
+            return it;
     }
     return NULL;
 }
 
-// Refresh an endpoint
-static void endpoint_refresh(const endpoint_group_t *group, endpoint_t *endpoint)
+// Searches for the first endpoint matching value and port
+// Returns NULL if it cannot be found
+endpoint_t *endpoint_group_find(endpoint_group_t *group, const char *value,
+    const uint16_t port)
 {
-    // Update last_refresh timestamp
-    oshd_gettime(&endpoint->last_refresh);
-    logger_debug(DBG_ENDPOINTS, "Refreshed endpoint %s:%u from group %p (%s)",
-        endpoint->hostname, endpoint->port, group, group->owner_name);
+    return _endpoint_group_find(group->head, value, port);
 }
 
-// Add an endpoint to the group
+// Searches for the first endpoint matching value and port starting at the
+// element *after->next
+// Returns NULL if it cannot be found
+endpoint_t *endpoint_group_find_after(endpoint_t *after,
+    const char *value, const uint16_t port)
+{
+    return _endpoint_group_find(after->next, value, port);
+}
+
+// Find a duplicate endpoint (taking can_expire and socktype into account)
+// Returns NULL if the endpoint does not yet exist
+endpoint_t *endpoint_group_find_duplicate(endpoint_group_t *group,
+    const char *value, const uint16_t port, const endpoint_socktype_t socktype, const bool can_expire)
+{
+    endpoint_t *endpoint = endpoint_group_find(group, value, port);
+
+    while (endpoint) {
+        // If the matching endpoint and the new one have the same can_expire
+        // value the existing one can inherit the socktype value of the new one
+        if (endpoint->can_expire == can_expire)
+            return endpoint;
+
+        // If the matching endpoint has all the socket types of the new one, it
+        // can be considered as a duplicate
+        if ((endpoint->socktype & socktype) == socktype)
+            return endpoint;
+
+        // Find the next occurence of the endpoint
+        endpoint = endpoint_group_find_after(endpoint, value, port);
+    }
+
+    // No duplicates were found
+    return NULL;
+}
+
+// Insert *endpoint at the location pointed to by **it
+// **it must be part of the *group linked list
+// Returns the inserted endpoint
+static endpoint_t *endpoint_group_insert_at2(endpoint_t **it, endpoint_group_t *group,
+    endpoint_t *endpoint)
+{
+    endpoint->next = *it;
+    *it = endpoint;
+    group->count += 1;
+    return endpoint;
+}
+
+// Insert a new endpoint at the location pointed to by **it
+// **it must be part of the *group linked list
+// Returns the inserted endpoint
+static endpoint_t *endpoint_group_insert_at(endpoint_t **it, endpoint_group_t *group,
+    const char *value, const uint16_t port, const endpoint_socktype_t socktype, const bool can_expire)
+{
+    endpoint_t *endpoint = endpoint_create(value, port, socktype, can_expire);
+
+    return endpoint_group_insert_at2(it, group, endpoint);
+}
+
+// Insert a new endpoint at the end of the group and returns it
+endpoint_t *endpoint_group_insert_back(endpoint_group_t *group,
+    const char *value, const uint16_t port, const endpoint_socktype_t socktype, const bool can_expire)
+{
+    endpoint_t **it = &group->head;
+
+    while (*it)
+        it = &(*it)->next;
+
+    return endpoint_group_insert_at(it, group, value, port, socktype, can_expire);
+}
+
+// Insert a new endpoint after the given element and returns it
+endpoint_t *endpoint_group_insert_after(endpoint_t *after, endpoint_group_t *group,
+    const char *value, const uint16_t port, const endpoint_socktype_t socktype, const bool can_expire)
+{
+    // This should never happen
+    if (!is_endpoint_ptr_in_group(after, group)) {
+        logger(LOG_CRIT, "%s:%i: %s: endpoint pointer is not part of the given group",
+            __FILE__, __LINE__, __func__);
+        abort();
+    }
+
+    return endpoint_group_insert_at(&after->next, group, value, port, socktype, can_expire);
+}
+
+// Insert an endpoint to the group sorted by priority
 // If a matching endpoint is already in the group it will only be refreshed and
 // nothing else will be changed
 // Returns the endpoint pointer if it was added, returns NULL if it was already
 // in the group
-endpoint_t *endpoint_group_add(endpoint_group_t *group, const char *hostname,
-    uint16_t port, netarea_t area, bool can_expire)
+endpoint_t *endpoint_group_insert_sorted(endpoint_group_t *group,
+    const char *value, const uint16_t port, const endpoint_socktype_t socktype, const bool can_expire)
 {
-    endpoint_t *endpoint = endpoint_group_find(group, hostname, port);
+    endpoint_t *endpoint = endpoint_group_find_duplicate(group, value, port, socktype, can_expire);
     endpoint_t *added = NULL;
+    endpoint_t **it;
 
-    if (!endpoint) {
-        endpoint_t **i = &group->head;
+    if (endpoint) {
+        // The same endpoint already exists in the group
 
-        endpoint = endpoint_create(hostname, port, area, can_expire);
+        // Add the socket types of the new endpoint to the existing one
+        endpoint->socktype |= socktype;
+    } else {
+        // The endpoint does not already exist in the group, create it
+
+        it = &group->head;
+        endpoint = endpoint_create(value, port, socktype, can_expire);
         added = endpoint;
 
-        // Insert the new endpoint sorted by its area
-        while (*i) {
-            // Endpoints that don't expire always come first
-            if (!endpoint->can_expire && (*i)->can_expire)
+        while (*it) {
+            // Sort by ascending priority value
+            if (endpoint->priority < (*it)->priority)
                 break;
 
-            // Otherwise sort them using the area in ascending order
-            if ((*i)->area > endpoint->area)
-                break;
-
-            i = &(*i)->next;
+            it = &(*it)->next;
         }
-        endpoint->next = *i;
-        *i = endpoint;
-        group->count += 1;
+        endpoint_group_insert_at2(it, group, endpoint);
 
         // Endpoints which can't expire are endpoints from the configuration
         // file, having those in the group means that we should never give up
@@ -147,8 +297,8 @@ endpoint_t *endpoint_group_add(endpoint_group_t *group, const char *hostname,
         if (!can_expire)
             group->always_retry = true;
 
-        logger_debug(DBG_ENDPOINTS, "Added endpoint %s:%u to group %p (%s)",
-            endpoint->hostname, endpoint->port, group, group->owner_name);
+        logger_debug(DBG_ENDPOINTS, "%s: Added endpoint %s:%u",
+            group->debug_id, endpoint->value, endpoint->port);
 
         // Automatically select the first item if a connection is not underway
         if (!endpoint_group_is_connecting(group))
@@ -159,47 +309,48 @@ endpoint_t *endpoint_group_add(endpoint_group_t *group, const char *hostname,
     return added;
 }
 
-// Same as endpoint_group_add but gets the values from endpoint
-void endpoint_group_add_ep(endpoint_group_t *group, const endpoint_t *endpoint)
+// Same as endpoint_group_insert_sorted but gets the values from endpoint
+void endpoint_group_insert_sorted_ep(endpoint_group_t *group,
+    const endpoint_t *endpoint)
 {
-    endpoint_group_add(group, endpoint->hostname, endpoint->port,
-        endpoint->area, endpoint->can_expire);
+    endpoint_group_insert_sorted(group, endpoint->value, endpoint->port,
+        endpoint->socktype, endpoint->can_expire);
 }
 
-// Add all endpoints from src to dest, does the same as endpoint_group_add
-void endpoint_group_add_group(endpoint_group_t *dest,
+// Insert all endpoints from src to dest, using endpoint_group_insert_sorted
+void endpoint_group_insert_group(endpoint_group_t *dest,
     const endpoint_group_t *src)
 {
     // Stop early if we try to merge the same group
-    if (dest != src) {
-        foreach_endpoint(endpoint, src) {
-            endpoint_group_add_ep(dest, endpoint);
-        }
+    if (dest == src)
+        return;
+
+    foreach_endpoint_const(endpoint, src) {
+        endpoint_group_insert_sorted_ep(dest, endpoint);
     }
 }
 
 // Delete endpoint from group
 void endpoint_group_del(endpoint_group_t *group, endpoint_t *endpoint)
 {
-    endpoint_t **i = &group->head;
+    endpoint_t **it = &group->head;
 
     // If the selected endpoint is the one we are deleting, select the next one
     if (group->selected == endpoint)
         endpoint_group_select_next(group);
 
-    while (*i) {
-        if (*i == endpoint) {
-            *i = (*i)->next;
+    while (*it) {
+        if (*it == endpoint) {
+            *it = (*it)->next;
             group->count -= 1;
 
-            logger_debug(DBG_ENDPOINTS,
-                "Deleted endpoint %s:%u from group %p (%s)",
-                endpoint->hostname, endpoint->port, group, group->owner_name);
+            logger_debug(DBG_ENDPOINTS, "%s: Deleted endpoint %s:%u",
+                group->debug_id, endpoint->value, endpoint->port);
 
             endpoint_free(endpoint);
             break;
         }
-        i = &(*i)->next;
+        it = &(*it)->next;
     }
 }
 
@@ -245,9 +396,9 @@ endpoint_t *endpoint_group_selected(endpoint_group_t *group)
 endpoint_t *endpoint_group_select_next(endpoint_group_t *group)
 {
     if (group->selected) {
-        logger_debug(DBG_ENDPOINTS,
-            "Selecting next endpoint in group %p owned by %s (%p -> %p)",
-            group, group->owner_name, group->selected, group->selected->next);
+        logger_debug(DBG_ENDPOINTS, "%s: Select next endpoint (%p -> %p)",
+            group->debug_id, group->selected, group->selected->next);
+
         group->selected = group->selected->next;
     }
     return group->selected;
@@ -256,10 +407,12 @@ endpoint_t *endpoint_group_select_next(endpoint_group_t *group)
 // Select the first endpoint in the group and return its pointer
 endpoint_t *endpoint_group_select_first(endpoint_group_t *group)
 {
-    logger_debug(DBG_ENDPOINTS,
-        "Selecting first endpoint in group %p owned by %s (%p)",
-        group, group->owner_name, group->head);
-    group->selected = group->head;
+    if (group->selected != group->head) {
+        logger_debug(DBG_ENDPOINTS, "%s: Select first endpoint (%p)",
+            group->debug_id, group->head);
+
+        group->selected = group->head;
+    }
     return group->selected;
 }
 
@@ -267,8 +420,6 @@ endpoint_t *endpoint_group_select_first(endpoint_group_t *group)
 void endpoint_group_set_is_connecting(endpoint_group_t *group, bool is_connecting)
 {
     group->is_connecting = is_connecting;
-    logger_debug(DBG_ENDPOINTS, "Set is_connecting to %s for group %p (%s)",
-        group->is_connecting ? "true" : "false",
-        group,
-        group->owner_name);
+    logger_debug(DBG_ENDPOINTS, "%s: Set is_connecting to %s", group->debug_id,
+        group->is_connecting ? "true" : "false");
 }

@@ -169,8 +169,8 @@ node_id_t *node_id_add(const char *name)
         oshd.node_tree_count = new_count;
 
         strncpy(id->name, name, NODE_NAME_SIZE);
-        id->endpoints = endpoint_group_create(id->name);
-        id->connect_endpoints = endpoint_group_create(id->name);
+        id->endpoints = endpoint_group_create(id->name, "known");
+        id->connect_endpoints = endpoint_group_create(id->name, "connect");
     }
     return id;
 }
@@ -643,13 +643,39 @@ static void node_connect_delay_increment(node_id_t *nid)
     nid->connect_delay = reconnect_delay_next(nid->connect_delay);
 }
 
+// Returns true if the endpoint type can be used to connect to a node
+static bool connect_endpoint_type_compatible(const endpoint_type_t type)
+{
+    switch (type) {
+        case ENDPOINT_TYPE_HOSTNAME:
+        case ENDPOINT_TYPE_IP4:
+        case ENDPOINT_TYPE_IP6:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
 // Initialize nid->connect_endpoints for a new connection attempt
 // Copies all the currently known valid endpoints, selects the first one
 // Returns false if there are no endpoints to connect to
 static bool node_connect_setup_endpoints(node_id_t *nid)
 {
+    const endpoint_socktype_t st_mask = ENDPOINT_SOCKTYPE_TCP;
+
     endpoint_group_clear(nid->connect_endpoints);
-    endpoint_group_add_group(nid->connect_endpoints, nid->endpoints);
+    foreach_endpoint_const(endpoint, nid->endpoints) {
+        if (!(endpoint->socktype & st_mask))
+            continue;
+
+        if (!connect_endpoint_type_compatible(endpoint->type))
+            continue;
+
+        endpoint_group_insert_sorted(nid->connect_endpoints,
+            endpoint->value, endpoint->port,
+            endpoint->socktype & st_mask, endpoint->can_expire);
+    }
     endpoint_group_select_first(nid->connect_endpoints);
 
     return endpoint_group_selected(nid->connect_endpoints) != NULL;

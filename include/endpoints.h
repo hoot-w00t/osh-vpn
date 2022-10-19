@@ -10,16 +10,39 @@
 // Endpoints expire after 60 minutes
 #define ENDPOINT_EXPIRY (3600)
 
+typedef enum endpoint_type endpoint_type_t;
+typedef enum endpoint_socktype endpoint_socktype_t;
 typedef struct endpoint endpoint_t;
 typedef struct endpoint_group endpoint_group_t;
 
+// Type of the endpoint's value
+enum endpoint_type {
+    ENDPOINT_TYPE_HOSTNAME = 0,
+    ENDPOINT_TYPE_IP4,
+    ENDPOINT_TYPE_IP6,
+    _endpoint_type_last
+};
+#define ENDPOINT_TYPE_UNKNOWN ENDPOINT_TYPE_HOSTNAME
+
+// Socket types with which the endpoint is compatible
+enum endpoint_socktype {
+    ENDPOINT_SOCKTYPE_NONE  = 0,
+    ENDPOINT_SOCKTYPE_TCP   = (1 << 0),
+    _endpoint_socktype_last
+};
+
 struct endpoint {
-    char *hostname;
+    char *value;
     uint16_t port;
+
     netarea_t area;
+    endpoint_type_t type;
+    endpoint_socktype_t socktype;
 
     bool can_expire;
     struct timespec last_refresh;
+
+    int priority;
 
     endpoint_t *next;
 };
@@ -36,23 +59,32 @@ struct endpoint_group {
     bool is_connecting;
 
     // Name of the node which owns this group
-    // If NULL is passed as an owner name, has_owner is false and the owner name
-    // is set to the group's pointer
     char *owner_name;
-    bool has_owner;
+
+    // Debug ID used to better identify the group in log messages
+    char *debug_id;
 };
 
-endpoint_group_t *endpoint_group_create(const char *owner_name);
+endpoint_group_t *endpoint_group_create(const char *owner_name, const char *debug_id);
 void endpoint_group_free(endpoint_group_t *group);
 void endpoint_group_clear(endpoint_group_t *group);
 
-endpoint_t *endpoint_group_find(endpoint_group_t *group, const char *hostname,
-    uint16_t port);
+endpoint_t *endpoint_group_find(endpoint_group_t *group, const char *value,
+    const uint16_t port);
+endpoint_t *endpoint_group_find_after(endpoint_t *after,
+    const char *value, const uint16_t port);
+endpoint_t *endpoint_group_find_duplicate(endpoint_group_t *group,
+    const char *value, const uint16_t port, const endpoint_socktype_t socktype, const bool can_expire);
 
-endpoint_t *endpoint_group_add(endpoint_group_t *group, const char *hostname,
-    uint16_t port, netarea_t area, bool can_expire);
-void endpoint_group_add_ep(endpoint_group_t *group, const endpoint_t *endpoint);
-void endpoint_group_add_group(endpoint_group_t *dest,
+endpoint_t *endpoint_group_insert_back(endpoint_group_t *group,
+    const char *value, const uint16_t port, const endpoint_socktype_t socktype, const bool can_expire);
+endpoint_t *endpoint_group_insert_after(endpoint_t *after, endpoint_group_t *group,
+    const char *value, const uint16_t port, const endpoint_socktype_t socktype, const bool can_expire);
+endpoint_t *endpoint_group_insert_sorted(endpoint_group_t *group,
+    const char *value, const uint16_t port, const endpoint_socktype_t socktype, const bool can_expire);
+void endpoint_group_insert_sorted_ep(endpoint_group_t *group,
+    const endpoint_t *endpoint);
+void endpoint_group_insert_group(endpoint_group_t *dest,
     const endpoint_group_t *src);
 
 void endpoint_group_del(endpoint_group_t *group, endpoint_t *endpoint);
@@ -68,5 +100,8 @@ void endpoint_group_set_is_connecting(endpoint_group_t *group, bool is_connectin
 
 #define foreach_endpoint(endpoint, group) \
     for (endpoint_t *endpoint = (group)->head; endpoint; endpoint = endpoint->next)
+
+#define foreach_endpoint_const(endpoint, group) \
+    for (const endpoint_t *endpoint = (group)->head; endpoint; endpoint = endpoint->next)
 
 #endif

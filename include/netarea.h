@@ -4,7 +4,8 @@
 typedef enum netarea {
     NETAREA_UNK = 0, // Unknown area
     NETAREA_LAN,     // Local area network
-    NETAREA_WAN      // Wide area network
+    NETAREA_WAN,     // Wide area network
+    _netarea_last
 } netarea_t;
 
 // Returns the name of the area

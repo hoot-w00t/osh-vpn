@@ -81,15 +81,10 @@ static bool client_queue_endpoint_exg_internal(client_t *c,
     oshpacket_endpoint_t pkt;
     netaddr_t addr;
 
-    if (!group->has_owner) {
-        logger(LOG_ERR, "%s: Failed to queue endpoint %s:%u: No owner (%s)",
-            c->addrw, endpoint->hostname, endpoint->port, group->owner_name);
-        return false;
-    }
-    if (!netaddr_lookup(&addr, endpoint->hostname)) {
+    if (!netaddr_lookup(&addr, endpoint->value)) {
         logger(LOG_WARN,
-            "%s: Failed to queue endpoint %s:%u owned by %s (lookup failed)",
-            c->addrw, endpoint->hostname, endpoint->port, group->owner_name);
+            "%s: Failed to queue endpoint %s:%u from group %s (lookup failed)",
+            c->addrw, endpoint->value, endpoint->port, group->debug_id);
         return true;
     }
 
@@ -100,8 +95,8 @@ static bool client_queue_endpoint_exg_internal(client_t *c,
     netaddr_cpy_data(&pkt.addr_data, &addr);
     pkt.port = htons(endpoint->port);
 
-    logger_debug(DBG_STATEEXG, "%s: %s: Exchanging endpoint %s:%u owned by %s",
-        c->addrw, c->id->name, endpoint->hostname, endpoint->port, group->owner_name);
+    logger_debug(DBG_STATEEXG, "%s: %s: Exchanging endpoint %s:%u from group %s",
+        c->addrw, c->id->name, endpoint->value, endpoint->port, group->debug_id);
     return client_queue_packet_exg(c, ENDPOINT, &pkt, sizeof(pkt));
 }
 
@@ -114,7 +109,7 @@ bool client_queue_endpoint_exg(client_t *c)
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
         endpoint_group_t *group = oshd.node_tree[i]->endpoints;
 
-        foreach_endpoint(endpoint, group) {
+        foreach_endpoint_const(endpoint, group) {
             // If ShareEndpoints was not set in the configuration file,
             // endpoints that don't expire will not be shared
             if (!endpoint->can_expire && !oshd.shareendpoints)

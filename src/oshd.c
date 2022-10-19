@@ -146,13 +146,9 @@ bool oshd_init(void)
 
     // Add all nodes' endpoints
     for (size_t i = 0; i < oshd.conf_endpoints_count; ++i) {
-        // This should never happen
-        if (!oshd.conf_endpoints[i]->has_owner)
-            continue;
-
         node_id_t *nid = node_id_add(oshd.conf_endpoints[i]->owner_name);
 
-        endpoint_group_add_group(nid->endpoints, oshd.conf_endpoints[i]);
+        endpoint_group_insert_group(nid->endpoints, oshd.conf_endpoints[i]);
     }
 
     // Add manually configured local routes

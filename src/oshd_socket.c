@@ -329,7 +329,7 @@ bool oshd_connect_queue(node_id_t *nid)
     memset(d_addr, 0, sizeof(d_addr));
     memset(&d_sin, 0, sizeof(d_sin));
 
-    client_fd = tcp_outgoing_socket(endpoint->hostname, endpoint->port, d_addr,
+    client_fd = tcp_outgoing_socket(endpoint->value, endpoint->port, d_addr,
         sizeof(d_addr), (struct sockaddr *) &d_sin, sizeof(d_sin));
 
     if (client_fd < 0) {
@@ -353,9 +353,9 @@ bool oshd_connect_queue(node_id_t *nid)
 
     // If d_addr != endpoint->hostname, it contained an actual hostname instead
     // of an IP address
-    if (strcmp(d_addr, endpoint->hostname)) {
+    if (strcmp(d_addr, endpoint->value)) {
         logger(LOG_INFO, "Trying to connect to %s at %s:%u (%s)", nid->name,
-            endpoint->hostname, endpoint->port, d_addr);
+            endpoint->value, endpoint->port, d_addr);
     } else {
         logger(LOG_INFO, "Trying to connect to %s at %s...", nid->name, c->addrw);
     }
