@@ -9,6 +9,18 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 
+// Return the endpoint type name
+const char *endpoint_type_name(const endpoint_type_t type)
+{
+    switch (type) {
+        case ENDPOINT_TYPE_UNKNOWN : return "Unknown";
+        case ENDPOINT_TYPE_HOSTNAME: return "Hostname";
+        case ENDPOINT_TYPE_IP4     : return "IPv4";
+        case ENDPOINT_TYPE_IP6     : return "IPv6";
+             default               : return "Unknown";
+    }
+}
+
 // Determine the endpoint type of the value
 static endpoint_type_t endpoint_type_from_value(const char *value)
 {

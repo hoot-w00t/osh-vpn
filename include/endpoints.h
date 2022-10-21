@@ -66,6 +66,8 @@ struct endpoint_group {
     char *debug_id;
 };
 
+const char *endpoint_type_name(const endpoint_type_t type);
+
 endpoint_t *endpoint_create(const char *value, const uint16_t port,
     const endpoint_socktype_t socktype, const bool can_expire);
 void endpoint_free(endpoint_t *endpoint);
