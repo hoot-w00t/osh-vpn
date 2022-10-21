@@ -18,12 +18,12 @@ typedef struct endpoint_group endpoint_group_t;
 
 // Type of the endpoint's value
 enum endpoint_type {
-    ENDPOINT_TYPE_HOSTNAME = 0,
+    ENDPOINT_TYPE_UNKNOWN = 0,
+    ENDPOINT_TYPE_HOSTNAME,
     ENDPOINT_TYPE_IP4,
     ENDPOINT_TYPE_IP6,
     _endpoint_type_last
 };
-#define ENDPOINT_TYPE_UNKNOWN ENDPOINT_TYPE_HOSTNAME
 
 // Socket types with which the endpoint is compatible
 enum endpoint_socktype {
