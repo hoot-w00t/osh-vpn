@@ -511,7 +511,7 @@ endpoint_t *endpoint_from_sockaddr(const struct sockaddr *sa, const socklen_t sa
 {
     char addr_value[INET6_ADDRSTRLEN];
 
-    if (sa_len < sizeof(*sa))
+    if (sa_len < sizeof(sa->sa_family))
         return NULL;
 
     switch (sa->sa_family) {
