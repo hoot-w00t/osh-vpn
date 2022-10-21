@@ -13,6 +13,9 @@ include(GNUInstallDirs)
 
 enable_testing()
 
+# Libraries to link with
+set(OSH_LINK_LIBRARIES "")
+
 # Source/header files configured by CMake
 set(OSH_BINARY_SOURCEDIR "${CMAKE_CURRENT_BINARY_DIR}/src")
 set(OSH_BINARY_INCLUDEDIR "${CMAKE_CURRENT_BINARY_DIR}/include")
@@ -68,6 +71,7 @@ if (OPENSSL_VERSION VERSION_LESS "1.1.0")
     message(FATAL_ERROR "OpenSSL version 1.1.0 or later is required (found version ${OPENSSL_VERSION})")
 endif()
 include_directories(${OPENSSL_INCLUDE_DIR})
+list(APPEND OSH_LINK_LIBRARIES ${OPENSSL_CRYPTO_LIBRARIES})
 
 # easyconf (from the submodule)
 set(EASYCONF_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/easyconf")
@@ -82,6 +86,7 @@ message(STATUS "${EASYCONF_MSG} - done")
 
 link_directories(${EASYCONF_BUILD})
 include_directories(${EASYCONF_INCLUDEDIR})
+list(APPEND OSH_LINK_LIBRARIES easyconf)
 
 # Header directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -190,15 +195,9 @@ set(OSHD_TESTS_SOURCES
     tests/oshpacket_tests.c
     tests/random_tests.c)
 
-
-# Libraries to link to oshd
-set(OSHD_LINK_LIBRARIES
-    easyconf
-    ${OPENSSL_CRYPTO_LIBRARIES})
-
 # Osh daemon
 add_executable(oshd ${OSHD_SOURCES} src/main.c)
-target_link_libraries(oshd ${OSHD_LINK_LIBRARIES})
+target_link_libraries(oshd ${OSH_LINK_LIBRARIES})
 add_dependencies(oshd version_git)
 
 # Criterion unit tests
@@ -208,7 +207,7 @@ if (ENABLE_UNIT_TESTS)
 
     find_library(CRITERION_FOUND criterion REQUIRED)
     add_executable(oshd_tests ${OSHD_SOURCES} ${OSHD_TESTS_SOURCES})
-    target_link_libraries(oshd_tests ${OSHD_LINK_LIBRARIES} criterion)
+    target_link_libraries(oshd_tests ${OSH_LINK_LIBRARIES} criterion)
     add_dependencies(oshd_tests version_git)
 
     add_test(NAME unit_tests COMMAND ./oshd_tests)
@@ -283,6 +282,7 @@ string(STRIP "${CMAKE_EXE_LINKER_FLAGS} ${CMAKE_EXE_LINKER_FLAGS_${CMAKE_BUILD_T
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Compiler flags: ${OSH_COMPILER_FLAGS}")
 message(STATUS "Linker flags: ${OSH_LINKER_FLAGS}")
+message(STATUS "Link libraries: ${OSH_LINK_LIBRARIES}")
 
 # CPack variables must be set before including it
 include(CPack)
