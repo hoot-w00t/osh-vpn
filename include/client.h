@@ -86,7 +86,9 @@ struct client_io {
 
 struct client {
     int fd;                      // Network socket
-    struct sockaddr_storage sin; // Socket address
+    struct sockaddr_storage sa;  // Socket address
+    endpoint_t *sa_endpoint;     // Socket endpoint
+    char addrw[128];             // Endpoint "address:port" string
 
     struct client_io io;         // send/recv data buffers
     aio_event_t *aio_event;      // Client's async I/O event
@@ -139,9 +141,6 @@ struct client {
     // No more packets will be received or queued
     bool finish_and_disconnect;
 
-    // Endpoint "address:port" string
-    char addrw[128];
-
     // If *reconnect_nid is not NULL, it points to the node to which we should
     // try to connect to after the client is disconnected
     node_id_t *reconnect_nid;
@@ -156,7 +155,8 @@ struct client {
 void client_graceful_disconnect(client_t *c);
 
 void client_destroy(client_t *c);
-client_t *client_init(int fd, bool initiator, const netaddr_t *addr, uint16_t port);
+client_t *client_init(int fd, bool initiator, const endpoint_t *endpoint,
+    const struct sockaddr_storage *sa);
 
 void client_reconnect_to(client_t *c, node_id_t *nid);
 #define client_reconnect_disable(c) client_reconnect_to(c, NULL)

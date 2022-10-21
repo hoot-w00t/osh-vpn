@@ -220,7 +220,7 @@ static void client_aio_write(aio_event_t *event)
 static bool oshd_connect_async(client_t *c)
 {
     // We try to connect the socket
-    if (connect(c->fd, (struct sockaddr *) &c->sin, sizeof(c->sin)) < 0) {
+    if (connect(c->fd, (struct sockaddr *) &c->sa, sizeof(c->sa)) < 0) {
         // If error is EISCONN the connection is already established, so we can
         // proceed without processing any error
         if (errno != EISCONN) {
@@ -272,7 +272,7 @@ static void client_aio_error(aio_event_t *event, aio_poll_event_t revents)
 // Create an aio event for the client and add it to the global aio
 // Correctly sets poll_events and cb_write
 // Sets c->aio_event
-static void oshd_add_client(client_t *c)
+static void oshd_client_add(client_t *c)
 {
     aio_event_t base_event;
 
@@ -303,27 +303,11 @@ static void oshd_add_client(client_t *c)
 }
 
 // Queue client connection (non-blocking connect)
-bool oshd_connect_queue(node_id_t *nid)
+bool oshd_client_connect(node_id_t *nid, endpoint_t *endpoint)
 {
     client_t *c;
-    int client_fd;
-    char d_addr[128];
-    netaddr_t naddr;
-    struct sockaddr_storage d_sin;
-    endpoint_t *endpoint;
-
-    if (nid->node_socket) {
-        node_connect_end(nid, false, "Already connected (oshd_connect_queue)");
-        return false;
-    }
-
-    endpoint = endpoint_group_selected(nid->connect_endpoints);
-    if (!endpoint) {
-        // If this error appears the code is glitched
-        logger(LOG_ERR, "oshd_connect_queue called with no endpoint");
-        node_connect_continue(nid);
-        return false;
-    }
+    int sockfd;
+    struct sockaddr_storage sa;
 
     // If the endpoint is a hostname, lookup its IP addresses and insert them to
     // the connection group
@@ -333,31 +317,29 @@ bool oshd_connect_queue(node_id_t *nid)
         return false;
     }
 
-    // Initialize and create a socket to connect to address:port
-    memset(d_addr, 0, sizeof(d_addr));
-    memset(&d_sin, 0, sizeof(d_sin));
-
-    client_fd = tcp_outgoing_socket(endpoint->value, endpoint->port, d_addr,
-        sizeof(d_addr), (struct sockaddr *) &d_sin, sizeof(d_sin));
-
-    if (client_fd < 0) {
-        // Either the socket could not be created or there was a DNS lookup
-        // error, try the next endpoint
+    // Initialize sockaddr
+    if (!endpoint_to_sockaddr((struct sockaddr *) &sa, sizeof(sa), endpoint)) {
+        logger(LOG_ERR, "Failed to initialize socket address for %s:%u",
+            endpoint->value, endpoint->port);
         node_connect_continue(nid);
         return false;
     }
 
-    // The socket was created successfully, we can initialize some of the
+    // Create TCP socket
+    sockfd = tcp_outgoing_socket((const struct sockaddr *) &sa, sizeof(sa));
+    if (sockfd < 0) {
+        // The socket could not be created, try the next endpoint
+        node_connect_continue(nid);
+        return false;
+    }
+
+    // The socket was created successfully, initialize the client, configure it
+    // and start trying to connect to it
     // client's socket information
-    netaddr_pton(&naddr, d_addr);
-    c = client_init(client_fd, true, &naddr, endpoint->port);
+    c = client_init(sockfd, true, endpoint, &sa);
     client_reconnect_to(c, nid);
-    memcpy(&c->sin, &d_sin, sizeof(d_sin));
-
-    // Set all the socket options
-    oshd_setsockopts(client_fd);
-
-    oshd_add_client(c);
+    oshd_setsockopts(sockfd);
+    oshd_client_add(c);
     logger(LOG_INFO, "Trying to connect to %s at %s...", nid->name, c->addrw);
 
     return oshd_connect_async(c);
@@ -383,36 +365,32 @@ static void server_aio_read(aio_event_t *event)
         return;
 
     client_t *c;
-    netaddr_t addr;
-    uint16_t port;
-    struct sockaddr_in6 sin;
-    socklen_t sin_len = sizeof(sin);
+    struct sockaddr_storage sa;
+    socklen_t sa_len = sizeof(sa);
     int client_fd;
+    endpoint_t *endpoint;
 
     // Accept the incoming socket
-    if ((client_fd = accept(event->fd, (struct sockaddr *) &sin, &sin_len)) < 0) {
+    if ((client_fd = accept(event->fd, (struct sockaddr *) &sa, &sa_len)) < 0) {
         logger(LOG_ERR, "accept: %i: %s", event->fd, strerror(errno));
         return;
     }
 
-    // Get the remote socket's address and port
-    if (((struct sockaddr *) &sin)->sa_family == AF_INET6) {
-        netaddr_dton(&addr, IP6, &sin.sin6_addr);
-        port = sin.sin6_port;
-    } else {
-        netaddr_dton(&addr, IP4, &((struct sockaddr_in *) &sin)->sin_addr);
-        port = ((struct sockaddr_in *) &sin)->sin_port;
+    endpoint = endpoint_from_sockaddr((const struct sockaddr *) &sa, sa_len,
+        ENDPOINT_SOCKTYPE_TCP, true);
+    if (!endpoint) {
+        close(client_fd);
+        return;
     }
 
     // Set all the socket options
     oshd_setsockopts(client_fd);
 
-    // Initialize the client we the newly created socket
-    c = client_init(client_fd, false, &addr, port);
+    // Initialize the client with the newly created socket
+    c = client_init(client_fd, false, endpoint, &sa);
     c->connected = true;
-
+    oshd_client_add(c);
     logger(LOG_INFO, "Accepted connection from %s", c->addrw);
-    oshd_add_client(c);
 }
 
 // Add an aio event for a TCP server

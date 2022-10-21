@@ -86,6 +86,8 @@ void client_destroy(client_t *c)
 
     client_disconnect(c);
 
+    endpoint_free(c->sa_endpoint);
+
     free(c->handshake_sig_data);
     free(c->io.recvbuf);
 
@@ -96,16 +98,28 @@ void client_destroy(client_t *c)
 }
 
 // Create and initialize a new client
-client_t *client_init(int fd, bool initiator, const netaddr_t *addr, uint16_t port)
+client_t *client_init(int fd, bool initiator, const endpoint_t *endpoint,
+    const struct sockaddr_storage *sa)
 {
     client_t *c = xzalloc(sizeof(client_t));
 
     c->fd = fd;
     c->initiator = initiator;
+    memcpy(&c->sa, sa, sizeof(c->sa));
+    c->sa_endpoint = endpoint_dup(endpoint);
 
     // Format the client's address and port for logging
-    if (!netaddr_ntop2(c->addrw, sizeof(c->addrw), addr, port))
-        snprintf(c->addrw, sizeof(c->addrw), "(format error)");
+    switch (c->sa_endpoint->type) {
+    case ENDPOINT_TYPE_IP6:
+        snprintf(c->addrw, sizeof(c->addrw), "[%s]:%u",
+            c->sa_endpoint->value, c->sa_endpoint->port);
+        break;
+
+    default:
+        snprintf(c->addrw, sizeof(c->addrw), "%s:%u",
+            c->sa_endpoint->value, c->sa_endpoint->port);
+        break;
+    }
 
     // Initialize network buffers
     c->io.recvbuf = xalloc(CLIENT_RECVBUF_SIZE);

@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/socket.h>
 
 // Endpoints expire after 60 minutes
 #define ENDPOINT_EXPIRY (3600)
@@ -65,6 +66,11 @@ struct endpoint_group {
     char *debug_id;
 };
 
+endpoint_t *endpoint_create(const char *value, const uint16_t port,
+    const endpoint_socktype_t socktype, const bool can_expire);
+void endpoint_free(endpoint_t *endpoint);
+endpoint_t *endpoint_dup(const endpoint_t *original);
+
 endpoint_group_t *endpoint_group_create(const char *owner_name, const char *debug_id);
 void endpoint_group_free(endpoint_group_t *group);
 void endpoint_group_clear(endpoint_group_t *group);
@@ -91,6 +97,10 @@ void endpoint_group_del(endpoint_group_t *group, endpoint_t *endpoint);
 bool endpoint_group_del_expired(endpoint_group_t *group);
 
 bool endpoint_lookup(endpoint_t *endpoint, endpoint_group_t *group);
+bool endpoint_to_sockaddr(struct sockaddr *sa, const socklen_t sa_len,
+    const endpoint_t *endpoint);
+endpoint_t *endpoint_from_sockaddr(const struct sockaddr *sa, const socklen_t sa_len,
+    const endpoint_socktype_t socktype, const bool can_expire);
 
 endpoint_t *endpoint_group_selected(endpoint_group_t *group);
 endpoint_t *endpoint_group_select_next(endpoint_group_t *group);

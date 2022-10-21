@@ -11,12 +11,34 @@ static void connect_event_freedata(void *data)
     ((node_id_t *) data)->connect_event = NULL;
 }
 
+// Returns true if a connection can be attempted
+static bool connection_attempt_is_valid(node_id_t *nid)
+{
+    // If a connection was made since the event was queued, stop here
+    if (nid->node_socket) {
+        node_connect_end(nid, false, "Already connected");
+        return false;
+    }
+
+    // Make sure to have an endpoint to try to connect to
+    if (!endpoint_group_selected(nid->connect_endpoints)) {
+        // If this error appears the code is glitched
+        logger(LOG_ERR, "Connect event called with no endpoint");
+        node_connect_continue(nid);
+        return false;
+    }
+
+    return true;
+}
+
 static time_t connect_event_handler(void *data)
 {
     node_id_t *nid = (node_id_t *) data;
 
     nid->connect_event = NULL;
-    oshd_connect_queue(nid);
+    if (connection_attempt_is_valid(nid))
+        oshd_client_connect(nid, endpoint_group_selected(nid->connect_endpoints));
+
     return EVENT_IS_DONE;
 }
 

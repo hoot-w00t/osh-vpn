@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 
 // Determine the endpoint type of the value
 static endpoint_type_t endpoint_type_from_value(const char *value)
@@ -59,7 +60,7 @@ static int endpoint_calc_priority(const endpoint_t *endpoint)
 }
 
 // Allocate a new endpoint
-static endpoint_t *endpoint_create(const char *value, const uint16_t port,
+endpoint_t *endpoint_create(const char *value, const uint16_t port,
     const endpoint_socktype_t socktype, const bool can_expire)
 {
     endpoint_t *endpoint = xzalloc(sizeof(endpoint_t));
@@ -77,12 +78,19 @@ static endpoint_t *endpoint_create(const char *value, const uint16_t port,
 }
 
 // Free endpoint and its allocated resources
-static void endpoint_free(endpoint_t *endpoint)
+void endpoint_free(endpoint_t *endpoint)
 {
     if (endpoint) {
         free(endpoint->value);
         free(endpoint);
     }
+}
+
+// Duplicate existing endpoint
+endpoint_t *endpoint_dup(const endpoint_t *original)
+{
+    return endpoint_create(original->value, original->port,
+        original->socktype, original->can_expire);
 }
 
 // Returns true if endpoint has the same value and port
@@ -455,6 +463,85 @@ bool endpoint_lookup(endpoint_t *endpoint, endpoint_group_t *group)
 
     freeaddrinfo(addrinfo);
     return true;
+}
+
+// Initialize a socket address from an endpoint
+// Returns false on error
+bool endpoint_to_sockaddr(struct sockaddr *sa, const socklen_t sa_len,
+    const endpoint_t *endpoint)
+{
+    switch (endpoint->type) {
+        case ENDPOINT_TYPE_IP4: {
+            struct sockaddr_in *sin = (struct sockaddr_in *) sa;
+
+            if (sa_len < sizeof(*sin))
+                return false;
+
+            memset(sa, 0, sa_len);
+            if (inet_pton(AF_INET, endpoint->value, &sin->sin_addr) != 1)
+                return false;
+            sin->sin_family = AF_INET;
+            sin->sin_port = htons(endpoint->port);
+            return true;
+        }
+
+        case ENDPOINT_TYPE_IP6: {
+            struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *) sa;
+
+            if (sa_len < sizeof(*sin6))
+                return false;
+
+            memset(sa, 0, sa_len);
+            if (inet_pton(AF_INET6, endpoint->value, &sin6->sin6_addr) != 1)
+                return false;
+            sin6->sin6_family = AF_INET6;
+            sin6->sin6_port = htons(endpoint->port);
+            return true;
+        }
+
+        default:
+            return false;
+    }
+}
+
+// Create an endpoint from a socket address
+// Returns NULL on error
+endpoint_t *endpoint_from_sockaddr(const struct sockaddr *sa, const socklen_t sa_len,
+    const endpoint_socktype_t socktype, const bool can_expire)
+{
+    char addr_value[INET6_ADDRSTRLEN];
+
+    if (sa_len < sizeof(*sa))
+        return NULL;
+
+    switch (sa->sa_family) {
+        case AF_INET: {
+            const struct sockaddr_in *sin = (const struct sockaddr_in *) sa;
+
+            if (sa_len < sizeof(*sin))
+                return NULL;
+
+            if (!inet_ntop(AF_INET, &sin->sin_addr, addr_value, sizeof(addr_value)))
+                return NULL;
+
+            return endpoint_create(addr_value, ntohs(sin->sin_port), socktype, can_expire);
+        }
+
+        case AF_INET6: {
+            const struct sockaddr_in6 *sin6 = (const struct sockaddr_in6 *) sa;
+
+            if (sa_len < sizeof(*sin6))
+                return NULL;
+
+            if (!inet_ntop(AF_INET6, &sin6->sin6_addr, addr_value, sizeof(addr_value)))
+                return NULL;
+
+            return endpoint_create(addr_value, ntohs(sin6->sin6_port), socktype, can_expire);
+        }
+
+        default:
+            return NULL;
+    }
 }
 
 // Returns the selected endpoint
