@@ -66,10 +66,7 @@ set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_CONTACT}")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libssl1.1")
 
 # Libraries
-find_package(OpenSSL REQUIRED)
-if (OPENSSL_VERSION VERSION_LESS "1.1.0")
-    message(FATAL_ERROR "OpenSSL version 1.1.0 or later is required (found version ${OPENSSL_VERSION})")
-endif()
+find_package(OpenSSL 1.1.0 REQUIRED COMPONENTS Crypto)
 include_directories(${OPENSSL_INCLUDE_DIR})
 list(APPEND OSH_LINK_LIBRARIES ${OPENSSL_CRYPTO_LIBRARIES})
 
