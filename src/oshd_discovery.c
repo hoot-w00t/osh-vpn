@@ -169,11 +169,15 @@ void oshd_discover_local_endpoints(void)
         logger_debug(DBG_ENDPOINTS, "Discovered %s endpoint: %s (%s)",
             netarea_name(area), addrw, ifa->ifa_name);
 
-        endpoint_t *endpoint = endpoint_group_insert_sorted(local_id->endpoints, addrw,
-            oshd.server_port, ENDPOINT_SOCKTYPE_TCP, true);
+        endpoint_t *endpoint = endpoint_create(addrw, oshd.server_port,
+            ENDPOINT_SOCKTYPE_TCP, true);
+        endpoint_t *inserted = endpoint_group_insert_sorted(local_id->endpoints, endpoint);
 
-        if (endpoint)
-            client_queue_endpoint_broadcast(NULL, endpoint, local_id->endpoints);
+        if (inserted)
+            client_queue_endpoint(NULL, inserted, local_id, true);
+
+        endpoint_free(endpoint);
+
     }
     freeifaddrs(ifaces);
 }

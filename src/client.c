@@ -86,14 +86,13 @@ void client_destroy(client_t *c)
 
     client_disconnect(c);
 
-    endpoint_free(c->sa_endpoint);
-
     free(c->handshake_sig_data);
     free(c->io.recvbuf);
 
     netbuffer_free(c->io.sendq);
     client_reset_ciphers(c);
 
+    endpoint_free(c->sa_endpoint);
     free(c);
 }
 
@@ -109,17 +108,7 @@ client_t *client_init(int fd, bool initiator, const endpoint_t *endpoint,
     c->sa_endpoint = endpoint_dup(endpoint);
 
     // Format the client's address and port for logging
-    switch (c->sa_endpoint->type) {
-    case ENDPOINT_TYPE_IP6:
-        snprintf(c->addrw, sizeof(c->addrw), "[%s]:%u",
-            c->sa_endpoint->value, c->sa_endpoint->port);
-        break;
-
-    default:
-        snprintf(c->addrw, sizeof(c->addrw), "%s:%u",
-            c->sa_endpoint->value, c->sa_endpoint->port);
-        break;
-    }
+    c->addrw = c->sa_endpoint->addrstr;
 
     // Initialize network buffers
     c->io.recvbuf = xalloc(CLIENT_RECVBUF_SIZE);
@@ -702,30 +691,29 @@ bool client_queue_pubkey_broadcast(client_t *exclude, node_id_t *id)
     return client_queue_packet_broadcast(exclude, PUBKEY, &packet, sizeof(packet));
 }
 
-// Broadcast an endpoint owned by group->owner_name
-bool client_queue_endpoint_broadcast(client_t *exclude, const endpoint_t *endpoint,
-    const endpoint_group_t *group)
+// Queue an endpoint
+// If broadcast is true, *dest is a client to exclude from the broadcast
+bool client_queue_endpoint(client_t *dest, const endpoint_t *endpoint,
+    const node_id_t *owner, const bool broadcast)
 {
-    oshpacket_endpoint_t pkt;
-    netaddr_t addr;
+    uint8_t buf[sizeof(oshpacket_endpoint_t) + sizeof(endpoint_data_t)];
+    oshpacket_endpoint_t *pkt = (oshpacket_endpoint_t *) buf;
+    endpoint_data_t *data = (endpoint_data_t *) (pkt + 1);
+    size_t data_size;
+    size_t total_size;
 
-    if (!netaddr_lookup(&addr, endpoint->value)) {
-        logger(LOG_WARN,
-            "Failed to broadcast endpoint %s:%u from group %s (lookup failed)",
-            endpoint->value, endpoint->port, group->debug_id);
+    memset(buf, 0, sizeof(buf));
+    if (!endpoint_to_packet(endpoint, pkt, data, &data_size)) {
+        logger(LOG_ERR, "Failed to queue incompatible endpoint %s owned by %s",
+            endpoint->addrstr, owner->name);
         return false;
     }
 
-    memset(&pkt, 0, sizeof(pkt));
-    for (size_t i = 0; (group->owner_name[i] != 0) && (i < NODE_NAME_SIZE); ++i)
-        pkt.node_name[i] = group->owner_name[i];
-    pkt.addr_type = addr.type;
-    netaddr_cpy_data(&pkt.addr_data, &addr);
-    pkt.port = htons(endpoint->port);
+    memcpy(pkt->owner_name, owner->name, NODE_NAME_SIZE);
+    total_size = sizeof(*pkt) + data_size;
 
-    logger_debug(DBG_ENDPOINTS, "Broadcasting endpoint %s:%u from group %s",
-        endpoint->value, endpoint->port, group->debug_id);
-    return client_queue_packet_broadcast(exclude, ENDPOINT, &pkt, sizeof(pkt));
+    return broadcast ? client_queue_packet_broadcast(dest, ENDPOINT, buf, total_size)
+                     : client_queue_packet_direct(dest, ENDPOINT, buf, total_size);
 }
 
 

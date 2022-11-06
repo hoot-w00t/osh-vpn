@@ -356,7 +356,8 @@ static bool oshd_param_endpoint(ecp_t *ecp)
     char *port;
     uint16_t port_no;
     endpoint_group_t *group;
-    const endpoint_t *endpoint;
+    endpoint_t *endpoint;
+    const endpoint_t *inserted;
 
     if (!oshd_conf_require_selected_node(ecp))
         return false;
@@ -381,13 +382,16 @@ static bool oshd_param_endpoint(ecp_t *ecp)
     port_no = (*port) ? ((uint16_t) atoi(port)) : OSHD_DEFAULT_PORT;
 
     // Add the endpoint to the group
-    endpoint = endpoint_group_insert_sorted(group, addr, port_no, ENDPOINT_SOCKTYPE_TCP, false);
+    endpoint = endpoint_create(addr, port_no, ENDPOINT_SOCKTYPE_TCP, false);
+    inserted = endpoint_group_insert_sorted(group, endpoint);
 
-    logger_debug(DBG_CONF, "%s endpoint %s:%u for %s",
-        endpoint ? "Added" : "Ignored", addr, port_no,
+    logger_debug(DBG_CONF, "%s endpoint %s for %s",
+        inserted ? "Added" : "Ignored",
+        endpoint->addrstr,
         oshd_conf_selected_node());
 
     // Free the temporary address
+    endpoint_free(endpoint);
     free(addr);
     return true;
 }

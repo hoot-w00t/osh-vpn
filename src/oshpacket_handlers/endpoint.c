@@ -5,49 +5,49 @@
 bool oshpacket_handler_endpoint(client_t *c, __attribute__((unused)) node_id_t *src,
     oshpacket_hdr_t *hdr, void *payload)
 {
-    const size_t count = hdr->payload_size / sizeof(oshpacket_endpoint_t);
-    const oshpacket_endpoint_t *endpoints = (const oshpacket_endpoint_t *) payload;
-    char node_name[NODE_NAME_SIZE + 1];
+    const oshpacket_endpoint_t *pkt = (const oshpacket_endpoint_t *) payload;
+    const endpoint_data_t *data = (const endpoint_data_t *) (pkt + 1);
+    size_t data_size;
+    char owner_name[NODE_NAME_SIZE + 1];
+    endpoint_t *endpoint;
+    node_id_t *owner;
 
-    memset(node_name, 0, sizeof(node_name));
-    for (size_t i = 0; i < count; ++i) {
-        memcpy(node_name, endpoints[i].node_name, NODE_NAME_SIZE);
-
-        // Verify the node's name
-        if (!node_valid_name(node_name)) {
-            logger(LOG_ERR, "%s: %s: Endpoint: Invalid name",
-                c->addrw, c->id->name);
-            return false;
-        }
-
-        node_id_t *id = node_id_add(node_name);
-        netaddr_t addr;
-        netarea_t area;
-        uint16_t hport;
-        char hostname[INET6_ADDRSTRLEN];
-
-        // Parse the endpoint address
-        if (!netaddr_dton(&addr,
-                          endpoints[i].addr_type,
-                          &endpoints[i].addr_data))
-        {
-            logger(LOG_ERR, "%s: %s: Endpoint: Invalid endpoint type",
-                c->addrw, c->id->name);
-            return false;
-        }
-
-        // Format and add the endpoint
-        netaddr_ntop(hostname, sizeof(hostname), &addr);
-        area = netaddr_area(&addr);
-        hport = ntohs(endpoints[i].port);
-
-        logger_debug(DBG_ENDPOINTS, "%s: %s: Adding %s endpoint %s:%u to %s",
-            c->addrw, c->id->name, netarea_name(area),
-            hostname, hport, id->name);
-
-        endpoint_group_insert_sorted(id->endpoints, hostname, hport,
-            ENDPOINT_SOCKTYPE_TCP, true);
+    // Verify that we at least have a full header
+    if (hdr->payload_size <= sizeof(*pkt)) {
+        logger(LOG_ERR, "%s: %s: %s: %s", c->addrw, c->id->name, "Endpoint",
+            "Invalid size");
+        return false;
     }
 
+    // Get the attached data's size
+    data_size = hdr->payload_size - sizeof(*pkt);
+
+    // Verify the owner name
+    memset(owner_name, 0, sizeof(owner_name));
+    memcpy(owner_name, pkt->owner_name, NODE_NAME_SIZE);
+    if (!node_valid_name(owner_name)) {
+        logger(LOG_ERR, "%s: %s: %s: %s", c->addrw, c->id->name, "Endpoint",
+            "Invalid owner name");
+        return false;
+    }
+
+    // Try to create an endpoint from the packet's data
+    endpoint = endpoint_from_packet(pkt, data, data_size);
+    if (!endpoint) {
+        // This is not an error, other nodes may know endpoint types which we
+        // don't
+        logger_debug(DBG_ENDPOINTS,
+            "%s: %s: Ignoring unknown or invalid endpoint type %u of %zu bytes",
+            c->addrw, c->id->name, pkt->type, data_size);
+        return true;
+    }
+
+    // Find the owner node and add the endpoint
+    owner = node_id_add(owner_name);
+    logger_debug(DBG_ENDPOINTS, "%s: %s: Adding endpoint %s to %s",
+        c->addrw, c->id->name, endpoint->addrstr, owner->name);
+
+    endpoint_group_insert_sorted(owner->endpoints, endpoint);
+    endpoint_free(endpoint);
     return true;
 }

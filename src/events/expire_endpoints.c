@@ -12,7 +12,10 @@ static time_t expire_endpoints_event_handler(__attribute__((unused)) void *data)
     bool deleted = false;
 
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
-        if (endpoint_group_del_expired(oshd.node_tree[i]->endpoints))
+        node_id_t *owner = oshd.node_tree[i];
+        endpoint_group_t *group = owner->endpoints;
+
+        if (endpoint_group_del_expired(group, owner))
             deleted = true;
     }
 

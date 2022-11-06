@@ -88,7 +88,7 @@ struct client {
     int fd;                      // Network socket
     struct sockaddr_storage sa;  // Socket address
     endpoint_t *sa_endpoint;     // Socket endpoint
-    char addrw[128];             // Endpoint "address:port" string
+    const char *addrw;           // Endpoint "address:port" string
 
     struct client_io io;         // send/recv data buffers
     aio_event_t *aio_event;      // Client's async I/O event
@@ -193,8 +193,8 @@ bool client_queue_goodbye(client_t *c);
 bool client_queue_ping(client_t *c);
 bool client_queue_pong(client_t *c);
 bool client_queue_pubkey_broadcast(client_t *exclude, node_id_t *id);
-bool client_queue_endpoint_broadcast(client_t *exclude, const endpoint_t *endpoint,
-    const endpoint_group_t *group);
+bool client_queue_endpoint(client_t *dest, const endpoint_t *endpoint,
+    const node_id_t *owner, const bool broadcast);
 bool client_queue_edge_broadcast(client_t *exclude, oshpacket_type_t type,
     const char *src, const char *dest);
 bool client_queue_route_add_local(client_t *exclude, const netaddr_t *addrs,

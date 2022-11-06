@@ -76,38 +76,38 @@ bool client_queue_pubkey_exg(client_t *c)
 
 // Send an endpoint owned by group->owner_name to the client
 static bool client_queue_endpoint_exg_internal(client_t *c,
-    const endpoint_t *endpoint, const endpoint_group_t *group)
+    const endpoint_t *endpoint, const node_id_t *owner)
 {
-    oshpacket_endpoint_t pkt;
-    netaddr_t addr;
+    uint8_t buf[sizeof(oshpacket_endpoint_t) + sizeof(endpoint_data_t)];
+    oshpacket_endpoint_t *pkt = (oshpacket_endpoint_t *) buf;
+    endpoint_data_t *data = (endpoint_data_t *) (pkt + 1);
+    size_t data_size;
+    size_t total_size;
 
-    if (!netaddr_lookup(&addr, endpoint->value)) {
-        logger(LOG_WARN,
-            "%s: Failed to queue endpoint %s:%u from group %s (lookup failed)",
-            c->addrw, endpoint->value, endpoint->port, group->debug_id);
-        return true;
+    memset(buf, 0, sizeof(buf));
+    if (!endpoint_to_packet(endpoint, pkt, data, &data_size)) {
+        logger(LOG_ERR,
+            "%s: %s: Failed to exchange incompatible endpoint %s owned by %s",
+            c->addrw, c->id->name, endpoint->addrstr, owner->name);
+        return false;
     }
 
-    memset(&pkt, 0, sizeof(pkt));
-    for (size_t i = 0; (group->owner_name[i] != 0) && (i < NODE_NAME_SIZE); ++i)
-        pkt.node_name[i] = group->owner_name[i];
-    pkt.addr_type = addr.type;
-    netaddr_cpy_data(&pkt.addr_data, &addr);
-    pkt.port = htons(endpoint->port);
+    memcpy(pkt->owner_name, owner->name, NODE_NAME_SIZE);
+    total_size = sizeof(*pkt) + data_size;
 
-    logger_debug(DBG_STATEEXG, "%s: %s: Exchanging endpoint %s:%u from group %s",
-        c->addrw, c->id->name, endpoint->value, endpoint->port, group->debug_id);
-    return client_queue_packet_exg(c, ENDPOINT, &pkt, sizeof(pkt));
+    logger_debug(DBG_STATEEXG, "%s: %s: Exchanging endpoint %s owned by %s",
+        c->addrw, c->id->name, endpoint->addrstr, owner->name);
+    return client_queue_packet_exg(c, ENDPOINT, &buf, total_size);
 }
 
 // Exchange all known endpoints with the client
 // Endpoints from the configuration file will be skipped if ShareEndpoints is
 // not enabled
-// TODO: Rewrite this function to send multiple endpoints in a single payload
 bool client_queue_endpoint_exg(client_t *c)
 {
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
-        endpoint_group_t *group = oshd.node_tree[i]->endpoints;
+        const node_id_t *owner = oshd.node_tree[i];
+        const endpoint_group_t *group = owner->endpoints;
 
         foreach_endpoint_const(endpoint, group) {
             // If ShareEndpoints was not set in the configuration file,
@@ -115,7 +115,7 @@ bool client_queue_endpoint_exg(client_t *c)
             if (!endpoint->can_expire && !oshd.shareendpoints)
                 continue;
 
-            if (!client_queue_endpoint_exg_internal(c, endpoint, group))
+            if (!client_queue_endpoint_exg_internal(c, endpoint, owner))
                 return false;
         }
     }

@@ -319,8 +319,8 @@ bool oshd_client_connect(node_id_t *nid, endpoint_t *endpoint)
 
     // Initialize sockaddr
     if (!endpoint_to_sockaddr((struct sockaddr *) &sa, sizeof(sa), endpoint)) {
-        logger(LOG_ERR, "Failed to initialize socket address for %s:%u",
-            endpoint->value, endpoint->port);
+        logger(LOG_ERR, "Failed to initialize socket address for %s",
+            endpoint->addrstr);
         node_connect_continue(nid);
         return false;
     }
@@ -391,6 +391,9 @@ static void server_aio_read(aio_event_t *event)
     c->connected = true;
     oshd_client_add(c);
     logger(LOG_INFO, "Accepted connection from %s", c->addrw);
+
+    // Free temporary endpoint
+    endpoint_free(endpoint);
 }
 
 // Add an aio event for a TCP server

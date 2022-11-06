@@ -213,10 +213,9 @@ typedef struct __attribute__((__packed__)) oshpacket_pubkey {
 } oshpacket_pubkey_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_endpoint {
-    char node_name[NODE_NAME_SIZE];
-    netaddr_type_t addr_type : 8;
-    netaddr_data_t addr_data;
-    uint16_t port;
+    uint8_t type;                       // endpoint_type_t
+    uint8_t socktype;                   // endpoint_socktype_t
+    char owner_name[NODE_NAME_SIZE];
 } oshpacket_endpoint_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_edge {

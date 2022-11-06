@@ -3,10 +3,15 @@
 
 #include "netarea.h"
 #include "oshd_clock.h"
+#include "oshpacket.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <sys/socket.h>
+#include <netinet/in.h>
+
+// We need to manually define the node_id_t type to prevent include loops
+// (node.h/client.h includes endpoints.h)
+typedef struct node_id node_id_t;
 
 // Endpoints expire after 60 minutes
 #define ENDPOINT_EXPIRY (3600)
@@ -32,19 +37,50 @@ enum endpoint_socktype {
     _endpoint_socktype_last
 };
 
-struct endpoint {
-    char *value;
+#define ENDPOINT_HOSTNAME_MAXLEN (255)
+struct __attribute__((packed)) endpoint_hostname {
     uint16_t port;
+    char hostname[ENDPOINT_HOSTNAME_MAXLEN + 1];
+};
 
-    netarea_t area;
+struct __attribute__((packed)) endpoint_ip4 {
+    uint16_t port;
+    struct in_addr addr;
+};
+
+struct __attribute__((packed)) endpoint_ip6 {
+    uint16_t port;
+    struct in6_addr addr;
+};
+
+typedef union endpoint_data {
+    struct endpoint_hostname host;
+    struct endpoint_ip4 ip4;
+    struct endpoint_ip6 ip6;
+} endpoint_data_t;
+
+#define ENDPOINT_ADDRSTR_MAXLEN (ENDPOINT_HOSTNAME_MAXLEN + 8)
+
+struct endpoint {
+    // Type of the address data
     endpoint_type_t type;
+
+    // Address data
+    endpoint_data_t data;
+
+    // Socket type(s) with which the endpoint can be used
     endpoint_socktype_t socktype;
+
+    // Presentation string of the socket address/port
+    char addrstr[ENDPOINT_ADDRSTR_MAXLEN + 1];
 
     bool can_expire;
     struct timespec last_refresh;
 
+    netarea_t area;
     int priority;
 
+    // Next endpoint in the linked list (when part of an endpoint_group_t)
     endpoint_t *next;
 };
 
@@ -77,32 +113,32 @@ endpoint_group_t *endpoint_group_create(const char *owner_name, const char *debu
 void endpoint_group_free(endpoint_group_t *group);
 void endpoint_group_clear(endpoint_group_t *group);
 
-endpoint_t *endpoint_group_find(endpoint_group_t *group, const char *value,
-    const uint16_t port);
-endpoint_t *endpoint_group_find_after(endpoint_t *after,
-    const char *value, const uint16_t port);
-endpoint_t *endpoint_group_find_duplicate(endpoint_group_t *group,
-    const char *value, const uint16_t port, const endpoint_socktype_t socktype, const bool can_expire);
+endpoint_t *endpoint_group_find(endpoint_group_t *group, const endpoint_t *endpoint);
+endpoint_t *endpoint_group_find_after(endpoint_t *after,const endpoint_t *endpoint);
+endpoint_t *endpoint_group_find_duplicate(endpoint_group_t *group, const endpoint_t *endpoint);
 
 endpoint_t *endpoint_group_insert_back(endpoint_group_t *group,
-    const char *value, const uint16_t port, const endpoint_socktype_t socktype, const bool can_expire);
-endpoint_t *endpoint_group_insert_after(endpoint_t *after, endpoint_group_t *group,
-    const char *value, const uint16_t port, const endpoint_socktype_t socktype, const bool can_expire);
-endpoint_t *endpoint_group_insert_sorted(endpoint_group_t *group,
-    const char *value, const uint16_t port, const endpoint_socktype_t socktype, const bool can_expire);
-void endpoint_group_insert_sorted_ep(endpoint_group_t *group,
     const endpoint_t *endpoint);
+endpoint_t *endpoint_group_insert_after(endpoint_t *after, endpoint_group_t *group,
+    const endpoint_t *endpoint);
+endpoint_t *endpoint_group_insert_sorted(endpoint_group_t *group,
+    const endpoint_t *original);
 void endpoint_group_insert_group(endpoint_group_t *dest,
     const endpoint_group_t *src);
 
 void endpoint_group_del(endpoint_group_t *group, endpoint_t *endpoint);
-bool endpoint_group_del_expired(endpoint_group_t *group);
+bool endpoint_group_del_expired(endpoint_group_t *group, node_id_t *owner);
 
 bool endpoint_lookup(endpoint_t *endpoint, endpoint_group_t *group);
 bool endpoint_to_sockaddr(struct sockaddr *sa, const socklen_t sa_len,
     const endpoint_t *endpoint);
 endpoint_t *endpoint_from_sockaddr(const struct sockaddr *sa, const socklen_t sa_len,
     const endpoint_socktype_t socktype, const bool can_expire);
+
+bool endpoint_to_packet(const endpoint_t *endpoint,
+    oshpacket_endpoint_t *pkt, endpoint_data_t *data, size_t *data_size);
+endpoint_t *endpoint_from_packet(const oshpacket_endpoint_t *pkt,
+    const endpoint_data_t *data, const size_t data_size);
 
 endpoint_t *endpoint_group_selected(endpoint_group_t *group);
 endpoint_t *endpoint_group_select_next(endpoint_group_t *group);

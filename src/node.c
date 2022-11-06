@@ -672,6 +672,7 @@ static bool connect_endpoint_type_compatible(const endpoint_type_t type)
 static bool node_connect_setup_endpoints(node_id_t *nid)
 {
     const endpoint_socktype_t st_mask = ENDPOINT_SOCKTYPE_TCP;
+    endpoint_t *inserted;
 
     endpoint_group_clear(nid->connect_endpoints);
     foreach_endpoint_const(endpoint, nid->endpoints) {
@@ -681,9 +682,9 @@ static bool node_connect_setup_endpoints(node_id_t *nid)
         if (!connect_endpoint_type_compatible(endpoint->type))
             continue;
 
-        endpoint_group_insert_sorted(nid->connect_endpoints,
-            endpoint->value, endpoint->port,
-            endpoint->socktype & st_mask, endpoint->can_expire);
+        inserted = endpoint_group_insert_sorted(nid->connect_endpoints, endpoint);
+        if (inserted)
+            inserted->socktype &= st_mask;
     }
     endpoint_group_select_first(nid->connect_endpoints);
 

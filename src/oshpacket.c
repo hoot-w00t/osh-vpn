@@ -121,8 +121,8 @@ static const oshpacket_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_endpoint,
         .can_be_forwarded = true,
-        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FRAGMENTED,
-        .payload_size = sizeof(oshpacket_endpoint_t)
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_VARIABLE,
+        .payload_size = 0
     },
     {
         .type = EDGE_ADD,
