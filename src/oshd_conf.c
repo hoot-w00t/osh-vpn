@@ -396,6 +396,19 @@ static bool oshd_param_endpoint(ecp_t *ecp)
     return true;
 }
 
+// AlwaysConnect
+static bool oshd_param_alwaysconnect(__attribute__((unused)) ecp_t *ecp)
+{
+    endpoint_group_t *group;
+
+    if (!oshd_conf_require_selected_node(ecp))
+        return false;
+
+    group = get_endpoint_group(oshd_conf_selected_node());
+    group->always_retry = true;
+    return true;
+}
+
 // ReconnectDelayMin
 static bool oshd_param_reconnectdelaymin(ecp_t *ecp)
 {
@@ -726,6 +739,7 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "DevUp", .type = VALUE_REQUIRED, &oshd_param_command },
     { .name = "DevDown", .type = VALUE_REQUIRED, &oshd_param_command },
     { .name = "Endpoint", .type = VALUE_REQUIRED, &oshd_param_endpoint },
+    { .name = "AlwaysConnect", .type = VALUE_NONE, &oshd_param_alwaysconnect },
     { .name = "ReconnectDelayMin", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymin },
     { .name = "ReconnectDelayMax", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymax },
     { .name = "ConnectionsLimit", .type = VALUE_REQUIRED, &oshd_param_connectionslimit },

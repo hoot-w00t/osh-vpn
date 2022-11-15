@@ -148,6 +148,7 @@ bool oshd_init(void)
     for (size_t i = 0; i < oshd.conf_endpoints_count; ++i) {
         node_id_t *nid = node_id_add(oshd.conf_endpoints[i]->owner_name);
 
+        nid->endpoints->always_retry = oshd.conf_endpoints[i]->always_retry;
         endpoint_group_insert_group(nid->endpoints, oshd.conf_endpoints[i]);
     }
 
@@ -283,8 +284,12 @@ void oshd_loop(void)
 
     // Queue the connections to our endpoints
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
-        if (oshd.node_tree[i]->local_node || oshd.node_tree[i]->endpoints->count == 0)
+        if (    oshd.node_tree[i]->local_node
+            ||  oshd.node_tree[i]->endpoints->count == 0
+            || !oshd.node_tree[i]->endpoints->always_retry)
+        {
             continue;
+        }
 
         node_connect(oshd.node_tree[i], true);
     }

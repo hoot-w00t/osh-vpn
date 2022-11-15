@@ -395,12 +395,6 @@ endpoint_t *endpoint_group_insert_sorted(endpoint_group_t *group,
         }
         endpoint_group_insert_at2(it, group, endpoint);
 
-        // Endpoints which can't expire are endpoints from the configuration
-        // file, having those in the group means that we should never give up
-        // trying to connect to a node
-        if (!endpoint->can_expire)
-            group->always_retry = true;
-
         logger_debug(DBG_ENDPOINTS, "%s: Added endpoint %s",
             group->debug_id, endpoint->addrstr);
 
