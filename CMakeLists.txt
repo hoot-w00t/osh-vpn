@@ -135,7 +135,7 @@ set(OSHD_SOURCES
     src/events/expire_seen_brd_ids.c
     src/events/handshake_renew.c
     src/events/handshake_timeout.c
-    src/events/periodic_ping.c
+    src/events/keepalive.c
     src/netutil/icmp.c
     src/oshpacket_handlers/data.c
     src/oshpacket_handlers/devmode.c

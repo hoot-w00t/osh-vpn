@@ -105,6 +105,13 @@ struct client {
     // Timed events linked to clients
     event_t *handshake_renew_event;
     event_t *handshake_timeout_event;
+    event_t *keepalive_event;
+
+    // Interval at which probes will be sent (in seconds)
+    time_t keepalive_interval;
+
+    // Connection timeout delay (in seconds)
+    time_t keepalive_timeout;
 
     // This variable is true after a local handshake is created and sent to the
     // other node
@@ -164,6 +171,8 @@ void client_change_endpoint(client_t *c, const endpoint_t *endpoint,
 void client_destroy(client_t *c);
 client_t *client_init(int fd, bool initiator, const endpoint_t *endpoint,
     const struct sockaddr_storage *sa);
+
+void client_set_keepalive(client_t *c, time_t interval, time_t timeout);
 
 void client_reconnect_to(client_t *c, node_id_t *nid);
 #define client_reconnect_disable(c) client_reconnect_to(c, NULL)

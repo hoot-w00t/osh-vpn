@@ -104,6 +104,7 @@ void client_destroy(client_t *c)
     // Cancel any events linked to this client
     event_cancel(c->handshake_renew_event);
     event_cancel(c->handshake_timeout_event);
+    event_cancel(c->keepalive_event);
 
     client_disconnect(c);
 
@@ -139,7 +140,18 @@ client_t *client_init(int fd, bool initiator, const endpoint_t *endpoint,
     // succeed
     event_queue_handshake_timeout(c, HANDSHAKE_TIMEOUT);
 
+    // Probe the other node to know if the connection is still alive
+    client_set_keepalive(c, HANDSHAKE_TIMEOUT, HANDSHAKE_TIMEOUT);
+    event_queue_keepalive(c, EVENT_QUEUE_NOW);
+
     return c;
+}
+
+// Set client connection timeout and keepalive interval
+void client_set_keepalive(client_t *c, time_t interval, time_t timeout)
+{
+    c->keepalive_interval = interval;
+    c->keepalive_timeout = timeout;
 }
 
 // Set the node to which this client should try to reconnect to

@@ -302,7 +302,6 @@ void oshd_loop(void)
     }
 
     // Osh actually starts
-    event_queue_periodic_ping();
     event_queue_expire_endpoints();
     event_queue_expire_routes();
     event_queue_expire_seen_brd_ids();

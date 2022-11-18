@@ -87,6 +87,6 @@ void event_queue_expire_routes(void);
 void event_queue_expire_seen_brd_ids(void);
 void event_queue_handshake_renew(client_t *c);
 void event_queue_handshake_timeout(client_t *c, time_t timeout_delay);
-void event_queue_periodic_ping(void);
+void event_queue_keepalive(client_t *c, time_t delay);
 
 #endif
