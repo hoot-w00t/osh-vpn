@@ -58,7 +58,7 @@ void _aio_event_free(aio_event_t *event)
 void _aio_event_init(aio_event_t *event)
 {
     // Initialize epoll event data
-    event->data.ptr = xzalloc(sizeof(struct epoll_event));
+    event->data.ptr = xzalloc(sizeof(event_data_epoll_t));
     event_data(event).events = epoll_flags(event->poll_events);
     event_data(event).data.ptr = event;
 }
