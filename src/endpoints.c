@@ -303,11 +303,28 @@ static endpoint_t *_endpoint_group_find(endpoint_t *start, const endpoint_t *end
     return NULL;
 }
 
+// Returns the first exactly matching endpoint starting at element *start
+static endpoint_t *_endpoint_group_find_exact(endpoint_t *start, const endpoint_t *endpoint)
+{
+    for (endpoint_t *it = start; it != NULL; it = it->next) {
+        if (endpoint_eq(it, endpoint) && it->socktype == endpoint->socktype)
+            return it;
+    }
+    return NULL;
+}
+
 // Searches for the first endpoint matching value and port
 // Returns NULL if it cannot be found
 endpoint_t *endpoint_group_find(endpoint_group_t *group, const endpoint_t *endpoint)
 {
     return _endpoint_group_find(group->head, endpoint);
+}
+
+// Searches for the first endpoint exactly matching
+// Returns NULL if it cannot be found
+endpoint_t *endpoint_group_find_exact(endpoint_group_t *group, const endpoint_t *endpoint)
+{
+    return _endpoint_group_find_exact(group->head, endpoint);
 }
 
 // Searches for the first endpoint matching value and port starting at the
@@ -316,6 +333,14 @@ endpoint_t *endpoint_group_find(endpoint_group_t *group, const endpoint_t *endpo
 endpoint_t *endpoint_group_find_after(endpoint_t *after, const endpoint_t *endpoint)
 {
     return _endpoint_group_find(after->next, endpoint);
+}
+
+// Searches for the first endpoint exactly matching starting at the element
+// *after->next
+// Returns NULL if it cannot be found
+endpoint_t *endpoint_group_find_exact_after(endpoint_t *after, const endpoint_t *endpoint)
+{
+    return _endpoint_group_find_exact(after->next, endpoint);
 }
 
 // Find a duplicate endpoint (taking can_expire and socktype into account)
@@ -543,12 +568,16 @@ bool endpoint_lookup(endpoint_t *endpoint, endpoint_group_t *group)
             continue;
 
         // Check if the endpoint already exists in the group
-        if (endpoint_group_find(group, lookedup)) {
+        if (endpoint_group_find_exact(group, lookedup)) {
             // Check if it exists after the current one
-            endpoint_t *old_endpoint = endpoint_group_find_after(after, lookedup);
+            endpoint_t *old_endpoint = endpoint_group_find_exact_after(after, lookedup);
 
-            // If it exists before the current one, skip it
-            if (!old_endpoint) {
+            if (old_endpoint) {
+                // The endpoint exists after the current one, we will move it by
+                // deleting and re-inserting it
+                endpoint_group_del(group, old_endpoint);
+            } else {
+                // If it exists before the current one, skip it
                 logger_debug(DBG_ENDPOINTS, "%s: Ignoring looked up endpoint %s (%s)",
                     group->debug_id, lookedup->addrstr, "already exists");
                 continue;
@@ -562,7 +591,7 @@ bool endpoint_lookup(endpoint_t *endpoint, endpoint_group_t *group)
 
         // Insert the new endpoint
         logger_debug(DBG_ENDPOINTS, "%s: Inserting looked up endpoint %s",
-                    group->debug_id, lookedup->addrstr);
+            group->debug_id, lookedup->addrstr);
         after = endpoint_group_insert_after(after, group, lookedup);
     }
     endpoint_free(lookedup);
