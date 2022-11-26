@@ -41,5 +41,5 @@ void event_queue_handshake_timeout(client_t *c, time_t timeout_delay)
         handshake_timeout_event_handler,
         handshake_timeout_event_freedata,
         c);
-    event_queue_in(c->handshake_timeout_event, timeout_delay);
+    event_queue_in(c->handshake_timeout_event, EVENT_QUEUE_IN_S(timeout_delay));
 }

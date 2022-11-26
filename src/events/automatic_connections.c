@@ -126,5 +126,5 @@ void event_queue_automatic_connections(void)
             automatic_connections_handler,
             NULL,
             NULL),
-        oshd.automatic_connections_interval);
+        EVENT_QUEUE_IN_S(oshd.automatic_connections_interval));
 }

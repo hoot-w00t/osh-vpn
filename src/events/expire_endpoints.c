@@ -33,5 +33,5 @@ void event_queue_expire_endpoints(void)
             expire_endpoints_event_handler,
             NULL,
             NULL),
-        EXPIRE_ENDPOINTS_INTERVAL);
+        EVENT_QUEUE_IN_S(EXPIRE_ENDPOINTS_INTERVAL));
 }

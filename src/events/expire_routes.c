@@ -21,5 +21,5 @@ void event_queue_expire_routes(void)
             expire_routes_event_handler,
             NULL,
             NULL),
-        ROUTE_LOCAL_EXPIRY);
+        EVENT_QUEUE_IN_S(ROUTE_LOCAL_EXPIRY));
 }

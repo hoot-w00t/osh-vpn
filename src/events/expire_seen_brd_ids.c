@@ -57,5 +57,5 @@ void event_queue_expire_seen_brd_ids(void)
             expire_seen_brd_ids_event_handler,
             NULL,
             NULL),
-        NODE_BRD_ID_TIMEOUT);
+        EVENT_QUEUE_IN_S(NODE_BRD_ID_TIMEOUT));
 }

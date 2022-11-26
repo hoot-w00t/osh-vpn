@@ -22,5 +22,5 @@ void event_queue_periodic_ping(void)
             periodic_ping_event_handler,
             NULL,
             NULL),
-        PERIODIC_PING_INTERVAL);
+        EVENT_QUEUE_IN_S(PERIODIC_PING_INTERVAL));
 }

@@ -27,5 +27,5 @@ void event_queue_handshake_renew(client_t *c)
             handshake_renew_event_freedata,
             c);
     }
-    event_queue_in(c->handshake_renew_event, HANDSHAKE_RENEW_INTERVAL);
+    event_queue_in(c->handshake_renew_event, EVENT_QUEUE_IN_S(HANDSHAKE_RENEW_INTERVAL));
 }

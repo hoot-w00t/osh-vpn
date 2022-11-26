@@ -58,5 +58,5 @@ void event_queue_connect(node_id_t *nid, time_t delay)
 
     nid->connect_event = event_create("connect", connect_event_handler,
         connect_event_freedata, nid);
-    event_queue_in(nid->connect_event, delay);
+    event_queue_in(nid->connect_event, EVENT_QUEUE_IN_S(delay));
 }
