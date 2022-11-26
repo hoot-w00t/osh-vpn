@@ -273,7 +273,7 @@ static bool event_unqueue(event_t *event)
     return false;
 }
 
-// Add an event to the queue which will trigger in delay seconds from now
+// Add an event to the queue which will trigger in delay milliseconds from now
 // Automatically checks whether the event is already queued to prevent doubles
 // Can be used to change the trigger of an already queued event
 void event_queue_in(event_t *event, time_t delay)
@@ -284,9 +284,14 @@ void event_queue_in(event_t *event, time_t delay)
     // Set the event's trigger time
     if (delay > 0) {
         oshd_gettime(&event->trigger_at);
-        event->trigger_at.tv_sec += delay;
+        event->trigger_at.tv_sec  += EVENT_DELAY_TO_SEC(delay);
+        event->trigger_at.tv_nsec += EVENT_DELAY_TO_NSEC(delay);
+        while (event->trigger_at.tv_nsec >= EVENT_NSEC_MAX) {
+            event->trigger_at.tv_nsec -= EVENT_NSEC_MAX;
+            event->trigger_at.tv_sec  += 1;
+        }
     } else {
-        event->trigger_at.tv_sec = 0;
+        event->trigger_at.tv_sec  = 0;
         event->trigger_at.tv_nsec = 0;
     }
 
@@ -294,7 +299,7 @@ void event_queue_in(event_t *event, time_t delay)
     if (event->in_queue)
         event_unqueue(event);
 
-    logger_debug(DBG_EVENTS, "Queuing %s event %p in %lis",
+    logger_debug(DBG_EVENTS, "Queuing %s event %p in %li" EVENT_DELAY_UNIT,
         event->name, event, delay);
 
     // Sort the events by their trigger time (ascending)

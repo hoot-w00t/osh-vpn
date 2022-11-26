@@ -5,14 +5,23 @@
 #include "oshd_clock.h"
 #include "netaddr.h"
 
+#define EVENT_DELAY_UNIT "ms"
+#define EVENT_DELAY_PRECISION (1000)
+#define EVENT_NSEC_MAX (1000000000)
+#define EVENT_DELAY_TO_SEC(x) \
+    ((x) / EVENT_DELAY_PRECISION)
+#define EVENT_DELAY_TO_NSEC(x) \
+    (((x) % EVENT_DELAY_PRECISION) * (EVENT_NSEC_MAX / EVENT_DELAY_PRECISION))
+
 // Corresponds to the delays an event can return
 // < 0 : the event is finished (it is freed right after)
 // >= 0: the event will be triggered again with this delay (in seconds) from now
-#define EVENT_IS_DONE       (-1)
-#define EVENT_QUEUE_NOW     (0)
-#define EVENT_QUEUE_IN_S(s) (s)
-#define EVENT_QUEUE_IN_M(m) ((m) * 60)
-#define EVENT_QUEUE_IN_H(h) ((h) * 60 * 60)
+#define EVENT_IS_DONE           (-1)
+#define EVENT_QUEUE_NOW         (0)
+#define EVENT_QUEUE_IN_MS(ms)   (ms)
+#define EVENT_QUEUE_IN_S(s)     EVENT_QUEUE_IN_MS((s) * 1000)
+#define EVENT_QUEUE_IN_M(m)     EVENT_QUEUE_IN_S((m) * 60)
+#define EVENT_QUEUE_IN_H(h)     EVENT_QUEUE_IN_M((h) * 60)
 
 typedef time_t (*event_handler_t)(void *);
 typedef void (*event_freedata_t)(void *);
