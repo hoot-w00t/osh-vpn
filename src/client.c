@@ -77,6 +77,27 @@ static void client_reset_ciphers(client_t *c)
     c->recv_cipher_next = NULL;
 }
 
+// Set the client's endpoint, socket address and format addrw for logging
+static void client_set_endpoint(client_t *c, const endpoint_t *endpoint,
+    const struct sockaddr_storage *sa)
+{
+    endpoint_free(c->sa_endpoint);
+    free(c->addrw);
+
+    memcpy(&c->sa, sa, sizeof(c->sa));
+    c->sa_endpoint = endpoint_dup(endpoint);
+    c->addrw = xstrdup(c->sa_endpoint->addrstr);
+}
+
+// Change the client's existing endpoint and socket address and log it
+void client_change_endpoint(client_t *c, const endpoint_t *endpoint,
+    const struct sockaddr_storage *sa)
+{
+    logger(LOG_INFO, "%s: Endpoint changed to %s", c->sa_endpoint->addrstr,
+        endpoint->addrstr);
+    client_set_endpoint(c, endpoint, sa);
+}
+
 // Disconnect and free a client
 void client_destroy(client_t *c)
 {
@@ -93,6 +114,7 @@ void client_destroy(client_t *c)
     client_reset_ciphers(c);
 
     endpoint_free(c->sa_endpoint);
+    free(c->addrw);
     free(c);
 }
 
@@ -104,11 +126,9 @@ client_t *client_init(int fd, bool initiator, const endpoint_t *endpoint,
 
     c->fd = fd;
     c->initiator = initiator;
-    memcpy(&c->sa, sa, sizeof(c->sa));
-    c->sa_endpoint = endpoint_dup(endpoint);
 
-    // Format the client's address and port for logging
-    c->addrw = c->sa_endpoint->addrstr;
+    // Set the client's socket address, endpoint and format addrw
+    client_set_endpoint(c, endpoint, sa);
 
     // Initialize network buffers
     c->io.recvbuf = xalloc(CLIENT_RECVBUF_SIZE);

@@ -88,7 +88,7 @@ struct client {
     int fd;                      // Network socket
     struct sockaddr_storage sa;  // Socket address
     endpoint_t *sa_endpoint;     // Socket endpoint
-    const char *addrw;           // Endpoint "address:port" string
+    char *addrw;                 // Endpoint "address:port" string
 
     struct client_io io;         // send/recv data buffers
     aio_event_t *aio_event;      // Client's async I/O event
@@ -153,6 +153,9 @@ struct client {
 };
 
 void client_graceful_disconnect(client_t *c);
+
+void client_change_endpoint(client_t *c, const endpoint_t *endpoint,
+    const struct sockaddr_storage *sa);
 
 void client_destroy(client_t *c);
 client_t *client_init(int fd, bool initiator, const endpoint_t *endpoint,
