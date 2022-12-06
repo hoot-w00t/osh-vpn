@@ -72,7 +72,8 @@ struct endpoint {
     endpoint_socktype_t socktype;
 
     // Presentation string of the socket address/port
-    char addrstr[ENDPOINT_ADDRSTR_MAXLEN + 1];
+    char *addrstr;
+    size_t addrstr_size;
 
     bool can_expire;
     struct timespec last_refresh;

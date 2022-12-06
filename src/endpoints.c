@@ -93,13 +93,24 @@ static void endpoint_data_from_charvalue(endpoint_t *endpoint,
     }
 }
 
+// Allocate new addrstr of len + 10 bytes (for additionnal characters, the
+// port number and the terminating byte)
+// Frees previously allocated addrstr (if any)
+static void endpoint_alloc_addrstr(endpoint_t *endpoint, size_t len)
+{
+    free(endpoint->addrstr);
+    endpoint->addrstr_size = len + 16;
+    endpoint->addrstr = xalloc(endpoint->addrstr_size);
+}
+
 // Format endpoint->addrstr from socket address
 // Returns false on error
 static bool endpoint_format_addrstr(endpoint_t *endpoint)
 {
     switch (endpoint->type) {
         case ENDPOINT_TYPE_HOSTNAME: {
-            snprintf(endpoint->addrstr, sizeof(endpoint->addrstr), "%s:%u",
+            endpoint_alloc_addrstr(endpoint, strlen(endpoint->data.host.hostname));
+            snprintf(endpoint->addrstr, endpoint->addrstr_size, "%s:%u",
                 endpoint->data.host.hostname, ntohs(endpoint->data.host.port));
             return true;
         }
@@ -110,7 +121,8 @@ static bool endpoint_format_addrstr(endpoint_t *endpoint)
             if (!inet_ntop(AF_INET, &endpoint->data.ip4.addr, addrp, sizeof(addrp)))
                 return false;
 
-            snprintf(endpoint->addrstr, sizeof(endpoint->addrstr), "%s:%u",
+            endpoint_alloc_addrstr(endpoint, strlen(addrp));
+            snprintf(endpoint->addrstr, endpoint->addrstr_size, "%s:%u",
                 addrp, ntohs(endpoint->data.ip4.port));
             return true;
         }
@@ -121,7 +133,8 @@ static bool endpoint_format_addrstr(endpoint_t *endpoint)
             if (!inet_ntop(AF_INET6, &endpoint->data.ip6.addr, addrp, sizeof(addrp)))
                 return false;
 
-            snprintf(endpoint->addrstr, sizeof(endpoint->addrstr), "[%s]:%u",
+            endpoint_alloc_addrstr(endpoint, strlen(addrp));
+            snprintf(endpoint->addrstr, endpoint->addrstr_size, "[%s]:%u",
                 addrp, ntohs(endpoint->data.ip6.port));
             return true;
         }
@@ -129,6 +142,12 @@ static bool endpoint_format_addrstr(endpoint_t *endpoint)
         default:
             return false;
     }
+}
+
+// Allocate an empty endpoint
+static endpoint_t *endpoint_alloc(void)
+{
+    return xzalloc(sizeof(endpoint_t));
 }
 
 // Initialize remaining members of the endpoint after the address was set
@@ -141,15 +160,19 @@ static void endpoint_init2(endpoint_t *endpoint,
     endpoint->area = endpoint_calc_area(endpoint);
     endpoint->priority = endpoint_calc_priority(endpoint);
 
-    if (!endpoint_format_addrstr(endpoint))
-        snprintf(endpoint->addrstr, sizeof(endpoint->addrstr), "(format error)");
+    if (!endpoint_format_addrstr(endpoint)) {
+        const char *errstr = "(format error)";
+
+        endpoint_alloc_addrstr(endpoint, strlen(errstr));
+        snprintf(endpoint->addrstr, endpoint->addrstr_size, "%s", errstr);
+    }
 }
 
 // Create a new endpoint from a character string
 endpoint_t *endpoint_create(const char *value, const uint16_t port,
     const endpoint_socktype_t socktype, const bool can_expire)
 {
-    endpoint_t *endpoint = xzalloc(sizeof(endpoint_t));
+    endpoint_t *endpoint = endpoint_alloc();
 
     endpoint_data_from_charvalue(endpoint, value, port);
     endpoint_init2(endpoint, socktype, can_expire);
@@ -160,6 +183,7 @@ endpoint_t *endpoint_create(const char *value, const uint16_t port,
 void endpoint_free(endpoint_t *endpoint)
 {
     if (endpoint) {
+        free(endpoint->addrstr);
         free(endpoint);
     }
 }
@@ -167,10 +191,16 @@ void endpoint_free(endpoint_t *endpoint)
 // Duplicate existing endpoint
 endpoint_t *endpoint_dup(const endpoint_t *original)
 {
-    endpoint_t *endpoint = xalloc(sizeof(*endpoint));
+    endpoint_t *endpoint = endpoint_alloc();
 
+    // Copy the original endpoint's values
     memcpy(endpoint, original, sizeof(*endpoint));
+
+    // Reset or reallocate members which cannot be shared
+    endpoint->addrstr = xstrdup(original->addrstr);
+    endpoint->addrstr_size = strlen(endpoint->addrstr) + 1;
     endpoint->next = NULL;
+
     return endpoint;
 }
 
@@ -700,11 +730,9 @@ endpoint_t *endpoint_from_packet(const oshpacket_endpoint_t *pkt,
         default: return NULL;
     }
 
-    endpoint = xzalloc(sizeof(*endpoint));
-
+    endpoint = endpoint_alloc();
     endpoint->type = pkt->type;
     memcpy(&endpoint->data, data, data_size);
-
     endpoint_init2(endpoint, pkt->socktype, true);
     return endpoint;
 }
