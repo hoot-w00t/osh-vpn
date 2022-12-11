@@ -582,11 +582,6 @@ bool endpoint_lookup(endpoint_t *endpoint, endpoint_group_t *group)
                     group->debug_id, lookedup->addrstr, "already exists");
                 continue;
             }
-
-            // The endpoint exists after the current one, we will move it by
-            // deleting and re-inserting it (keep all socket types)
-            lookedup->socktype |= old_endpoint->socktype;
-            endpoint_group_del(group, old_endpoint);
         }
 
         // Insert the new endpoint
