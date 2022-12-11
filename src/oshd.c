@@ -95,8 +95,15 @@ bool oshd_init(void)
     }
 
     if (oshd.server_enabled) {
-        int fd4 = tcp4_bind(NULL, oshd.server_port, OSHD_TCP_SERVER_BACKLOG);
-        int fd6 = tcp6_bind(NULL, oshd.server_port, OSHD_TCP_SERVER_BACKLOG);
+        endpoint_t *ipv4_any = endpoint_create("0.0.0.0", oshd.server_port, ENDPOINT_SOCKTYPE_NONE, false);
+        endpoint_t *ipv6_any = endpoint_create("::", oshd.server_port, ENDPOINT_SOCKTYPE_NONE, false);
+
+        int fd4 = tcp_bind(ipv4_any, OSHD_TCP_SERVER_BACKLOG);
+        int fd6 = tcp_bind(ipv6_any, OSHD_TCP_SERVER_BACKLOG);
+
+        // Free temporary endpoints
+        endpoint_free(ipv4_any);
+        endpoint_free(ipv6_any);
 
         // If no server was opened, stop here
         if (fd4 < 0 && fd6 < 0)
