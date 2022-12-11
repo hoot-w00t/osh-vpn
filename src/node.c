@@ -666,25 +666,29 @@ static bool connect_endpoint_type_compatible(const endpoint_type_t type)
     }
 }
 
+// Insert endpoint if it is compatible with the socket type
+static void node_connect_setup_endpoints_insert(node_id_t *nid,
+    const endpoint_t *endpoint, const endpoint_socktype_t socktype)
+{
+    endpoint_t *inserted;
+
+    if (endpoint->socktype & socktype) {
+        inserted = endpoint_group_insert_back(nid->connect_endpoints, endpoint);
+        inserted->socktype &= socktype;
+    }
+}
+
 // Initialize nid->connect_endpoints for a new connection attempt
 // Copies all the currently known valid endpoints, selects the first one
 // Returns false if there are no endpoints to connect to
 static bool node_connect_setup_endpoints(node_id_t *nid)
 {
-    const endpoint_socktype_t st_mask = ENDPOINT_SOCKTYPE_TCP;
-    endpoint_t *inserted;
-
     endpoint_group_clear(nid->connect_endpoints);
     foreach_endpoint_const(endpoint, nid->endpoints) {
-        if (!(endpoint->socktype & st_mask))
-            continue;
-
         if (!connect_endpoint_type_compatible(endpoint->type))
             continue;
 
-        inserted = endpoint_group_insert_sorted(nid->connect_endpoints, endpoint);
-        if (inserted)
-            inserted->socktype &= st_mask;
+        node_connect_setup_endpoints_insert(nid, endpoint, ENDPOINT_SOCKTYPE_TCP);
     }
     endpoint_group_select_first(nid->connect_endpoints);
 
