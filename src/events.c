@@ -323,7 +323,7 @@ void event_queue_in(event_t *event, time_t delay)
         if (diff.tv_sec == 0 && diff.tv_nsec == 0) {
             // The new trigger time is the same as the previous one, we can
             // return now as no changes will be made
-            logger_debug(DBG_EVENTS, "Queuing %s event %p in %li (no changes)" EVENT_DELAY_UNIT,
+            logger_debug(DBG_EVENTS, "Queuing %s event %p in %li" EVENT_DELAY_UNIT " (no changes)",
                 event->name, event, delay);
             return;
         }
