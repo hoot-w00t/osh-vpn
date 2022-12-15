@@ -279,6 +279,30 @@ static bool event_unqueue(event_t *event)
     return false;
 }
 
+// Convert time_t delay into trigger_at timestamp
+// If now is NULL, gets the current time using oshd_gettime()
+static void event_trigger_at_from_delay(struct timespec *trigger_at,
+    const time_t delay, const struct timespec *now)
+{
+    if (delay > 0) {
+        if (now) {
+            *trigger_at = *now;
+        } else {
+            oshd_gettime(trigger_at);
+        }
+
+        trigger_at->tv_sec  += EVENT_DELAY_TO_SEC(delay);
+        trigger_at->tv_nsec += EVENT_DELAY_TO_NSEC(delay);
+        while (trigger_at->tv_nsec >= EVENT_NSEC_MAX) {
+            trigger_at->tv_nsec -= EVENT_NSEC_MAX;
+            trigger_at->tv_sec  += 1;
+        }
+    } else {
+        trigger_at->tv_sec  = 0;
+        trigger_at->tv_nsec = 0;
+    }
+}
+
 // Add an event to the queue which will trigger in delay milliseconds from now
 // Automatically checks whether the event is already queued to prevent doubles
 // Can be used to change the trigger of an already queued event
@@ -288,18 +312,7 @@ void event_queue_in(event_t *event, time_t delay)
     struct timespec diff;
 
     // Set the event's trigger time
-    if (delay > 0) {
-        oshd_gettime(&event->trigger_at);
-        event->trigger_at.tv_sec  += EVENT_DELAY_TO_SEC(delay);
-        event->trigger_at.tv_nsec += EVENT_DELAY_TO_NSEC(delay);
-        while (event->trigger_at.tv_nsec >= EVENT_NSEC_MAX) {
-            event->trigger_at.tv_nsec -= EVENT_NSEC_MAX;
-            event->trigger_at.tv_sec  += 1;
-        }
-    } else {
-        event->trigger_at.tv_sec  = 0;
-        event->trigger_at.tv_nsec = 0;
-    }
+    event_trigger_at_from_delay(&event->trigger_at, delay, NULL);
 
     // If this event is already in the queue we have to first remove it
     if (event->in_queue)
