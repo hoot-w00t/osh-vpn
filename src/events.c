@@ -2,6 +2,7 @@
 #include "events.h"
 #include "logger.h"
 #include "xalloc.h"
+#include "macros.h"
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -155,7 +156,12 @@ static void event_aio_process(aio_event_t *event)
 
     // Disarm the timerfd
     if (read(event->fd, &expirations, sizeof(expirations)) < 0) {
-        logger(LOG_CRIT, "Events timerfd: read: %s", strerror(errno));
+        if (IO_WOULDBLOCK(errno)) {
+            // This error indicates that the timer hasn't expired yet
+            logger(LOG_WARN, "Events timerfd misfired");
+        } else {
+            logger(LOG_ERR, "Events timerfd: read: %s", strerror(errno));
+        }
         return;
     }
 
