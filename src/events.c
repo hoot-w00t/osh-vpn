@@ -309,15 +309,32 @@ static void event_trigger_at_from_delay(struct timespec *trigger_at,
 void event_queue_in(event_t *event, time_t delay)
 {
     event_t **i = &event_queue_head;
+    struct timespec trigger_at;
     struct timespec diff;
 
-    // Set the event's trigger time
-    event_trigger_at_from_delay(&event->trigger_at, delay, NULL);
+    // Calculate the event's trigger time
+    event_trigger_at_from_delay(&trigger_at, delay, NULL);
 
-    // If this event is already in the queue we have to first remove it
-    if (event->in_queue)
+    // Check if the event was already queued
+    if (event->in_queue) {
+        // Compare the new trigger time with the previous
+        timespecsub(&trigger_at, &event->trigger_at, &diff);
+
+        if (diff.tv_sec == 0 && diff.tv_nsec == 0) {
+            // The new trigger time is the same as the previous one, we can
+            // return now as no changes will be made
+            logger_debug(DBG_EVENTS, "Queuing %s event %p in %li (no changes)" EVENT_DELAY_UNIT,
+                event->name, event, delay);
+            return;
+        }
+
+        // The event's trigger time changed, we will update it by removing it
+        // and adding it back with the new delay
         event_unqueue(event);
+    }
 
+    // Set the trigger time and queue the event
+    event->trigger_at = trigger_at;
     logger_debug(DBG_EVENTS, "Queuing %s event %p in %li" EVENT_DELAY_UNIT,
         event->name, event, delay);
 
