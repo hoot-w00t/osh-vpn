@@ -48,34 +48,9 @@ bool oshd_process_packet(client_t *c, void *packet,
     uint8_t *payload = OSHPACKET_PAYLOAD(packet);
     const oshpacket_t *def;
 
-    // If we have a recv_cipher, the private header and payload are encrypted,
-    // so we need to decrypt it before we can process the data
-    if (c->recv_cipher) {
-        const size_t encrypted_size = OSHPACKET_PRIVATE_HDR_SIZE + hdr->payload_size;
-        size_t decrypted_size;
-
-        logger_debug(DBG_ENCRYPTION, "%s: Decrypting packet of %zu bytes",
-            c->addrw, encrypted_size);
-
-        // We decrypt the packet at the same location because we are using a
-        // streaming cipher
-        if (!cipher_decrypt(c->recv_cipher,
-                OSHPACKET_PRIVATE_HDR(packet), &decrypted_size,
-                OSHPACKET_PRIVATE_HDR(packet), encrypted_size,
-                hdr->tag,
-                packet_seqno))
-        {
-            logger(LOG_ERR, "%s: Failed to decrypt packet", c->addrw);
-            return false;
-        }
-
-        if (decrypted_size != encrypted_size) {
-            logger(LOG_ERR,
-                "%s: Decrypted packet has a different size (encrypted: %zu, decrypted: %zu)",
-                c->addrw, encrypted_size, decrypted_size);
-            return false;
-        }
-    }
+    // Decrypt the packet data
+    if (!client_decrypt_packet(c, packet, hdr->payload_size, packet_seqno))
+        return false;
 
     def = oshpacket_lookup(hdr->type);
 
