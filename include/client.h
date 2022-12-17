@@ -136,6 +136,10 @@ struct client {
     cipher_t *recv_cipher;
     cipher_t *recv_cipher_next;
 
+    // Packet sequence numbers (used with the send/receive ciphers)
+    cipher_seqno_t send_seqno;
+    cipher_seqno_t recv_seqno;
+
     // When this is set to true, disconnect and remove the client after the
     // send queue is emptied (graceful disconnection)
     // No more packets will be received or queued

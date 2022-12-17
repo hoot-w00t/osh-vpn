@@ -198,6 +198,7 @@ static bool handshake_setup_new_ciphers(client_t *c)
         logger_debug(DBG_HANDSHAKE, "%s: Rotating send cipher", c->addrw);
         cipher_free(c->send_cipher);
         c->send_cipher = new_send_cipher;
+        c->send_seqno = 0;
 
         // Keep the new recv cipher on the side for now
         c->recv_cipher_next = new_recv_cipher;

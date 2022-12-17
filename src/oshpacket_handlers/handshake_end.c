@@ -30,6 +30,7 @@ bool oshpacket_handler_handshake_end(client_t *c,
     cipher_free(c->recv_cipher);
     c->recv_cipher = c->recv_cipher_next;
     c->recv_cipher_next = NULL;
+    c->recv_seqno = 0;
 
     // The handshake is now over
     client_finish_handshake(c);

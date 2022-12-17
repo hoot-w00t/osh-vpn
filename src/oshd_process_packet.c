@@ -41,7 +41,8 @@ static bool forward_packet(const node_id_t *src_node, node_id_t *dest_node,
 
 // Returns true if packet was processed without an error
 // Returns false if the client should be disconnected
-bool oshd_process_packet(client_t *c, void *packet)
+bool oshd_process_packet(client_t *c, void *packet,
+    const cipher_seqno_t packet_seqno)
 {
     oshpacket_hdr_t *hdr = OSHPACKET_HDR(packet);
     uint8_t *payload = OSHPACKET_PAYLOAD(packet);
@@ -61,7 +62,8 @@ bool oshd_process_packet(client_t *c, void *packet)
         if (!cipher_decrypt(c->recv_cipher,
                 OSHPACKET_PRIVATE_HDR(packet), &decrypted_size,
                 OSHPACKET_PRIVATE_HDR(packet), encrypted_size,
-                hdr->tag))
+                hdr->tag,
+                packet_seqno))
         {
             logger(LOG_ERR, "%s: Failed to decrypt packet", c->addrw);
             return false;

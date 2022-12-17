@@ -260,7 +260,8 @@ bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
         if (!cipher_encrypt(c->send_cipher,
                 OSHPACKET_PRIVATE_HDR(slot), &encr_size,
                 OSHPACKET_PRIVATE_HDR(slot), orig_size,
-                OSHPACKET_HDR(slot)->tag))
+                OSHPACKET_HDR(slot)->tag,
+                c->send_seqno))
         {
             logger(LOG_ERR, "%s: Failed to encrypt packet", c->addrw);
             netbuffer_cancel(c->io.sendq, packet_size);
@@ -301,6 +302,9 @@ bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
 
         return false;
     }
+
+    // Increment the send seqno
+    c->send_seqno += 1;
 
     aio_enable_poll_events(c->aio_event, AIO_WRITE);
     return true;
