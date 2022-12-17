@@ -32,9 +32,6 @@ typedef struct cipher {
 
     // Actual IV that will be used
     cipher_iv_t iv;
-
-    // Sequence number, incremented after every cipher operation
-    cipher_seqno_t seqno;
 } cipher_t;
 
 #define _cipher_attr __attribute__((warn_unused_result))
@@ -47,10 +44,10 @@ void cipher_free(cipher_t *cipher);
 
 _cipher_attr
 bool cipher_encrypt(cipher_t *cipher, uint8_t *out, size_t *out_size,
-    const uint8_t *in, size_t in_size, void *tag);
+    const uint8_t *in, size_t in_size, void *tag, cipher_seqno_t seqno);
 
 _cipher_attr
 bool cipher_decrypt(cipher_t *cipher, uint8_t *out, size_t *out_size,
-    const uint8_t *in, size_t in_size, void *tag);
+    const uint8_t *in, size_t in_size, void *tag, cipher_seqno_t seqno);
 
 #endif

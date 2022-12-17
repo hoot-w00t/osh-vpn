@@ -7,16 +7,9 @@
 #include <string.h>
 
 // Compute iv from the base_iv and sequence number
-static void cipher_compute_iv(cipher_t *cipher)
+static void cipher_compute_iv(cipher_t *cipher, cipher_seqno_t seqno)
 {
-    cipher->iv.s.seqno_be = cipher->base_iv.s.seqno_be ^ htobe64(cipher->seqno);
-}
-
-// Increment sequence number and compute the new IV
-static void cipher_increment_iv(cipher_t *cipher)
-{
-    cipher->seqno += 1;
-    cipher_compute_iv(cipher);
+    cipher->iv.s.seqno_be = cipher->base_iv.s.seqno_be ^ htobe64(seqno);
 }
 
 // Generic cipher_create function for any *evp_cipher
@@ -57,8 +50,6 @@ static cipher_t *cipher_create(const EVP_CIPHER *evp_cipher, bool encrypts,
     cipher->encrypts = encrypts;
     memcpy(cipher->base_iv.b, iv, CIPHER_IV_SIZE);
     memcpy(cipher->iv.b, cipher->base_iv.b, CIPHER_IV_SIZE);
-    cipher->seqno = 0;
-    cipher_compute_iv(cipher);
 
     // Allocate the cipher context
     if (!(cipher->ctx = EVP_CIPHER_CTX_new())) {
@@ -117,10 +108,11 @@ void cipher_free(cipher_t *cipher)
 // Write authentication tag to tag
 _cipher_attr
 bool cipher_encrypt(cipher_t *cipher, uint8_t *out, size_t *out_size,
-    const uint8_t *in, size_t in_size, void *tag)
+    const uint8_t *in, size_t in_size, void *tag, cipher_seqno_t seqno)
 {
     int out_len, final_len;
 
+    cipher_compute_iv(cipher, seqno);
     if (EVP_EncryptInit_ex(cipher->ctx, NULL, NULL, NULL, cipher->iv.b) != 1) {
         logger(LOG_ERR, "%s: %s: %s", "cipher_encrypt", "EVP_EncryptInit_ex",
             osh_openssl_strerror);
@@ -144,7 +136,6 @@ bool cipher_encrypt(cipher_t *cipher, uint8_t *out, size_t *out_size,
         return false;
     }
     *out_size = out_len + final_len;
-    cipher_increment_iv(cipher);
     return true;
 }
 
@@ -153,10 +144,11 @@ bool cipher_encrypt(cipher_t *cipher, uint8_t *out, size_t *out_size,
 // Verifies the authenticity of the cipher text using tag
 _cipher_attr
 bool cipher_decrypt(cipher_t *cipher, uint8_t *out, size_t *out_size,
-    const uint8_t *in, size_t in_size, void *tag)
+    const uint8_t *in, size_t in_size, void *tag, cipher_seqno_t seqno)
 {
     int out_len, final_len;
 
+    cipher_compute_iv(cipher, seqno);
     if (EVP_DecryptInit_ex(cipher->ctx, NULL, NULL, NULL, cipher->iv.b) != 1) {
         logger(LOG_ERR, "%s: %s: %s", "cipher_decrypt", "EVP_DecryptInit_ex",
             osh_openssl_strerror);
@@ -180,6 +172,5 @@ bool cipher_decrypt(cipher_t *cipher, uint8_t *out, size_t *out_size,
         return false;
     }
     *out_size = out_len + final_len;
-    cipher_increment_iv(cipher);
     return true;
 }
