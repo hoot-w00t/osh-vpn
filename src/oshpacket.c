@@ -24,7 +24,7 @@ static bool handler_reject(client_t *c, node_id_t *src, oshpacket_hdr_t *hdr,
 // lookup will return an invalid definition
 // The name and both handlers must never be NULL, as those will be used without
 // checking their values first
-static const oshpacket_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
+static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
     {
         .type = HANDSHAKE,
         .name = "HANDSHAKE",
@@ -160,7 +160,7 @@ const char *oshpacket_type_name(oshpacket_type_t type)
     return "UNKNOWN";
 }
 
-const oshpacket_t *oshpacket_lookup(oshpacket_type_t type)
+const oshpacket_def_t *oshpacket_lookup(oshpacket_type_t type)
 {
     if (oshpacket_type_valid(type))
         return &oshpacket_table[type];
@@ -168,7 +168,7 @@ const oshpacket_t *oshpacket_lookup(oshpacket_type_t type)
 }
 
 // Returns true if the given payload size is valid for this packet type
-bool oshpacket_payload_size_valid(const oshpacket_t *def,
+bool oshpacket_payload_size_valid(const oshpacket_def_t *def,
     const size_t payload_size)
 {
     // Verify the payload size

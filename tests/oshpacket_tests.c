@@ -71,7 +71,7 @@ Test(oshpacket_type_name, oshpacket_type_has_name)
 
 Test(oshpacket_lookup, oshpacket_lookup_has_valid_information)
 {
-    const oshpacket_t *p;
+    const oshpacket_def_t *p;
 
     for (oshpacket_type_t i = 0; i < _LAST_OSHPACKET_TYPE_ENTRY; ++i) {
         p = oshpacket_lookup(i);
@@ -109,7 +109,7 @@ Test(oshpacket_lookup, oshpacket_lookup_invalid_types)
 
 Test(oshpacket_payload_size_valid, variable_size)
 {
-    const oshpacket_t def = {
+    const oshpacket_def_t def = {
         .type = _LAST_OSHPACKET_TYPE_ENTRY,
         .name = NULL,
         .handler_unauth = NULL,
@@ -125,7 +125,7 @@ Test(oshpacket_payload_size_valid, variable_size)
 
 Test(oshpacket_payload_size_valid, fixed_size)
 {
-    oshpacket_t def = {
+    oshpacket_def_t def = {
         .type = _LAST_OSHPACKET_TYPE_ENTRY,
         .name = NULL,
         .handler_unauth = NULL,
@@ -149,7 +149,7 @@ Test(oshpacket_payload_size_valid, fixed_size)
 
 Test(oshpacket_payload_size_valid, fragmented_size)
 {
-    oshpacket_t def = {
+    oshpacket_def_t def = {
         .type = _LAST_OSHPACKET_TYPE_ENTRY,
         .name = NULL,
         .handler_unauth = NULL,
@@ -173,7 +173,7 @@ Test(oshpacket_payload_size_valid, fragmented_size)
 
 Test(oshpacket_payload_size_valid, invalid_payload_size_type)
 {
-    const oshpacket_t def = {
+    const oshpacket_def_t def = {
         .type = _LAST_OSHPACKET_TYPE_ENTRY,
         .name = NULL,
         .handler_unauth = NULL,

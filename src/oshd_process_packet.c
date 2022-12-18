@@ -1,9 +1,10 @@
+#include "oshd_process_packet.h"
 #include "node.h"
 #include "logger.h"
 
 static bool forward_packet(const node_id_t *src_node, node_id_t *dest_node,
     const client_t *src_client, const oshpacket_hdr_t *hdr, const void *payload,
-    const oshpacket_t *def)
+    const oshpacket_def_t *def)
 {
     client_t *dest_client;
 
@@ -46,7 +47,7 @@ bool oshd_process_packet(client_t *c, void *packet,
 {
     oshpacket_hdr_t *hdr = OSHPACKET_HDR(packet);
     uint8_t *payload = OSHPACKET_PAYLOAD(packet);
-    const oshpacket_t *def;
+    const oshpacket_def_t *def;
 
     // Decrypt the packet data
     if (!client_decrypt_packet(c, packet, hdr->payload_size, packet_seqno))

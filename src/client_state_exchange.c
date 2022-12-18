@@ -11,7 +11,7 @@
 static bool queue_exg_fragmented(client_t *c, oshpacket_type_t type,
     const void *payload, const size_t payload_size)
 {
-    const oshpacket_t *def = oshpacket_lookup(type);
+    const oshpacket_def_t *def = oshpacket_lookup(type);
 
     // The packet type must be valid and support fragmentation
     // If this triggers there is an error in the code
@@ -38,7 +38,6 @@ static bool queue_exg_fragmented(client_t *c, oshpacket_type_t type,
         {
             return false;
         }
-
     }
 
     return true;

@@ -134,7 +134,8 @@ typedef bool (*oshpacket_unauth_handler_t)(client_t *, oshpacket_hdr_t *, void *
 // Closes the socket if the return value is false
 typedef bool (*oshpacket_handler_t)(client_t *, node_id_t *, oshpacket_hdr_t *, void *);
 
-typedef struct oshpacket {
+// Packet type definitions
+typedef struct oshpacket_def {
     oshpacket_type_t type;
     const char *name;
     oshpacket_unauth_handler_t handler_unauth;
@@ -142,7 +143,7 @@ typedef struct oshpacket {
     bool can_be_forwarded;
     oshpacket_payload_size_t payload_size_type;
     size_t payload_size;
-} oshpacket_t;
+} oshpacket_def_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_devmode {
     device_mode_t devmode : 8;
@@ -271,8 +272,8 @@ static inline bool oshpacket_type_is_qm(oshpacket_type_t type)
 }
 
 const char *oshpacket_type_name(oshpacket_type_t type);
-const oshpacket_t *oshpacket_lookup(oshpacket_type_t type);
-bool oshpacket_payload_size_valid(const oshpacket_t *def,
+const oshpacket_def_t *oshpacket_lookup(oshpacket_type_t type);
+bool oshpacket_payload_size_valid(const oshpacket_def_t *def,
     const size_t payload_size);
 
 #endif
