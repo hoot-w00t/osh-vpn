@@ -278,6 +278,9 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 #define OSHPACKET_PRIVATE_HDR_CONST(pkt) _OSHPACKET_OFFSET_CONST(pkt, OSHPACKET_PUBLIC_HDR_SIZE)
 #define OSHPACKET_PAYLOAD_CONST(pkt)     _OSHPACKET_OFFSET_CONST(pkt, OSHPACKET_HDR_SIZE)
 
+// Calculate the full packet size from its payload size
+#define OSHPACKET_CALC_SIZE(payload_size) (OSHPACKET_HDR_SIZE + (payload_size))
+
 static inline bool oshpacket_type_valid(oshpacket_type_t type)
 {
     return (type >= 0) && (type < _LAST_OSHPACKET_TYPE_ENTRY);

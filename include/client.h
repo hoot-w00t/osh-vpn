@@ -179,6 +179,7 @@ void client_reconnect_to(client_t *c, node_id_t *nid);
 
 void client_finish_handshake(client_t *c);
 
+bool client_encrypt_packet(client_t *c, oshpacket_t *pkt);
 bool client_decrypt_packet(client_t *c, oshpacket_t *pkt);
 
 bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,

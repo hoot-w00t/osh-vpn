@@ -181,6 +181,43 @@ void client_finish_handshake(client_t *c)
     }
 }
 
+// Encrypt packet using the client's send cipher
+bool client_encrypt_packet(client_t *c, oshpacket_t *pkt)
+{
+    size_t result;
+
+    // If there is no cipher, the encryption operation is considered failed
+    if (!c->send_cipher) {
+        logger(LOG_ERR, "%s: Failed to encrypt packet seqno %" PRIu64 ": %s",
+            c->addrw, pkt->seqno, "No send cipher");
+        return false;
+    }
+
+    logger_debug(DBG_ENCRYPTION, "%s: Encrypting packet seqno %" PRIu64 " of %zu bytes",
+        c->addrw, pkt->seqno, pkt->encrypted_size);
+
+    // We encrypt the packet at the same location because we are using a
+    // streaming cipher
+    if (!cipher_encrypt(c->send_cipher,
+            pkt->encrypted, &result,
+            pkt->encrypted, pkt->encrypted_size,
+            pkt->hdr->tag, pkt->seqno))
+    {
+        logger(LOG_ERR, "%s: Failed to encrypt packet seqno %" PRIu64, c->addrw, pkt->seqno);
+        return false;
+    }
+
+    // Make sure that the packet size is the same
+    if (result != pkt->encrypted_size) {
+        logger(LOG_ERR,
+            "%s: Encrypted packet seqno %" PRIu64 " has a different size (expected: %zu, actual: %zu)",
+            c->addrw, pkt->seqno, pkt->encrypted_size, result);
+        return false;
+    }
+
+    return true;
+}
+
 // Decrypt packet using the client's receive cipher
 bool client_decrypt_packet(client_t *c, oshpacket_t *pkt)
 {
@@ -240,6 +277,66 @@ static bool qm_packet_should_drop(const client_t *c)
     return false;
 }
 
+// Initialize packet's oshpacket_hdr_t
+static void packet_init_hdr(oshpacket_t *pkt, const oshpacket_hdr_t *src_hdr)
+{
+    // Initialize the public part of the header
+    pkt->hdr->payload_size = htons(((uint16_t) pkt->payload_size));
+
+    // Copy the private part of the header which was initialized by the caller
+    memcpy(OSHPACKET_PRIVATE_HDR(pkt->hdr), OSHPACKET_PRIVATE_HDR_CONST(src_hdr),
+        OSHPACKET_PRIVATE_HDR_SIZE);
+}
+
+// Initialize packet's payload
+static void packet_init_payload(oshpacket_t *pkt, const void *payload,
+    const size_t payload_size)
+{
+    // Redundant check, this should never happen
+    if (pkt->payload_size != payload_size) {
+        logger(LOG_CRIT, "%s: %s", __func__, "Packet payload sizes don't match");
+        abort();
+    }
+
+    memcpy(pkt->payload, payload, payload_size);
+}
+
+// Encrypt the packet if we can
+// This returns false if the encryption failed or the packet can not be sent
+// unencrypted
+static bool packet_encrypt(client_t *c, oshpacket_t *pkt, const oshpacket_def_t *def)
+{
+    if (c->send_cipher) {
+        // The socket has a send_cipher, so the packet will be encrypted
+        return client_encrypt_packet(c, pkt);
+
+    } else if (def->can_be_sent_unencrypted) {
+        // The socket does not have a send cipher yet but the packet is allowed
+        // to be sent unencrypted
+
+        // Zero the source and destination as they will not be taken into
+        // account yet; this prevents leaking the nodes' names in plain text
+        memset(pkt->hdr->src_node, 0,
+            sizeof(pkt->hdr->src_node));
+        memset(&pkt->hdr->dest, 0,
+            sizeof(pkt->hdr->dest));
+
+        // Zero the authentication tag as there is no encryption
+        memset(pkt->hdr->tag, 0, sizeof(pkt->hdr->tag));
+
+        return true;
+
+    } else {
+        // The socket does not have a send cipher yet and it cannot be sent
+        // unencrypted, we drop it
+        // This should never happen, if it does there is a bug in the code
+        logger(LOG_CRIT, "%s: Cannot queue unencrypted %s packet",
+            c->addrw, def->name);
+
+        return false;
+    }
+}
+
 // Actually queue a packet
 // The private part of the header must be initialized before calling this
 // function, but not the public part as it will be initialized here
@@ -252,8 +349,9 @@ bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
     const void *payload, const size_t payload_size)
 {
     const oshpacket_def_t *def = oshpacket_lookup(hdr->type);
-    const size_t packet_size = OSHPACKET_HDR_SIZE + payload_size;
+    const size_t packet_size = OSHPACKET_CALC_SIZE(payload_size);
     uint8_t *slot;
+    oshpacket_t pkt;
 
     // This should never happen
     if (!def) {
@@ -286,79 +384,30 @@ bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
     }
 
     slot = netbuffer_reserve(c->io.sendq, packet_size);
+    oshpacket_init(&pkt, slot, packet_size, c->send_seqno);
 
-    // Initialize the public part of the header
-    OSHPACKET_HDR(slot)->payload_size = htons(((uint16_t) payload_size));
-
-    // Copy the private part of the header which was initialized by the caller
-    memcpy(OSHPACKET_PRIVATE_HDR(slot), OSHPACKET_PRIVATE_HDR_CONST(hdr),
-        OSHPACKET_PRIVATE_HDR_SIZE);
+    // Initialize the packet header
+    packet_init_hdr(&pkt, hdr);
 
     // Copy the packet's payload to the buffer (if there is one)
     if (payload)
-        memcpy(OSHPACKET_PAYLOAD(slot), payload, payload_size);
+        packet_init_payload(&pkt, payload, payload_size);
 
-    if (c->send_cipher) {
-        // The socket has a send_cipher, so the packet will be encrypted
-
-        // We encrypt the private header and the payload but not the public
-        // header as it is required to properly receive and decode the packet
-        const size_t orig_size = OSHPACKET_PRIVATE_HDR_SIZE + payload_size;
-        size_t encr_size;
-
-        logger_debug(DBG_ENCRYPTION, "%s: Encrypting packet of %zu bytes",
-            c->addrw, orig_size);
-
-        if (!cipher_encrypt(c->send_cipher,
-                OSHPACKET_PRIVATE_HDR(slot), &encr_size,
-                OSHPACKET_PRIVATE_HDR(slot), orig_size,
-                OSHPACKET_HDR(slot)->tag,
-                c->send_seqno))
-        {
-            logger(LOG_ERR, "%s: Failed to encrypt packet", c->addrw);
-            netbuffer_cancel(c->io.sendq, packet_size);
-            return false;
-        }
-
-        // The encrypted data must have the same size as the original
-        if (encr_size != orig_size) {
-            logger(LOG_ERR,
-                "%s: Encrypted packet has a different size (original: %zu, encrypted %zu)",
-                c->addrw, orig_size, encr_size);
-            netbuffer_cancel(c->io.sendq, packet_size);
-            return false;
-        }
-
-    } else if (def->can_be_sent_unencrypted) {
-        // The socket does not have a send cipher yet but the packet is a
-        // HANDSHAKE, we only allow this type of packet to be sent unencrypted
-        // as it will initialize encryption ciphers
-
-        // Zero the source and destination as they will not be taken into
-        // account yet; this prevents leaking the nodes' names in plain text
-        memset(OSHPACKET_HDR(slot)->src_node, 0,
-            sizeof(OSHPACKET_HDR(slot)->src_node));
-        memset(&OSHPACKET_HDR(slot)->dest, 0,
-            sizeof(OSHPACKET_HDR(slot)->dest));
-
-        // Zero the authentication tag as there is no encryption
-        memset(OSHPACKET_HDR(slot)->tag, 0, sizeof(OSHPACKET_HDR(slot)->tag));
-
-    } else {
-        // The socket does not have a send cipher yet and it cannot be sent
-        // unencrypted, we drop it
-        // This should never happen, if it does there is a bug in the code
-        logger(LOG_CRIT, "%s: Cannot queue unencrypted %s packet",
-            c->addrw, oshpacket_type_name(hdr->type));
+    // Try to encrypt the packet
+    // Cancel the buffer if this fails
+    if (!packet_encrypt(c, &pkt, def)) {
         netbuffer_cancel(c->io.sendq, packet_size);
-
         return false;
     }
 
-    // Increment the send seqno
+    // The packet was queued successfully
+
+    // Increment the send seqno for future packets
     c->send_seqno += 1;
 
+    // Make sure to enable writing on the socket
     aio_enable_poll_events(c->aio_event, AIO_WRITE);
+
     return true;
 }
 

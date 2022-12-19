@@ -243,4 +243,6 @@ Test(oshpacket_t, oshpacket_init)
     cr_assert_eq(pkt.payload_size, e_bytes_size - sizeof(oshpacket_hdr_t));
     cr_assert_eq(pkt.encrypted, ((uint8_t *) pkt.hdr) + CIPHER_TAG_SIZE + sizeof(uint16_t));
     cr_assert_eq(pkt.encrypted_size, e_bytes_size - CIPHER_TAG_SIZE - sizeof(uint16_t));
+
+    cr_assert_eq(OSHPACKET_CALC_SIZE(pkt.payload_size), pkt.packet_size);
 }
