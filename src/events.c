@@ -214,7 +214,8 @@ time_t event_get_timeout_ms(void)
         return 0;
 
     return    (timer_next_timeout.tv_sec  * 1000)
-            + (timer_next_timeout.tv_nsec / 1000000);
+            + (timer_next_timeout.tv_nsec / 1000000)
+            + 1;
 }
 
 bool event_init(void)
