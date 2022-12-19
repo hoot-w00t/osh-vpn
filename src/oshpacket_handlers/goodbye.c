@@ -14,15 +14,14 @@ static bool handle_goodbye(const client_t *c)
 
 bool oshpacket_handler_goodbye_unauth(client_t *c,
     __attribute__((unused)) oshpacket_hdr_t *hdr,
-    __attribute__((unused)) void *payload)
+    __attribute__((unused)) oshpacket_t *pkt)
 {
     return handle_goodbye(c);
 }
 
 bool oshpacket_handler_goodbye(client_t *c,
     __attribute__((unused)) node_id_t *src,
-    __attribute__((unused)) oshpacket_hdr_t *hdr,
-    __attribute__((unused)) void *payload)
+    __attribute__((unused)) oshpacket_t *pkt)
 {
     return handle_goodbye(c);
 }

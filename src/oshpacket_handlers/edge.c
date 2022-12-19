@@ -78,10 +78,10 @@ static void process_edge_del(client_t *c, node_id_t *src_node, node_id_t *dest_n
 }
 
 // Iterate through all edges of EDGE_ADD/EDGE_DEL packet
-static bool process_edge(client_t *c, const oshpacket_hdr_t *pkt,
-    const oshpacket_edge_t *payload,
+static bool process_edge(client_t *c, const oshpacket_t *pkt,
     void (*action)(client_t *, node_id_t *, node_id_t *))
 {
+    const oshpacket_edge_t *payload = (const oshpacket_edge_t *) pkt->payload;
     const size_t payload_count = pkt->payload_size / sizeof(oshpacket_edge_t);
     char src_name[NODE_NAME_SIZE + 1], dest_name[NODE_NAME_SIZE + 1];
     node_id_t *src, *dest;
@@ -95,7 +95,7 @@ static bool process_edge(client_t *c, const oshpacket_hdr_t *pkt,
         // Verify the names
         if (!node_valid_name(src_name) || !node_valid_name(dest_name)) {
             logger(LOG_ERR, "%s: %s: %s: Invalid node names",
-                c->addrw, c->id->name, oshpacket_type_name(pkt->type));
+                c->addrw, c->id->name, oshpacket_type_name(pkt->hdr->type));
             return false;
         }
 
@@ -106,24 +106,26 @@ static bool process_edge(client_t *c, const oshpacket_hdr_t *pkt,
     return true;
 }
 
-bool oshpacket_handler_edge_add(client_t *c, __attribute__((unused)) node_id_t *src,
-    oshpacket_hdr_t *hdr, void *payload)
+bool oshpacket_handler_edge_add(
+    client_t *c,
+    __attribute__((unused)) node_id_t *src,
+    oshpacket_t *pkt)
 {
     bool success;
 
-    success = process_edge(c, hdr, (const oshpacket_edge_t *) payload,
-        process_edge_add);
+    success = process_edge(c, pkt, process_edge_add);
     node_tree_update();
     return success;
 }
 
-bool oshpacket_handler_edge_del(client_t *c, __attribute__((unused)) node_id_t *src,
-    oshpacket_hdr_t *hdr, void *payload)
+bool oshpacket_handler_edge_del(
+    client_t *c,
+    __attribute__((unused)) node_id_t *src,
+    oshpacket_t *pkt)
 {
     bool success;
 
-    success = process_edge(c, hdr, (const oshpacket_edge_t *) payload,
-        process_edge_del);
+    success = process_edge(c, pkt, process_edge_del);
     node_tree_update();
     return success;
 }

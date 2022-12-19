@@ -219,10 +219,9 @@ static bool handshake_setup_new_ciphers(client_t *c)
     return true;
 }
 
-bool oshpacket_handler_handshake_sig(client_t *c,
-    __attribute__((unused)) oshpacket_hdr_t *hdr, void *payload)
+bool oshpacket_handler_handshake_sig(client_t *c, oshpacket_t *pkt)
 {
-    const oshpacket_handshake_sig_t *sig_packet = (const oshpacket_handshake_sig_t *) payload;
+    const oshpacket_handshake_sig_t *sig_packet = (const oshpacket_handshake_sig_t *) pkt->payload;
 
     // If the handshake is not in progress we can't process this signature
     if (   !c->handshake_in_progress
@@ -296,8 +295,9 @@ bool oshpacket_handler_handshake_sig(client_t *c,
 }
 
 bool oshpacket_handler_handshake_sig_auth(
-    client_t *c, __attribute__((unused)) node_id_t *src,
-    oshpacket_hdr_t *hdr, void *payload)
+    client_t *c,
+    __attribute__((unused)) node_id_t *src,
+    oshpacket_t *pkt)
 {
-    return oshpacket_handler_handshake_sig(c, hdr, payload);
+    return oshpacket_handler_handshake_sig(c, pkt);
 }

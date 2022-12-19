@@ -196,3 +196,21 @@ Test(oshpacket_devmode_t, check_dynamic_devmode_packet_struct)
     cr_assert_eq(sizeof(*regular), sizeof(dyn->devmode_pkt));
     cr_assert_eq(&dyn->network_name, ((uint8_t *) regular) + sizeof(*regular));
 }
+
+Test(oshpacket_t, oshpacket_init)
+{
+    const cipher_seqno_t e_seqno = 0xABCDEF;
+    const size_t e_bytes_size = OSHPACKET_MAXSIZE;
+    uint8_t e_bytes[e_bytes_size];
+    oshpacket_t pkt;
+
+    memset(e_bytes, 0, e_bytes_size);
+    oshpacket_init(&pkt, e_bytes, e_bytes_size, e_seqno);
+
+    cr_assert_eq(pkt.seqno, e_seqno);
+    cr_assert_eq(pkt.packet, e_bytes);
+    cr_assert_eq(pkt.packet_size, e_bytes_size);
+    cr_assert_eq(pkt.hdr, pkt.packet);
+    cr_assert_eq(pkt.payload, pkt.hdr + 1);
+    cr_assert_eq(pkt.payload_size, e_bytes_size - sizeof(oshpacket_hdr_t));
+}

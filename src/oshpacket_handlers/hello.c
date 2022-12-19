@@ -103,10 +103,9 @@ static void hello_ntoh(oshpacket_hello_t *hello)
     hello->options = ntohl(hello->options);
 }
 
-bool oshpacket_handler_hello(client_t *c,
-    __attribute__((unused)) oshpacket_hdr_t *hdr, void *payload)
+bool oshpacket_handler_hello(client_t *c, oshpacket_t *pkt)
 {
-    const oshpacket_hello_t *hello = (const oshpacket_hello_t *) payload;
+    const oshpacket_hello_t *hello = (const oshpacket_hello_t *) pkt->payload;
 
     // Make sure that the handshake is in progress
     if (!c->handshake_in_progress || !c->handshake_id) {
@@ -125,7 +124,7 @@ bool oshpacket_handler_hello(client_t *c,
     logger_debug(DBG_HANDSHAKE, "%s: Successfully authenticated the remote node", c->addrw);
 
     // Convert the payload values to host byte order
-    hello_ntoh((oshpacket_hello_t *) payload);
+    hello_ntoh((oshpacket_hello_t *) pkt->payload);
 
     logger_debug(DBG_HANDSHAKE, "%s: Remote options 0x%08X", c->addrw, hello->options);
 

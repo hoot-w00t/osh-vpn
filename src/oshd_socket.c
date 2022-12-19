@@ -142,6 +142,11 @@ static void client_aio_read(aio_event_t *event)
         } else {
             // If we fully received the decoded packet we can process it
             if (remaining_size >= c->io.recv_pkt_size) {
+                oshpacket_t pkt;
+
+                // Initialize the packet data for processing
+                oshpacket_init(&pkt, curr_packet, c->io.recv_pkt_size, c->recv_seqno);
+
                 // We have to pre-increment the receive seqno because the packet
                 // handler can modify it after a successful handshake
                 // In this case it must not be incremented as that would offset
@@ -149,7 +154,7 @@ static void client_aio_read(aio_event_t *event)
                 // will fail)
                 c->recv_seqno += 1;
 
-                if (!oshd_process_packet(c, curr_packet, c->recv_seqno - 1)) {
+                if (!oshd_process_packet(c, &pkt)) {
                     // There was an error while processing the packet, we drop the
                     // connection
                     aio_event_del(c->aio_event);

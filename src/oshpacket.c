@@ -4,19 +4,17 @@
 #include "node.h"
 
 // Generic default handlers for invalid packet types
-static bool unauth_handler_reject(client_t *c, oshpacket_hdr_t *hdr,
-    __attribute__((unused)) void *payload)
+static bool unauth_handler_reject(client_t *c, oshpacket_t *pkt)
 {
     logger(LOG_ERR, "%s: Rejecting %s packet",
-        c->addrw, oshpacket_type_name(hdr->type));
+        c->addrw, oshpacket_type_name(pkt->hdr->type));
     return false;
 }
 
-static bool handler_reject(client_t *c, node_id_t *src, oshpacket_hdr_t *hdr,
-    __attribute__((unused)) void *payload)
+static bool handler_reject(client_t *c, node_id_t *src, oshpacket_t *pkt)
 {
     logger(LOG_ERR, "%s: %s: Rejecting %s packet from %s",
-        c->addrw, c->id->name, oshpacket_type_name(hdr->type), src->name);
+        c->addrw, c->id->name, oshpacket_type_name(pkt->hdr->type), src->name);
     return false;
 }
 
@@ -188,4 +186,22 @@ bool oshpacket_payload_size_valid(const oshpacket_def_t *def,
         // The default case should never occur
         default: return false;
     }
+}
+
+// Initialize oshpacket_t members from raw packet data
+// Pointers and sizes passed to this function must be valid
+void oshpacket_init(oshpacket_t *pkt, void *packet, size_t packet_size,
+    cipher_seqno_t seqno)
+{
+    if (packet_size < sizeof(oshpacket_hdr_t)) {
+        logger(LOG_CRIT, "%s: %s", __func__, "packet_size is too small");
+        abort();
+    }
+
+    pkt->seqno = seqno;
+    pkt->packet = packet;
+    pkt->packet_size = packet_size;
+    pkt->hdr = OSHPACKET_HDR(packet);
+    pkt->payload = OSHPACKET_PAYLOAD(pkt->hdr);
+    pkt->payload_size = pkt->packet_size - sizeof(oshpacket_hdr_t);
 }

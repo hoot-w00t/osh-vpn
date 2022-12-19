@@ -100,10 +100,9 @@ static bool queue_handshakes_signature(client_t *c, const oshpacket_handshake_t 
         &sig_packet, sizeof(sig_packet));
 }
 
-bool oshpacket_handler_handshake(client_t *c, __attribute__((unused)) oshpacket_hdr_t *hdr,
-    void *payload)
+bool oshpacket_handler_handshake(client_t *c, oshpacket_t *pkt)
 {
-    const oshpacket_handshake_t *handshake = (const oshpacket_handshake_t *) payload;
+    const oshpacket_handshake_t *handshake = (const oshpacket_handshake_t *) pkt->payload;
 
     // If we have a recv_cipher_next already, another handshake was already
     // processed but we are still waiting for the HANDSHAKE_SIG packet from
@@ -172,8 +171,9 @@ bool oshpacket_handler_handshake(client_t *c, __attribute__((unused)) oshpacket_
 }
 
 bool oshpacket_handler_handshake_auth(
-    client_t *c, __attribute__((unused)) node_id_t *src,
-    oshpacket_hdr_t *hdr, void *payload)
+    client_t *c,
+    __attribute__((unused)) node_id_t *src,
+    oshpacket_t *pkt)
 {
-    return oshpacket_handler_handshake(c, hdr, payload);
+    return oshpacket_handler_handshake(c, pkt);
 }

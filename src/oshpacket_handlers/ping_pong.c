@@ -3,16 +3,14 @@
 
 bool oshpacket_handler_ping(client_t *c,
     __attribute__((unused)) node_id_t *src,
-    __attribute__((unused)) oshpacket_hdr_t *hdr,
-    __attribute__((unused)) void *payload)
+    __attribute__((unused)) oshpacket_t *pkt)
 {
     return client_queue_pong(c);
 }
 
 bool oshpacket_handler_pong(client_t *c,
     __attribute__((unused)) node_id_t *src,
-    __attribute__((unused)) oshpacket_hdr_t *hdr,
-    __attribute__((unused)) void *payload)
+    __attribute__((unused)) oshpacket_t *pkt)
 {
     if (!c->rtt_await) {
         logger(LOG_WARN, "%s: %s: Received unexpected PONG",

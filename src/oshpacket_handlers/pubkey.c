@@ -5,11 +5,10 @@
 bool oshpacket_handler_pubkey(
     client_t *c,
     __attribute__((unused)) node_id_t *src,
-    oshpacket_hdr_t *hdr,
-    void *payload)
+    oshpacket_t *pkt)
 {
-    const size_t count = hdr->payload_size / sizeof(oshpacket_pubkey_t);
-    const oshpacket_pubkey_t *pubkeys = (const oshpacket_pubkey_t *) payload;
+    const size_t count = pkt->payload_size / sizeof(oshpacket_pubkey_t);
+    const oshpacket_pubkey_t *pubkeys = (const oshpacket_pubkey_t *) pkt->payload;
     char node_name[NODE_NAME_SIZE + 1];
     memset(node_name, 0, sizeof(node_name));
 

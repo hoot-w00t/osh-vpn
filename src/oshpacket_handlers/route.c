@@ -5,11 +5,13 @@
 #include <string.h>
 
 // Iterate through all routes in *payload and add them
-bool oshpacket_handler_route(client_t *c, __attribute__((unused)) node_id_t *src,
-    oshpacket_hdr_t *hdr, void *payload)
+bool oshpacket_handler_route(
+    client_t *c,
+    __attribute__((unused)) node_id_t *src,
+    oshpacket_t *pkt)
 {
-    const oshpacket_route_t *packet = (const oshpacket_route_t *) payload;
-    const size_t entries = hdr->payload_size / sizeof(oshpacket_route_t);
+    const oshpacket_route_t *payload = (const oshpacket_route_t *) pkt->payload;
+    const size_t entries = pkt->payload_size / sizeof(oshpacket_route_t);
     char node_name[NODE_NAME_SIZE + 1];
     char addr_str[INET6_ADDRSTRLEN];
     netaddr_t addr;
@@ -20,8 +22,8 @@ bool oshpacket_handler_route(client_t *c, __attribute__((unused)) node_id_t *src
     for (size_t i = 0; i < entries; ++i) {
         // Extract and verify the network address
         if (!netaddr_dton(&addr,
-                           packet[i].type,
-                          &packet[i].addr))
+                           payload[i].type,
+                          &payload[i].addr))
         {
             logger(LOG_ERR, "%s: %s: Add route: Invalid address type",
                 c->addrw, c->id->name);
@@ -29,14 +31,14 @@ bool oshpacket_handler_route(client_t *c, __attribute__((unused)) node_id_t *src
         }
 
         // Verify that the prefix length is valid
-        if (packet[i].prefixlen > netaddr_max_prefixlen(addr.type)) {
+        if (payload[i].prefixlen > netaddr_max_prefixlen(addr.type)) {
             logger(LOG_ERR, "%s: %s: Add route: Invalid prefix length",
                 c->addrw, c->id->name);
             return false;
         }
 
         // Extract and verify the node's name
-        memcpy(node_name, packet[i].owner_name, NODE_NAME_SIZE);
+        memcpy(node_name, payload[i].owner_name, NODE_NAME_SIZE);
         if (!node_valid_name(node_name)) {
             logger(LOG_ERR, "%s: %s: Add route: Invalid name",
                 c->addrw, c->id->name);
@@ -59,10 +61,10 @@ bool oshpacket_handler_route(client_t *c, __attribute__((unused)) node_id_t *src
             netaddr_ntop(addr_str, sizeof(addr_str), &addr);
             if (id->local_node) {
                 logger_debug(DBG_ROUTING, "%s: %s: Add route: Skipping local route %s/%u",
-                    c->addrw, c->id->name, addr_str, packet[i].prefixlen);
+                    c->addrw, c->id->name, addr_str, payload[i].prefixlen);
             } else {
                 logger(LOG_WARN, "%s: %s: Add route: %s/%u -> %s: No route",
-                    c->addrw, c->id->name, addr_str, packet[i].prefixlen, node_name);
+                    c->addrw, c->id->name, addr_str, payload[i].prefixlen, node_name);
             }
             continue;
         }
@@ -72,7 +74,7 @@ bool oshpacket_handler_route(client_t *c, __attribute__((unused)) node_id_t *src
         if (route && !route->owner) {
             netaddr_ntop(addr_str, sizeof(addr_str), &addr);
             logger(LOG_WARN, "%s: %s: Ignoring broadcast route: %s/%u -> %s",
-                c->addrw, c->id->name, addr_str, packet[i].prefixlen, id->name);
+                c->addrw, c->id->name, addr_str, payload[i].prefixlen, id->name);
             continue;
         }
 
@@ -80,11 +82,11 @@ bool oshpacket_handler_route(client_t *c, __attribute__((unused)) node_id_t *src
         if (logger_is_debugged(DBG_ROUTING)) {
             netaddr_ntop(addr_str, sizeof(addr_str), &addr);
             logger_debug(DBG_ROUTING, "%s: %s: Add route: %s/%u -> %s", c->addrw,
-                c->id->name, addr_str, packet[i].prefixlen, id->name);
+                c->id->name, addr_str, payload[i].prefixlen, id->name);
         }
 
-        netroute_add(oshd.route_table, &addr, packet[i].prefixlen, id,
-            packet[i].can_expire ? ROUTE_REMOTE_EXPIRY : ROUTE_NEVER_EXPIRE);
+        netroute_add(oshd.route_table, &addr, payload[i].prefixlen, id,
+            payload[i].can_expire ? ROUTE_REMOTE_EXPIRY : ROUTE_NEVER_EXPIRE);
     }
 
     if (logger_is_debugged(DBG_ROUTING)) {

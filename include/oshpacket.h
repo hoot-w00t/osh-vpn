@@ -124,15 +124,29 @@ typedef struct __attribute__((__packed__)) oshpacket_hdr {
 typedef struct client client_t;
 typedef struct node_id node_id_t;
 
+// Packet data structure used for packet handling
+typedef struct oshpacket {
+    cipher_seqno_t seqno;       // Packet sequence number
+
+    void *packet;               // Raw packet data
+    size_t packet_size;         // Raw packet data size
+
+    oshpacket_hdr_t *hdr;       // Packet header
+
+    void *payload;              // Packet payload
+                                // NULL if there is no payload
+    size_t payload_size;        // Packet payload size
+} oshpacket_t;
+
 // Unauthenticated handler is called with the client_t socket which received the
-// packet, its header and the payload
+// packet and the packet data
 // Closes the socket if the return value is false
-typedef bool (*oshpacket_unauth_handler_t)(client_t *, oshpacket_hdr_t *, void *);
+typedef bool (*oshpacket_unauth_handler_t)(client_t *, oshpacket_t *);
 
 // Authenticated handler is called with the client_t socket which received the
-// packet, the node that sent it, the packet header and the payload
+// packet, the node that sent it and the packet data
 // Closes the socket if the return value is false
-typedef bool (*oshpacket_handler_t)(client_t *, node_id_t *, oshpacket_hdr_t *, void *);
+typedef bool (*oshpacket_handler_t)(client_t *, node_id_t *, oshpacket_t *);
 
 // Packet type definitions
 typedef struct oshpacket_def {
@@ -275,5 +289,8 @@ const char *oshpacket_type_name(oshpacket_type_t type);
 const oshpacket_def_t *oshpacket_lookup(oshpacket_type_t type);
 bool oshpacket_payload_size_valid(const oshpacket_def_t *def,
     const size_t payload_size);
+
+void oshpacket_init(oshpacket_t *pkt, void *packet, size_t packet_size,
+    cipher_seqno_t seqno);
 
 #endif

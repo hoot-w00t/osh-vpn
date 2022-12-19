@@ -2,8 +2,7 @@
 #include "logger.h"
 #include "netpacket.h"
 
-bool oshpacket_handler_data(client_t *c, node_id_t *src,
-    oshpacket_hdr_t *hdr, void *payload)
+bool oshpacket_handler_data(client_t *c, node_id_t *src, oshpacket_t *pkt)
 {
     netpacket_t netpkt;
 
@@ -12,7 +11,7 @@ bool oshpacket_handler_data(client_t *c, node_id_t *src,
         return true;
 
     // Decode the network packet
-    if (!netpacket_from_data(&netpkt, payload, oshd.tuntap->is_tap)) {
+    if (!netpacket_from_data(&netpkt, pkt->payload, oshd.tuntap->is_tap)) {
         logger(LOG_ERR, "%s: %s: Failed to decode received tunnel packet",
             c->addrw, c->id->name);
         return false;
@@ -25,11 +24,11 @@ bool oshpacket_handler_data(client_t *c, node_id_t *src,
 
         netaddr_ntop(netpkt_src, sizeof(netpkt_src), &netpkt.src);
         netaddr_ntop(netpkt_dest, sizeof(netpkt_dest), &netpkt.dest);
-        logger_debug(DBG_TUNTAP, "%s: %s: %s <- %s (%u bytes, from %s)",
+        logger_debug(DBG_TUNTAP, "%s: %s: %s <- %s (%zu bytes, from %s)",
             c->addrw, c->id->name, netpkt_dest, netpkt_src,
-            hdr->payload_size, src->name);
+            pkt->payload_size, src->name);
     }
 
     // Write it
-    return tuntap_write(oshd.tuntap, payload, hdr->payload_size);
+    return tuntap_write(oshd.tuntap, pkt->payload, pkt->payload_size);
 }
