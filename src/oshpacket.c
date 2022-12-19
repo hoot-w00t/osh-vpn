@@ -29,6 +29,8 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = oshpacket_handler_handshake,
         .handler = oshpacket_handler_handshake_auth,
         .can_be_forwarded = false,
+        .can_be_sent_unencrypted = true,
+        .is_reliable = true,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
         .payload_size = sizeof(oshpacket_handshake_t)
     },
@@ -38,6 +40,8 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = oshpacket_handler_handshake_sig,
         .handler = oshpacket_handler_handshake_sig_auth,
         .can_be_forwarded = false,
+        .can_be_sent_unencrypted = true,
+        .is_reliable = true,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
         .payload_size = sizeof(oshpacket_handshake_sig_t)
     },
@@ -47,6 +51,8 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_handshake_end,
         .can_be_forwarded = false,
+        .can_be_sent_unencrypted = false,
+        .is_reliable = true,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
         .payload_size = 0
     },
@@ -56,6 +62,8 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = oshpacket_handler_hello,
         .handler = handler_reject,
         .can_be_forwarded = false,
+        .can_be_sent_unencrypted = false,
+        .is_reliable = true,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
         .payload_size = sizeof(oshpacket_hello_t)
     },
@@ -65,6 +73,8 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_devmode,
         .can_be_forwarded = false,
+        .can_be_sent_unencrypted = false,
+        .is_reliable = true,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_VARIABLE,
         .payload_size = 0
     },
@@ -74,6 +84,8 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = oshpacket_handler_goodbye_unauth,
         .handler = oshpacket_handler_goodbye,
         .can_be_forwarded = false,
+        .can_be_sent_unencrypted = true,
+        .is_reliable = true,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
         .payload_size = 0
     },
@@ -83,6 +95,8 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_ping,
         .can_be_forwarded = false,
+        .can_be_sent_unencrypted = false,
+        .is_reliable = true,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
         .payload_size = 0
     },
@@ -92,6 +106,8 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_pong,
         .can_be_forwarded = false,
+        .can_be_sent_unencrypted = false,
+        .is_reliable = true,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FIXED,
         .payload_size = 0
     },
@@ -101,6 +117,8 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_data,
         .can_be_forwarded = true,
+        .can_be_sent_unencrypted = false,
+        .is_reliable = false,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_VARIABLE,
         .payload_size = 0
     },
@@ -110,6 +128,8 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_pubkey,
         .can_be_forwarded = true,
+        .can_be_sent_unencrypted = false,
+        .is_reliable = true,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FRAGMENTED,
         .payload_size = sizeof(oshpacket_pubkey_t)
     },
@@ -119,6 +139,8 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_endpoint,
         .can_be_forwarded = true,
+        .can_be_sent_unencrypted = false,
+        .is_reliable = true,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_VARIABLE,
         .payload_size = 0
     },
@@ -128,6 +150,8 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_edge_add,
         .can_be_forwarded = true,
+        .can_be_sent_unencrypted = false,
+        .is_reliable = true,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FRAGMENTED,
         .payload_size = sizeof(oshpacket_edge_t)
     },
@@ -137,6 +161,8 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_edge_del,
         .can_be_forwarded = true,
+        .can_be_sent_unencrypted = false,
+        .is_reliable = true,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FRAGMENTED,
         .payload_size = sizeof(oshpacket_edge_t)
     },
@@ -146,6 +172,8 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_route,
         .can_be_forwarded = true,
+        .can_be_sent_unencrypted = false,
+        .is_reliable = true,
         .payload_size_type = OSHPACKET_PAYLOAD_SIZE_FRAGMENTED,
         .payload_size = sizeof(oshpacket_route_t)
     }

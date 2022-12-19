@@ -150,13 +150,19 @@ typedef bool (*oshpacket_handler_t)(client_t *, node_id_t *, oshpacket_t *);
 
 // Packet type definitions
 typedef struct oshpacket_def {
-    oshpacket_type_t type;
-    const char *name;
-    oshpacket_unauth_handler_t handler_unauth;
-    oshpacket_handler_t handler;
-    bool can_be_forwarded;
-    oshpacket_payload_size_t payload_size_type;
-    size_t payload_size;
+    oshpacket_type_t type;                      // Packet type
+    const char *name;                           // Type name
+
+    oshpacket_unauth_handler_t handler_unauth;  // Packet handler (on unauthenticated clients)
+    oshpacket_handler_t handler;                // Packet handler (on authenticated clients)
+
+    bool can_be_forwarded;                      // true if the packet can be forwarded
+    bool can_be_sent_unencrypted;               // true if the packet can be sent unencrypted
+    bool is_reliable;                           // true if the packet must not be lost or re-ordered
+                                                // false if the packet can be lost or re-ordered
+
+    oshpacket_payload_size_t payload_size_type; // Type of payload size
+    size_t payload_size;                        // Expected payload size
 } oshpacket_def_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_devmode {
@@ -272,17 +278,6 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 static inline bool oshpacket_type_valid(oshpacket_type_t type)
 {
     return (type >= 0) && (type < _LAST_OSHPACKET_TYPE_ENTRY);
-}
-
-static inline bool oshpacket_type_can_be_unencrypted(oshpacket_type_t type)
-{
-    return type == HANDSHAKE || type == HANDSHAKE_SIG || type == GOODBYE;
-}
-
-// Should queue management be applied for this packet type
-static inline bool oshpacket_type_is_qm(oshpacket_type_t type)
-{
-    return type == DATA;
 }
 
 const char *oshpacket_type_name(oshpacket_type_t type);

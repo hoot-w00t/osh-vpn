@@ -240,8 +240,15 @@ static bool qm_packet_should_drop(const client_t *c)
 bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
     const void *payload, const size_t payload_size)
 {
+    const oshpacket_def_t *def = oshpacket_lookup(hdr->type);
     const size_t packet_size = OSHPACKET_HDR_SIZE + payload_size;
     uint8_t *slot;
+
+    // This should never happen
+    if (!def) {
+        logger(LOG_CRIT, "%s: %s", __func__, "Invalid packet type");
+        return false;
+    }
 
     // Drop packet if its size exceeds the limit
     if (packet_size > OSHPACKET_MAXSIZE) {
@@ -259,9 +266,8 @@ bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
         return false;
     }
 
-    // Apply queue management for relevant packets to limit network congestion
-    if (   oshpacket_type_is_qm(hdr->type)
-        && qm_packet_should_drop(c))
+    // Apply queue management for unreliable packets to limit network congestion
+    if (!(def->is_reliable) && qm_packet_should_drop(c))
     {
         logger_debug(DBG_TUNTAP, "%s: Dropping %s packet of %zu bytes (%s)",
             c->addrw, oshpacket_type_name(hdr->type), payload_size, "qm");
@@ -312,7 +318,7 @@ bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
             return false;
         }
 
-    } else if (oshpacket_type_can_be_unencrypted(hdr->type)) {
+    } else if (def->can_be_sent_unencrypted) {
         // The socket does not have a send cipher yet but the packet is a
         // HANDSHAKE, we only allow this type of packet to be sent unencrypted
         // as it will initialize encryption ciphers

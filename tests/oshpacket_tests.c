@@ -69,6 +69,30 @@ Test(oshpacket_type_name, oshpacket_type_has_name)
     cr_assert_str_eq(oshpacket_type_name(_LAST_OSHPACKET_TYPE_ENTRY), "UNKNOWN");
 }
 
+static inline bool type_can_be_forwarded(const oshpacket_type_t type)
+{
+    return !(   type == HANDSHAKE
+             || type == HANDSHAKE_SIG
+             || type == HANDSHAKE_END
+             || type == HELLO
+             || type == GOODBYE
+             || type == PING
+             || type == PONG
+             || type == DEVMODE);
+}
+
+static inline bool type_can_be_sent_unencrypted(const oshpacket_type_t type)
+{
+    return type == HANDSHAKE
+        || type == HANDSHAKE_SIG
+        || type == GOODBYE;
+}
+
+static inline bool type_is_reliable(const oshpacket_type_t type)
+{
+    return type != DATA;
+}
+
 Test(oshpacket_lookup, oshpacket_lookup_has_valid_information)
 {
     const oshpacket_def_t *p;
@@ -96,6 +120,10 @@ Test(oshpacket_lookup, oshpacket_lookup_has_valid_information)
             default:
                 cr_assert_fail("Invalid oshpacket payload size");
         }
+
+        cr_assert_eq(p->can_be_forwarded, type_can_be_forwarded(p->type));
+        cr_assert_eq(p->can_be_sent_unencrypted, type_can_be_sent_unencrypted(p->type));
+        cr_assert_eq(p->is_reliable, type_is_reliable(p->type));
     }
 }
 
