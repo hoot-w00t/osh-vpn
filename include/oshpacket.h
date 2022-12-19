@@ -136,6 +136,9 @@ typedef struct oshpacket {
     void *payload;              // Packet payload
                                 // NULL if there is no payload
     size_t payload_size;        // Packet payload size
+
+    void *encrypted;            // Start of the encrypted data within the packet
+    size_t encrypted_size;      // Size of the encrypted data
 } oshpacket_t;
 
 // Unauthenticated handler is called with the client_t socket which received the

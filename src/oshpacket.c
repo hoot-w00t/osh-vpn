@@ -231,5 +231,7 @@ void oshpacket_init(oshpacket_t *pkt, void *packet, size_t packet_size,
     pkt->packet_size = packet_size;
     pkt->hdr = OSHPACKET_HDR(packet);
     pkt->payload = OSHPACKET_PAYLOAD(pkt->hdr);
-    pkt->payload_size = pkt->packet_size - sizeof(oshpacket_hdr_t);
+    pkt->payload_size = pkt->packet_size - OSHPACKET_HDR_SIZE;
+    pkt->encrypted = OSHPACKET_PRIVATE_HDR(pkt->hdr);
+    pkt->encrypted_size = pkt->packet_size - OSHPACKET_PUBLIC_HDR_SIZE;
 }

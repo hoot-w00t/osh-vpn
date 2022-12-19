@@ -172,21 +172,20 @@ void client_finish_handshake(client_t *c)
 // Decrypt packet using the client's receive cipher
 bool client_decrypt_packet(client_t *c, oshpacket_t *pkt)
 {
-    const size_t encrypted_size = OSHPACKET_PRIVATE_HDR_SIZE + pkt->payload_size;
-    size_t decrypted_size;
+    size_t result;
 
     // If there is no cipher, consider the decryption operation successful
     if (!c->recv_cipher)
         return true;
 
     logger_debug(DBG_ENCRYPTION, "%s: Decrypting packet seqno %" PRIu64 " of %zu bytes",
-        c->addrw, pkt->seqno, encrypted_size);
+        c->addrw, pkt->seqno, pkt->encrypted_size);
 
     // We decrypt the packet at the same location because we are using a
     // streaming cipher
     if (!cipher_decrypt(c->recv_cipher,
-            OSHPACKET_PRIVATE_HDR(pkt->hdr), &decrypted_size,
-            OSHPACKET_PRIVATE_HDR(pkt->hdr), encrypted_size,
+            pkt->encrypted, &result,
+            pkt->encrypted, pkt->encrypted_size,
             pkt->hdr->tag, pkt->seqno))
     {
         logger(LOG_ERR, "%s: Failed to decrypt packet seqno %" PRIu64, c->addrw, pkt->seqno);
@@ -194,10 +193,10 @@ bool client_decrypt_packet(client_t *c, oshpacket_t *pkt)
     }
 
     // Make sure that the packet size is the same
-    if (decrypted_size != encrypted_size) {
+    if (result != pkt->encrypted_size) {
         logger(LOG_ERR,
             "%s: Decrypted packet seqno %" PRIu64 " has a different size (encrypted: %zu, decrypted: %zu)",
-            c->addrw, pkt->seqno, encrypted_size, decrypted_size);
+            c->addrw, pkt->seqno, pkt->encrypted_size, result);
         return false;
     }
 
