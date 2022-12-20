@@ -696,6 +696,9 @@ static void node_connect_setup_endpoints_insert(node_id_t *nid,
     if (    insert_socktype
         && !node_connect_endpoints_find(nid, endpoint, insert_socktype))
     {
+        logger_debug(DBG_ENDPOINTS, "%s: Inserting endpoint %s",
+            nid->connect_endpoints->debug_id, endpoint->addrstr);
+
         inserted = endpoint_group_insert_back(nid->connect_endpoints, endpoint);
         inserted->socktype = insert_socktype;
     }
