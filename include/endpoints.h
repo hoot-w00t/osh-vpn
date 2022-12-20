@@ -115,7 +115,9 @@ void endpoint_group_free(endpoint_group_t *group);
 void endpoint_group_clear(endpoint_group_t *group);
 
 endpoint_t *endpoint_group_find(endpoint_group_t *group, const endpoint_t *endpoint);
+endpoint_t *endpoint_group_find_exact(endpoint_group_t *group, const endpoint_t *endpoint);
 endpoint_t *endpoint_group_find_after(endpoint_t *after,const endpoint_t *endpoint);
+endpoint_t *endpoint_group_find_exact_after(endpoint_t *after, const endpoint_t *endpoint);
 endpoint_t *endpoint_group_find_duplicate(endpoint_group_t *group, const endpoint_t *endpoint);
 
 endpoint_t *endpoint_group_insert_back(endpoint_group_t *group,
