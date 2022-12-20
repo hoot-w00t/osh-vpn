@@ -103,22 +103,23 @@ void event_process_queued(void)
         if (diff.tv_sec < 0)
             break;
 
-        // Remember delays bigger than 10 seconds
-        // If the event's trigger_at value is 0 the delay is incorrect because
-        // it is not relative to the current time
-        if (   diff.tv_sec >= 10
-            && max_diff.tv_sec <= 0
-            && event_queue_head->trigger_at.tv_sec != 0
-            && event_queue_head->trigger_at.tv_nsec != 0)
-        {
-            max_diff = diff;
-        }
-
+        // Pop the event
         event = event_queue_head;
 
         // Move the event queue to the next event
         event_queue_head = event->next;
         event->in_queue = false;
+
+        // If the event's trigger time is set to EVENT_QUEUE_NOW, set the delay
+        // to 0 since it is invalid (not relative to the current time)
+        if (event->trigger_at.tv_sec == 0 && event->trigger_at.tv_nsec == 0)
+            diff = event->trigger_at;
+
+        // Remember delays bigger than 10 seconds
+        // We only remember the first delay since the event queue is sorted by
+        // ascending trigger time, other events will have a smaller/equal delay
+        if (max_diff.tv_sec <= 0 && diff.tv_sec >= 10)
+            max_diff = diff;
 
         // Handle the current event
         logger_debug(DBG_EVENTS, "Processing %s event %p (delay %li.%09lis)",
