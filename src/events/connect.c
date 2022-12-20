@@ -6,11 +6,18 @@
 
 // Try to connect to a node
 
-static void connect_event_freedata(
-    __attribute__((unused)) const event_t *event,
-    void *data)
+// Set the node's connect_event to NULL only if it is the correct one
+// It is possible that the connect event handler queues another connect event,
+// we must not remove it since it's a different event
+static void unlink_connect_event(const event_t *event, node_id_t *nid)
 {
-    ((node_id_t *) data)->connect_event = NULL;
+    if (nid->connect_event == event)
+        nid->connect_event = NULL;
+}
+
+static void connect_event_freedata(const event_t *event, void *data)
+{
+    unlink_connect_event(event, (node_id_t *) data);
 }
 
 // Returns true if a connection can be attempted
@@ -34,13 +41,13 @@ static bool connection_attempt_is_valid(node_id_t *nid)
 }
 
 static time_t connect_event_handler(
-    __attribute__((unused)) const event_t *event,
+    const event_t *event,
     __attribute__((unused)) const struct timespec *delay,
     void *data)
 {
     node_id_t *nid = (node_id_t *) data;
 
-    nid->connect_event = NULL;
+    unlink_connect_event(event, nid);
     if (connection_attempt_is_valid(nid))
         oshd_client_connect(nid, endpoint_group_selected(nid->connect_endpoints));
 
