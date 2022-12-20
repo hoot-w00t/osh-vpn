@@ -88,7 +88,6 @@ typedef struct __attribute__((__packed__)) oshpacket_hdr {
     // Public part of the header (never encrypted)
     // If it changes OSHPACKET_PUBLIC_HDR_SIZE needs to be updated
     uint16_t         payload_size;
-    uint8_t          tag[CIPHER_TAG_SIZE];
 
     // Private header (always encrypted except for HANDSHAKE packets)
     // If it changes OSHPACKET_PRIVATE_HDR_SIZE needs to be updated
@@ -136,6 +135,9 @@ typedef struct oshpacket {
     void *payload;              // Packet payload
                                 // NULL if there is no payload
     size_t payload_size;        // Packet payload size
+
+    void *cipher_tag;           // Cipher AEAD tag
+    size_t cipher_tag_size;     // Cipher AEAD tag size
 
     void *encrypted;            // Start of the encrypted data within the packet
     size_t encrypted_size;      // Size of the encrypted data
@@ -256,7 +258,7 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 } oshpacket_route_t;
 
 // Size of the public part of the header
-#define OSHPACKET_PUBLIC_HDR_SIZE  (2 + CIPHER_TAG_SIZE)
+#define OSHPACKET_PUBLIC_HDR_SIZE  (2)
 
 // Size of the private part of the header
 #define OSHPACKET_PRIVATE_HDR_SIZE (1 + 1 + (NODE_NAME_SIZE * 2))
@@ -279,7 +281,7 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 #define OSHPACKET_PAYLOAD_CONST(pkt)     _OSHPACKET_OFFSET_CONST(pkt, OSHPACKET_HDR_SIZE)
 
 // Calculate the full packet size from its payload size
-#define OSHPACKET_CALC_SIZE(payload_size) (OSHPACKET_HDR_SIZE + (payload_size))
+#define OSHPACKET_CALC_SIZE(payload_size) (OSHPACKET_HDR_SIZE + (payload_size) + CIPHER_TAG_SIZE)
 
 static inline bool oshpacket_type_valid(oshpacket_type_t type)
 {

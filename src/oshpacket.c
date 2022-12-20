@@ -216,12 +216,20 @@ bool oshpacket_payload_size_valid(const oshpacket_def_t *def,
     }
 }
 
+// Get the size in bytes from startptr to endptr
+static size_t ptrsize(const void *startptr, const void *endptr)
+{
+    return ((const uint8_t *) endptr) - ((const uint8_t *) startptr);
+}
+
 // Initialize oshpacket_t members from raw packet data
 // Pointers and sizes passed to this function must be valid
 void oshpacket_init(oshpacket_t *pkt, void *packet, size_t packet_size,
     cipher_seqno_t seqno)
 {
-    if (packet_size < sizeof(oshpacket_hdr_t)) {
+    const size_t min_size = sizeof(oshpacket_hdr_t) + CIPHER_TAG_SIZE;
+
+    if (packet_size < min_size) {
         logger(LOG_CRIT, "%s: %s", __func__, "packet_size is too small");
         abort();
     }
@@ -229,9 +237,14 @@ void oshpacket_init(oshpacket_t *pkt, void *packet, size_t packet_size,
     pkt->seqno = seqno;
     pkt->packet = packet;
     pkt->packet_size = packet_size;
+
+    pkt->cipher_tag_size = CIPHER_TAG_SIZE;
+    pkt->cipher_tag = ((uint8_t *) packet) + packet_size - pkt->cipher_tag_size;
+
     pkt->hdr = OSHPACKET_HDR(packet);
     pkt->payload = OSHPACKET_PAYLOAD(pkt->hdr);
-    pkt->payload_size = pkt->packet_size - OSHPACKET_HDR_SIZE;
+    pkt->payload_size = ptrsize(pkt->payload, pkt->cipher_tag);
+
     pkt->encrypted = OSHPACKET_PRIVATE_HDR(pkt->hdr);
-    pkt->encrypted_size = pkt->packet_size - OSHPACKET_PUBLIC_HDR_SIZE;
+    pkt->encrypted_size = ptrsize(pkt->encrypted, pkt->cipher_tag);
 }

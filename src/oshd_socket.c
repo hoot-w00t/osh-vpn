@@ -124,7 +124,7 @@ static void client_aio_read(aio_event_t *event)
                 // Switch payload size to host byte order
                 curr_hdr->payload_size = ntohs(curr_hdr->payload_size);
 
-                c->io.recv_pkt_size = OSHPACKET_HDR_SIZE + curr_hdr->payload_size;
+                c->io.recv_pkt_size = OSHPACKET_CALC_SIZE(curr_hdr->payload_size);
                 if (c->io.recv_pkt_size > OSHPACKET_MAXSIZE) {
                     logger(LOG_ERR, "%s: Invalid packet size (recv, %zu bytes)",
                         c->addrw, c->io.recv_pkt_size);

@@ -201,7 +201,7 @@ bool client_encrypt_packet(client_t *c, oshpacket_t *pkt)
     if (!cipher_encrypt(c->send_cipher,
             pkt->encrypted, &result,
             pkt->encrypted, pkt->encrypted_size,
-            pkt->hdr->tag, pkt->seqno))
+            pkt->cipher_tag, pkt->seqno))
     {
         logger(LOG_ERR, "%s: Failed to encrypt packet seqno %" PRIu64, c->addrw, pkt->seqno);
         return false;
@@ -235,7 +235,7 @@ bool client_decrypt_packet(client_t *c, oshpacket_t *pkt)
     if (!cipher_decrypt(c->recv_cipher,
             pkt->encrypted, &result,
             pkt->encrypted, pkt->encrypted_size,
-            pkt->hdr->tag, pkt->seqno))
+            pkt->cipher_tag, pkt->seqno))
     {
         logger(LOG_ERR, "%s: Failed to decrypt packet seqno %" PRIu64, c->addrw, pkt->seqno);
         return false;
@@ -322,7 +322,7 @@ static bool packet_encrypt(client_t *c, oshpacket_t *pkt, const oshpacket_def_t 
             sizeof(pkt->hdr->dest));
 
         // Zero the authentication tag as there is no encryption
-        memset(pkt->hdr->tag, 0, sizeof(pkt->hdr->tag));
+        memset(pkt->cipher_tag, 0, pkt->cipher_tag_size);
 
         return true;
 
