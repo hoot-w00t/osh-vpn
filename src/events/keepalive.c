@@ -5,12 +5,23 @@
 // Send PING probes to measure latency and check if the connection is still
 // alive, disconnect the client if there are no responses in time
 
+static time_t timeout(client_t *c, const struct timespec *delay)
+{
+    logger(LOG_INFO, "%s: Timed out (after %" PRId64 " seconds)",
+        c->addrw, delay->tv_sec);
+    aio_event_del(c->aio_event);
+    return EVENT_IS_DONE;
+}
+
 static time_t keepalive_event_handler(
     __attribute__((unused)) const event_t *event,
-    __attribute__((unused)) const struct timespec *delay,
+    const struct timespec *delay,
     void *data)
 {
     client_t *c = (client_t *) data;
+
+    if (delay->tv_sec >= c->keepalive_timeout)
+        return timeout(c, delay);
 
     if (c->rtt_await) {
         struct timespec now;
@@ -18,12 +29,8 @@ static time_t keepalive_event_handler(
 
         oshd_gettime(&now);
         timespecsub(&now, &c->rtt_ping, &delta);
-        if (delta.tv_sec >= c->keepalive_timeout) {
-            logger(LOG_INFO, "%s: Timed out (after %" PRId64 " seconds)",
-                c->addrw, delta.tv_sec);
-            aio_event_del(c->aio_event);
-            return EVENT_IS_DONE;
-        }
+        if (delta.tv_sec >= c->keepalive_timeout)
+            return timeout(c, &delta);
     }
 
     if (c->authenticated)
