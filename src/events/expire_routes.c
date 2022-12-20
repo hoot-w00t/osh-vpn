@@ -4,7 +4,10 @@
 
 // Periodically expire stale routes from the routing table
 
-static time_t expire_routes_event_handler(__attribute__((unused)) void *data)
+static time_t expire_routes_event_handler(
+    __attribute__((unused)) const event_t *event,
+    __attribute__((unused)) const struct timespec *delay,
+    __attribute__((unused)) void *data)
 {
     time_t next_expire;
 

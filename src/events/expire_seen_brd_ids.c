@@ -3,7 +3,10 @@
 
 // Periodically delete old broadcast IDs from the seen_brd_id array
 
-static time_t expire_seen_brd_ids_event_handler(__attribute__((unused)) void *data)
+static time_t expire_seen_brd_ids_event_handler(
+    __attribute__((unused)) const event_t *event,
+    __attribute__((unused)) const struct timespec *delay,
+    __attribute__((unused)) void *data)
 {
     struct timespec now;
     struct timespec delta;

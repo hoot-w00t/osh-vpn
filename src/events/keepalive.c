@@ -5,7 +5,10 @@
 // Send PING probes to measure latency and check if the connection is still
 // alive, disconnect the client if there are no responses in time
 
-static time_t keepalive_event_handler(void *data)
+static time_t keepalive_event_handler(
+    __attribute__((unused)) const event_t *event,
+    __attribute__((unused)) const struct timespec *delay,
+    void *data)
 {
     client_t *c = (client_t *) data;
 
@@ -29,7 +32,9 @@ static time_t keepalive_event_handler(void *data)
     return EVENT_QUEUE_IN_S(c->keepalive_interval);
 }
 
-static void keepalive_event_freedata(void *data)
+static void keepalive_event_freedata(
+    __attribute__((unused)) const event_t *event,
+    void *data)
 {
     ((client_t *) data)->keepalive_event = NULL;
 }

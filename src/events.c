@@ -124,7 +124,7 @@ void event_process_queued(void)
         logger_debug(DBG_EVENTS, "Processing %s event %p (delay %li.%09lis)",
             event->name, event, diff.tv_sec, diff.tv_nsec);
 
-        new_delay = event->handler(event->userdata);
+        new_delay = event->handler(event, &diff, event->userdata);
 
         // If the event handler returned a positive value, queue the event again
         // using this delay
@@ -247,7 +247,7 @@ void event_free(event_t *event)
 {
     logger_debug(DBG_EVENTS, "Freeing %s event %p", event->name, event);
     if (event->freedata)
-        event->freedata(event->userdata);
+        event->freedata(event, event->userdata);
     free(event);
 }
 

@@ -69,7 +69,10 @@ static void keep_addr(struct conflict_routes *cr)
     client_queue_route_add_local(NULL, &cr->daddr->addr, 1, false);
 }
 
-static time_t dynamic_ip_conflict_handler(void *data)
+static time_t dynamic_ip_conflict_handler(
+    __attribute__((unused)) const event_t *event,
+    __attribute__((unused)) const struct timespec *delay,
+    void *data)
 {
     struct conflict_routes *cr = (struct conflict_routes *) data;
 
@@ -87,7 +90,9 @@ static time_t dynamic_ip_conflict_handler(void *data)
     return EVENT_IS_DONE;
 }
 
-static void dynamic_ip_conflict_freedata(void *data)
+static void dynamic_ip_conflict_freedata(
+    __attribute__((unused)) const event_t *event,
+    void *data)
 {
     struct conflict_routes *cr = (struct conflict_routes *) data;
 

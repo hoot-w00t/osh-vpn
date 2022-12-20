@@ -7,7 +7,10 @@
 
 #define EXPIRE_ENDPOINTS_INTERVAL (ENDPOINT_EXPIRY / 4) // 15 minutes
 
-static time_t expire_endpoints_event_handler(__attribute__((unused)) void *data)
+static time_t expire_endpoints_event_handler(
+    __attribute__((unused)) const event_t *event,
+    __attribute__((unused)) const struct timespec *delay,
+    __attribute__((unused)) void *data)
 {
     bool deleted = false;
 

@@ -4,7 +4,10 @@
 
 // Regularly initiate a new handshake to renew encryption keys
 
-static time_t handshake_renew_event_handler(void *data)
+static time_t handshake_renew_event_handler(
+    __attribute__((unused)) const event_t *event,
+    __attribute__((unused)) const struct timespec *delay,
+    void *data)
 {
     client_t *c = (client_t *) data;
 
@@ -13,7 +16,9 @@ static time_t handshake_renew_event_handler(void *data)
     return EVENT_IS_DONE;
 }
 
-static void handshake_renew_event_freedata(void *data)
+static void handshake_renew_event_freedata(
+    __attribute__((unused)) const event_t *event,
+    void *data)
 {
     ((client_t *) data)->handshake_renew_event = NULL;
 }

@@ -23,15 +23,17 @@
 #define EVENT_QUEUE_IN_M(m)     EVENT_QUEUE_IN_S((m) * 60)
 #define EVENT_QUEUE_IN_H(h)     EVENT_QUEUE_IN_M((h) * 60)
 
-typedef time_t (*event_handler_t)(void *);
-typedef void (*event_freedata_t)(void *);
 typedef struct event event_t;
+typedef time_t (*event_handler_t)(const event_t *, const struct timespec *, void *);
+typedef void (*event_freedata_t)(const event_t *, void *);
 
 struct event {
     // Name of the event for easier debugging
     char name[64];
 
     // Function called when the event triggers
+    // The struct timespec pointer contains the delay between the event's
+    // trigger time and the current time
     // The return value is used as a delay to re-queue the event
     // If the value is negative the event is freed
     // Otherwise the event is re-queued using that value (in seconds)

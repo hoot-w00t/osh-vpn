@@ -6,7 +6,9 @@
 
 // Try to connect to a node
 
-static void connect_event_freedata(void *data)
+static void connect_event_freedata(
+    __attribute__((unused)) const event_t *event,
+    void *data)
 {
     ((node_id_t *) data)->connect_event = NULL;
 }
@@ -31,7 +33,10 @@ static bool connection_attempt_is_valid(node_id_t *nid)
     return true;
 }
 
-static time_t connect_event_handler(void *data)
+static time_t connect_event_handler(
+    __attribute__((unused)) const event_t *event,
+    __attribute__((unused)) const struct timespec *delay,
+    void *data)
 {
     node_id_t *nid = (node_id_t *) data;
 

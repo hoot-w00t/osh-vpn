@@ -70,7 +70,10 @@ static time_t automatic_connections_next_retry_delay(void)
 // connections at once, but it should also prevent cases where some nodes would
 // never be automatically connected because others don't have a long enough
 // retry delay)
-static time_t automatic_connections_handler(__attribute__((unused)) void *data)
+static time_t automatic_connections_handler(
+    __attribute__((unused)) const event_t *event,
+    __attribute__((unused)) const struct timespec *delay,
+    __attribute__((unused)) void *data)
 {
     const time_t next_retry_delay = automatic_connections_next_retry_delay();
     size_t remaining_tries = automatic_connections_remaining(5);
