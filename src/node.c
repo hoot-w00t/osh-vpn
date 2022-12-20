@@ -666,15 +666,38 @@ static bool connect_endpoint_type_compatible(const endpoint_type_t type)
     }
 }
 
+// Find a matching connect endpoint (with the same value, port and socktype)
+// Returns NULL if the endpoint does not exist
+static endpoint_t *node_connect_endpoints_find(node_id_t *nid,
+    const endpoint_t *endpoint, const endpoint_socktype_t socktype)
+{
+    endpoint_t *it = endpoint_group_find(nid->connect_endpoints, endpoint);
+
+    while (it) {
+        // If the socket types match too, we found a matching endpoint
+        if (it->socktype == socktype)
+            return it;
+
+        // Find the next occurence of the endpoint
+        it = endpoint_group_find_after(it, endpoint);
+    }
+
+    // No matching endpoint was found
+    return NULL;
+}
+
 // Insert endpoint if it is compatible with the socket type
 static void node_connect_setup_endpoints_insert(node_id_t *nid,
     const endpoint_t *endpoint, const endpoint_socktype_t socktype)
 {
+    const endpoint_socktype_t insert_socktype = endpoint->socktype & socktype;
     endpoint_t *inserted;
 
-    if (endpoint->socktype & socktype) {
+    if (    insert_socktype
+        && !node_connect_endpoints_find(nid, endpoint, insert_socktype))
+    {
         inserted = endpoint_group_insert_back(nid->connect_endpoints, endpoint);
-        inserted->socktype &= socktype;
+        inserted->socktype = insert_socktype;
     }
 }
 
