@@ -38,7 +38,7 @@ typedef struct event_data_epoll {
 } event_data_epoll_t;
 
 #define aio_data(aio) ((aio_data_epoll_t *) (aio)->data.ptr)
-#define event_data(e) ((event_data_epoll_t *) (e)->data.ptr)->ep_event
+#define event_data_ep(e) ((event_data_epoll_t *) (e)->data.ptr)->ep_event
 
 void _aio_event_free(aio_event_t *event)
 {
@@ -46,7 +46,7 @@ void _aio_event_free(aio_event_t *event)
     if (event->aio) {
         // Delete file descriptor from the interest list
         if (epoll_ctl(aio_data(event->aio)->epfd, EPOLL_CTL_DEL, event->fd,
-                &event_data(event)) < 0)
+                &event_data_ep(event)) < 0)
         {
             logger(LOG_CRIT, "Failed to free AIO event: epoll_ctl: %s (fd=%i)",
                 strerror(errno), event->fd);
@@ -59,8 +59,8 @@ void _aio_event_init(aio_event_t *event)
 {
     // Initialize epoll event data
     event->data.ptr = xzalloc(sizeof(event_data_epoll_t));
-    event_data(event).events = epoll_flags(event->poll_events);
-    event_data(event).data.ptr = event;
+    event_data_ep(event).events = epoll_flags(event->poll_events);
+    event_data_ep(event).data.ptr = event;
 }
 
 void _aio_event_add(aio_t *aio, aio_event_t *event,
@@ -69,7 +69,7 @@ void _aio_event_add(aio_t *aio, aio_event_t *event,
 {
     // Add the file descriptor to the interest list
     if (epoll_ctl(aio_data(aio)->epfd, EPOLL_CTL_ADD, event->fd,
-            &event_data(event)) < 0)
+            &event_data_ep(event)) < 0)
     {
         logger(LOG_CRIT, "Failed to add AIO event: epoll_ctl: %s (fd=%i)",
             strerror(errno), event->fd);
@@ -151,11 +151,11 @@ static void update_epoll_events(aio_event_t *event)
 {
     if (event->added_to_aio) {
         if (epoll_ctl(aio_data(event->aio)->epfd, EPOLL_CTL_MOD, event->fd,
-                &event_data(event)) < 0)
+                &event_data_ep(event)) < 0)
         {
             logger(LOG_CRIT,
                 "update_epoll_events: epoll_ctl: %s (fd=%i, events=%u)",
-                strerror(errno), event->fd, event_data(event).events);
+                strerror(errno), event->fd, event_data_ep(event).events);
             abort();
         }
     }
@@ -164,13 +164,13 @@ static void update_epoll_events(aio_event_t *event)
 // Enables the given poll events
 void aio_enable_poll_events(aio_event_t *event, aio_poll_event_t poll_events)
 {
-    event_data(event).events |= epoll_flags(poll_events);
+    event_data_ep(event).events |= epoll_flags(poll_events);
     update_epoll_events(event);
 }
 
 // Disables the given poll events
 void aio_disable_poll_events(aio_event_t *event, aio_poll_event_t poll_events)
 {
-    event_data(event).events &= ~(epoll_flags(poll_events));
+    event_data_ep(event).events &= ~(epoll_flags(poll_events));
     update_epoll_events(event);
 }
