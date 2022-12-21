@@ -1,13 +1,30 @@
 #include "logger.h"
 #include "xalloc.h"
 #include "macros.h"
+#include "macros_windows.h"
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
-#include <sys/wait.h>
+
+#if PLATFORM_IS_WINDOWS
+#include <windows.h>
+#include <stdio.h>
+
+#ifdef WIFEXITED
+#undef WIFEXITED
+#endif
+#define WIFEXITED(status) (true)
+
+#ifdef WEXITSTATUS
+#undef WEXITSTATUS
+#endif
+#define WEXITSTATUS(status) (status)
+#else
 #include <unistd.h>
+#include <sys/wait.h>
+#endif
 
 typedef struct command {
     char *name;    // Command name (not case sensitive)
@@ -90,11 +107,20 @@ bool oshd_cmd_setenv(const char *variable, const char *value)
 {
     logger_debug(DBG_CMD, "Setting environment variable %s to '%s'",
         variable, value);
+
+#if PLATFORM_IS_WINDOWS
+    if (!SetEnvironmentVariable(variable, value)) {
+        logger(LOG_ERR, "Failed to set environment variable %s to '%s': %s",
+            variable, value, win_strerror_last());
+        return false;
+    }
+#else
     if (setenv(variable, value, 1) < 0) {
         logger(LOG_ERR, "Failed to set environment variable %s to '%s': %s",
             variable, value, strerror(errno));
         return false;
     }
+#endif
 
     return true;
 }
@@ -103,11 +129,20 @@ bool oshd_cmd_setenv(const char *variable, const char *value)
 bool oshd_cmd_unsetenv(const char *variable)
 {
     logger_debug(DBG_CMD, "Unsetting environment variable %s", variable);
+
+#if PLATFORM_IS_WINDOWS
+    if (!SetEnvironmentVariable(variable, NULL)) {
+        logger(LOG_ERR, "Failed to unset environment variable %s: %s",
+            variable, win_strerror_last());
+        return false;
+    }
+#else
     if (unsetenv(variable) < 0) {
         logger(LOG_ERR, "Failed to unset environment variable %s: %s",
             variable, strerror(errno));
         return false;
     }
+#endif
 
     return true;
 }
@@ -118,23 +153,30 @@ bool oshd_cmd_unsetenv(const char *variable)
 
 static int oshd_system(const char *command)
 {
-    pid_t pid = fork();
+    STARTUPINFO si;
+    PROCESS_INFORMATION pi;
+    DWORD retcode;
+    char process_cmdline[1024];
 
-    if (pid < 0) {
+    memset(&si, 0, sizeof(si));
+    memset(&pi, 0, sizeof(pi));
+    snprintf(process_cmdline, sizeof(process_cmdline), "%s /Q /C %s",
+        shell_fullpath, command);
+
+    if (!CreateProcess(NULL, process_cmdline,
+        NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
+    {
+        logger(LOG_CRIT, "%s: %s: %s", __func__, "CreateProcess",
+            win_strerror_last());
+        errno = ENOEXEC;
         return -1;
-    } else if (pid > 0) {
-        int status = -1;
-
-        if (waitpid(pid, &status, 0) != pid) {
-            logger(LOG_CRIT, "oshd_system: waitpid(%i): %s", pid, strerror(errno));
-            return -1;
-        }
-        return status;
-    } else {
-        execl(shell_fullpath, shell_filename, "/q", "/c", command, NULL);
-        logger(LOG_CRIT, "oshd_system: execl: %s", strerror(errno));
-        abort();
     }
+
+    WaitForSingleObject(pi.hThread, INFINITE);
+    GetExitCodeProcess(pi.hProcess, &retcode);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    return (int) retcode;
 }
 #else
 #define oshd_system(command) system(command)

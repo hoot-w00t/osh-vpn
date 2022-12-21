@@ -2,7 +2,7 @@
 #include "xalloc.h"
 #include "tuntap.h"
 #include "netaddr.h"
-#include "macros.h"
+#include "macros_windows.h"
 #include "netutil.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,37 +42,6 @@ typedef struct tt_data_win {
     uint8_t tun_pkt[TUNTAP_BUFSIZE]; // TUN packet buffer
 } tt_data_win_t;
 #define tuntap_data(tt) ((tt_data_win_t *) (tt)->data.ptr)
-
-static const char *win_strerror(DWORD errcode)
-{
-    static char errstr[256];
-
-    if (!FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, errcode, 0,
-        errstr, sizeof(errstr), NULL))
-    {
-        snprintf(errstr, sizeof(errstr), "Error code %u (FormatMessage failed with %u)",
-            errcode, GetLastError());
-    } else {
-        // Remove the newline at the end of the error string
-        // TODO: There could be a better way of doing this, this is very ugly
-        size_t errstr_len = strlen(errstr);
-
-        if (   errstr_len > 0
-            && (errstr[errstr_len - 1] == '\n' || errstr[errstr_len - 1] == '\r'))
-        {
-            errstr[errstr_len - 1] = '\0';
-            errstr_len -= 1;
-            if (   errstr_len > 0
-                && (errstr[errstr_len - 1] == '\n' || errstr[errstr_len - 1] == '\r'))
-            {
-                errstr[errstr_len - 1] = '\0';
-                errstr_len -= 1;
-            }
-        }
-    }
-    return errstr;
-}
-#define win_strerror_last() win_strerror(GetLastError())
 
 // Enable the TUN/TAP device
 // The adapter is not enabled by default and cannot be used before enabling it

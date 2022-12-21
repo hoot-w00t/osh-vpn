@@ -102,7 +102,7 @@ endif()
 
 # TUN/TAP sources
 set(OSH_TUNTAP_SOURCES src/tuntap/common.c)
-if (CYGWIN OR WIN32)
+if (CYGWIN OR MSYS OR WIN32)
     set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} src/tuntap/windows.c)
 else()
     set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} src/tuntap/linux.c)
@@ -178,6 +178,11 @@ set(OSHD_SOURCES
     src/xalloc.c
     ${OSH_VERSION_FILE_DEST}
 )
+
+if (CYGWIN OR MSYS OR WIN32)
+    # Windows-specific utility functions
+    list(APPEND OSHD_SOURCES "src/macros_windows.c")
+endif()
 
 # All sources for oshd_tests
 set(OSHD_TESTS_SOURCES
