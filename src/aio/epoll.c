@@ -34,11 +34,22 @@ typedef struct aio_data_epoll {
 } aio_data_epoll_t;
 
 typedef struct event_data_epoll {
+    // Incomplete copy of ep_event to keep track of some changes
+    struct epoll_event shadow_ep_event;
+
+    // Actual epoll_event used
     struct epoll_event ep_event;
 } event_data_epoll_t;
 
 #define aio_data(aio) ((aio_data_epoll_t *) (aio)->data.ptr)
-#define event_data_ep(e) ((event_data_epoll_t *) (e)->data.ptr)->ep_event
+
+// Access AIO event's shadow_ep_event
+#define event_data_shadow(e) \
+    ((event_data_epoll_t *) (e)->data.ptr)->shadow_ep_event
+
+// Access AIO event's actual ep_event
+#define event_data_ep(e) \
+    ((event_data_epoll_t *) (e)->data.ptr)->ep_event
 
 void _aio_event_free(aio_event_t *event)
 {
@@ -61,12 +72,18 @@ void _aio_event_init(aio_event_t *event)
     event->data.ptr = xzalloc(sizeof(event_data_epoll_t));
     event_data_ep(event).events = epoll_flags(event->poll_events);
     event_data_ep(event).data.ptr = event;
+
+    // Keep a copy of the epoll event data
+    event_data_shadow(event) = event_data_ep(event);
 }
 
 void _aio_event_add(aio_t *aio, aio_event_t *event,
     __attribute__((unused)) size_t idx,
     __attribute__((unused)) size_t new_count)
 {
+    // Update the copy of the epoll event data in case its events were changed
+    event_data_shadow(event) = event_data_ep(event);
+
     // Add the file descriptor to the interest list
     if (epoll_ctl(aio_data(aio)->epfd, EPOLL_CTL_ADD, event->fd,
             &event_data_ep(event)) < 0)
@@ -149,7 +166,15 @@ ssize_t _aio_poll(aio_t *aio, ssize_t timeout)
 // Update epoll event with the new events
 static void update_epoll_events(aio_event_t *event)
 {
-    if (event->added_to_aio) {
+    // Update only if the event was added to epoll and its events have changed
+    // since the last update
+    if (   event->added_to_aio
+        && event_data_ep(event).events != event_data_shadow(event).events)
+    {
+        // Remember the new events
+        event_data_shadow(event).events = event_data_ep(event).events;
+
+        // Update the epoll event
         if (epoll_ctl(aio_data(event->aio)->epfd, EPOLL_CTL_MOD, event->fd,
                 &event_data_ep(event)) < 0)
         {
