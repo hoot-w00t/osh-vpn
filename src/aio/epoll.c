@@ -53,7 +53,6 @@ typedef struct event_data_epoll {
 
 void _aio_event_free(aio_event_t *event)
 {
-    free(event->data.ptr);
     if (event->aio) {
         // Delete file descriptor from the interest list
         if (epoll_ctl(aio_data(event->aio)->epfd, EPOLL_CTL_DEL, event->fd,
@@ -64,6 +63,7 @@ void _aio_event_free(aio_event_t *event)
             abort();
         }
     }
+    free(event->data.ptr);
 }
 
 void _aio_event_init(aio_event_t *event)
