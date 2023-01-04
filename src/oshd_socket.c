@@ -421,6 +421,13 @@ static void server_aio_read(aio_event_t *event)
     endpoint_free(endpoint);
 }
 
+// Delete callback for TCP servers
+static void server_aio_del(aio_event_t *event)
+{
+    if (event->fd != invalid_sock_t)
+        sock_close(event->fd);
+}
+
 // Add an aio event for a TCP server
 void oshd_server_add(sock_t server_sockfd)
 {
@@ -429,7 +436,7 @@ void oshd_server_add(sock_t server_sockfd)
         AIO_READ,
         NULL,
         NULL,
-        aio_cb_delete_close_fd,
+        server_aio_del,
         server_aio_read,
         NULL,
         server_aio_error);
