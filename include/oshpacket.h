@@ -87,14 +87,14 @@ typedef uint64_t oshpacket_brd_id_t;
 typedef struct __attribute__((__packed__)) oshpacket_hdr {
     // Public part of the header (never encrypted)
     // If it changes OSHPACKET_PUBLIC_HDR_SIZE needs to be updated
-    uint16_t         payload_size;
+    uint16_t    payload_size;
 
     // Private header (always encrypted except for HANDSHAKE packets)
     // If it changes OSHPACKET_PRIVATE_HDR_SIZE needs to be updated
-    oshpacket_type_t type : 8;
-    uint8_t          flags;
+    uint8_t     type; // oshpacket_type_t
+    uint8_t     flags;
 
-    char             src_node[NODE_NAME_SIZE];
+    char        src_node[NODE_NAME_SIZE];
 
     // This field contains information about the destination of the packet
     // Both structures are of the same size, but the one used will depend on
@@ -171,7 +171,7 @@ typedef struct oshpacket_def {
 } oshpacket_def_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_devmode {
-    device_mode_t devmode : 8;
+    uint8_t devmode; // device_mode_t
 } oshpacket_devmode_t;
 
 typedef struct __attribute__((__packed__)) oshpacket_devmode_dynamic {
@@ -251,7 +251,7 @@ typedef struct __attribute__((__packed__)) oshpacket_edge {
 
 typedef struct __attribute__((__packed__)) oshpacket_route {
     char owner_name[NODE_NAME_SIZE];
-    netaddr_type_t type : 8;
+    uint8_t type; // netaddr_type_t
     netaddr_prefixlen_t prefixlen;
     netaddr_data_t addr;
     uint8_t can_expire;
