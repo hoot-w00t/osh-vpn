@@ -5,7 +5,12 @@ project(osh-vpn
     HOMEPAGE_URL "https://github.com/hoot-w00t/osh-vpn"
     LANGUAGES "C")
 
-include(CheckCCompilerFlag)
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+# Local modules
+include(compiler_flags)
+
+# System modules
 include(CheckIncludeFile)
 include(CheckLinkerFlag OPTIONAL RESULT_VARIABLE CheckLinkerFlagPath)
 include(CTest)
@@ -247,26 +252,19 @@ endif()
 install(TARGETS oshd RUNTIME)
 
 # Compiler flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wshadow -Wformat-security -Wcast-qual -Wpointer-arith")
-
-check_c_compiler_flag("-Wformat-signedness" cc_warn_format_signedness)
-if (cc_warn_format_signedness)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wformat-signedness")
-endif()
-
-check_c_compiler_flag("-pipe" cc_pipe)
-if (cc_pipe)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pipe")
-endif()
+add_compiler_flag(CMAKE_C_FLAGS -pipe)
+add_compiler_flags(CMAKE_C_FLAGS -Wall -Wextra -Wshadow)
+add_compiler_flags(CMAKE_C_FLAGS -Wformat-security -Wformat-signedness)
+add_compiler_flags(CMAKE_C_FLAGS -Wcast-qual -Wpointer-arith)
 
 if (CYGWIN)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE")
+    add_compiler_flag_nocheck(CMAKE_C_FLAGS "-D_GNU_SOURCE")
 endif()
 
 option(DISABLE_EVENTS_TIMERFD "Don't use timerfd for timed events even if it is available" OFF)
 check_include_file("sys/timerfd.h" timerfd_available)
 if (timerfd_available AND NOT DISABLE_EVENTS_TIMERFD)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DEVENTS_USE_TIMERFD")
+    add_compiler_flag_nocheck(CMAKE_C_FLAGS "-DEVENTS_USE_TIMERFD")
 endif()
 
 # Linker flags
@@ -296,8 +294,13 @@ set(CMAKE_C_FLAGS_DEBUG "-O0 -g3")
 set(CMAKE_C_FLAGS_MINSIZEREL "-Os")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g")
 set(CMAKE_C_FLAGS_RELEASE "-O2")
-set(CMAKE_C_FLAGS_NATIVERELEASE "-O2 -march=native")
-set(CMAKE_C_FLAGS_HARDENED "-O2 -g -fstack-protector-strong -D_FORTIFY_SOURCE=2")
+
+set(CMAKE_C_FLAGS_NATIVERELEASE "${CMAKE_C_FLAGS_RELEASE}")
+add_compiler_flags(CMAKE_C_FLAGS_NATIVERELEASE -march=native)
+
+set(CMAKE_C_FLAGS_HARDENED "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
+add_compiler_flag_nocheck(CMAKE_C_FLAGS_HARDENED "-D_FORTIFY_SOURCE=2")
+add_compiler_flags(CMAKE_C_FLAGS_HARDENED -fstack-protector-all)
 
 # Format and display the compiler and linker flags
 string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPER)
