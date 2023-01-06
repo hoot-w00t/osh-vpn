@@ -109,16 +109,39 @@ else()
 endif()
 
 # Async I/O sources
-option(DISABLE_EPOLL "Don't use epoll even if it is available" OFF)
-
-check_include_file("sys/epoll.h" epoll_available)
-
-set(OSH_AIO_SOURCES src/aio/aio.c)
-if (epoll_available AND NOT DISABLE_EPOLL)
-    set(OSH_AIO_SOURCES ${OSH_AIO_SOURCES} src/aio/epoll.c)
-else()
-    set(OSH_AIO_SOURCES ${OSH_AIO_SOURCES} src/aio/poll.c)
+set(AIO_BACKEND_CONFIGURED "unknown")
+if (NOT AIO_BACKEND)
+    set(AIO_BACKEND "auto")
 endif()
+
+if (AIO_BACKEND STREQUAL "auto")
+    check_include_file("poll.h"  poll_available)
+    check_include_file("sys/epoll.h" epoll_available)
+
+    if (epoll_available)
+        set(AIO_BACKEND_CONFIGURED "epoll")
+    elseif (poll_available)
+        set(AIO_BACKEND_CONFIGURED "poll")
+    endif()
+
+    if (AIO_BACKEND_CONFIGURED STREQUAL "unknown")
+        message(FATAL_ERROR "Failed to automatically configure AIO backend")
+    endif()
+else()
+    set(AIO_BACKEND_CONFIGURED "${AIO_BACKEND}")
+endif()
+
+# Configure AIO sources using configured backend
+set(OSH_AIO_SOURCES src/aio/aio.c)
+if (AIO_BACKEND_CONFIGURED STREQUAL "epoll")
+    set(OSH_AIO_SOURCES ${OSH_AIO_SOURCES} src/aio/epoll.c)
+elseif (AIO_BACKEND_CONFIGURED STREQUAL "poll")
+    set(OSH_AIO_SOURCES ${OSH_AIO_SOURCES} src/aio/poll.c)
+else()
+    message(FATAL_ERROR "Invalid configured AIO backend: ${AIO_BACKEND_CONFIGURED}")
+endif()
+
+message(STATUS "AIO backend: ${AIO_BACKEND_CONFIGURED} (${AIO_BACKEND})")
 
 # All sources for oshd
 set(OSHD_SOURCES

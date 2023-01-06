@@ -33,19 +33,6 @@ jobs:
           path: |
             ${{ github.workspace }}/osh-vpn/build/oshd
 
-      - name: Build project (without epoll)
-        run: |
-          cd "$GITHUB_WORKSPACE/osh-vpn"
-          cmake -B build -DDISABLE_EPOLL=ON
-          make -C build
-
-      - name: Upload binary (without epoll)
-        uses: actions/upload-artifact@v2
-        with:
-          name: osh-vpn-linux-no-epoll
-          path: |
-            ${{ github.workspace }}/osh-vpn/build/oshd
-
   cygwin:
     runs-on: windows-latest
     defaults:

@@ -52,7 +52,7 @@ You can change those options by running `cmake .. -D<option>=<value>`
 | Option              | Default value | Description |
 |---------------------|---------------|-------------|
 | `ENABLE_UNIT_TESTS` | `OFF`         | Build unit tests, they can be run with `ctest --output-on-failure` or directly with `./oshd_tests`. These unit tests are made using [Criterion](https://github.com/Snaipe/Criterion) |
-| `DISABLE_EPOLL`     | `OFF`         | Disable the use of `epoll` even when it is available, falls back to `poll` |
+| `AIO_BACKEND`       | `auto`        | Choose the backend used for polling I/O events. `auto` automatically chooses the best available in the following backends: `epoll`, `poll`. |
 | `ENABLE_SYSTEMD`    | `OFF`         | Configure systemd service files |
 | `DISABLE_EVENTS_TIMERFD` | `OFF`    | Disable the use of `timerfd` for timed events even when it is available |
 
