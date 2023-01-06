@@ -93,7 +93,7 @@ static void endpoint_data_from_charvalue(endpoint_t *endpoint,
     }
 }
 
-// Allocate new addrstr of len + 10 bytes (for additionnal characters, the
+// Allocate new addrstr of len + 10 bytes (for additional characters, the
 // port number and the terminating byte)
 // Frees previously allocated addrstr (if any)
 static void endpoint_alloc_addrstr(endpoint_t *endpoint, size_t len)
@@ -360,7 +360,7 @@ endpoint_t *endpoint_group_find_duplicate(endpoint_group_t *group, const endpoin
         if ((it->socktype & endpoint->socktype) == endpoint->socktype)
             return it;
 
-        // Find the next occurence of the endpoint
+        // Find the next occurrence of the endpoint
         it = endpoint_group_find_after(it, endpoint);
     }
 

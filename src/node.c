@@ -678,7 +678,7 @@ static endpoint_t *node_connect_endpoints_find(node_id_t *nid,
         if (it->socktype == socktype)
             return it;
 
-        // Find the next occurence of the endpoint
+        // Find the next occurrence of the endpoint
         it = endpoint_group_find_after(it, endpoint);
     }
 

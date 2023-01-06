@@ -176,7 +176,7 @@ static bool handshake_setup_new_ciphers(client_t *c)
         return false;
 
     // Start using the new ciphers
-    // There are two possibilites:
+    // There are two possibilities:
     // - This is the initial handshake, no ciphers were in use before so we will
     //   start using both right away
     //
