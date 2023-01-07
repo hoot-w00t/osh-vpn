@@ -5,14 +5,14 @@
 // The returned pointer is a static char array
 const char *win_strerror(DWORD errcode)
 {
-    static char errstr[256];
+    static char errfmt[256];
+    static char errstr[sizeof(errfmt) + 32];
+    DWORD fmterr;
 
-    if (!FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, errcode, 0,
-        errstr, sizeof(errstr), NULL))
-    {
-        snprintf(errstr, sizeof(errstr), "Error code %u (FormatMessage failed with %u)",
-            errcode, GetLastError());
-    } else {
+    fmterr = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, errcode, 0,
+        errfmt, sizeof(errfmt), NULL);
+
+    if (fmterr) {
         // Remove the newline at the end of the error string
         // TODO: There could be a better way of doing this, this is very ugly
         size_t errstr_len = strlen(errstr);
@@ -29,6 +29,13 @@ const char *win_strerror(DWORD errcode)
                 errstr_len -= 1;
             }
         }
+    }
+
+    if (fmterr) {
+        snprintf(errstr, sizeof(errstr), "%s (code %lu)", errfmt, errcode);
+    } else {
+        snprintf(errstr, sizeof(errstr), "Error code %lu (FormatMessage failed with %lu)",
+            errcode, GetLastError());
     }
     return errstr;
 }
