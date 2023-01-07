@@ -767,6 +767,10 @@ void oshd_init_conf(void)
     if (!random_xoshiro256_seed())
         abort();
 
+    // Initialize sockets
+    if (sock_init() != 0)
+        abort();
+
     // Everything should be at zero, including pointers and counts
     memset(&oshd, 0, sizeof(oshd_t));
 

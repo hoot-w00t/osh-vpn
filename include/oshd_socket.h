@@ -4,6 +4,6 @@
 #include "client.h"
 
 bool oshd_client_connect(node_id_t *nid, endpoint_t *endpoint);
-void oshd_server_add(int server_fd);
+void oshd_server_add(sock_t server_sockfd);
 
 #endif

@@ -140,8 +140,6 @@ typedef struct oshd {
 // true if the maximum number of clients is reached
 #define oshd_clients_limited() (oshd.clients_count_max != 0 && oshd.clients_count >= oshd.clients_count_max)
 
-int set_nonblocking(int fd);
-
 void oshd_stop(void);
 bool oshd_init(void);
 void oshd_free(void);

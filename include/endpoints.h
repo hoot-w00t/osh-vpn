@@ -1,13 +1,13 @@
 #ifndef _OSH_ENDPOINTS_H
 #define _OSH_ENDPOINTS_H
 
+#include "sock.h"
 #include "netarea.h"
 #include "oshd_clock.h"
 #include "oshpacket.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <netinet/in.h>
 
 // We need to manually define the node_id_t type to prevent include loops
 // (node.h/client.h includes endpoints.h)

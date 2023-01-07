@@ -1,6 +1,7 @@
 #ifndef _OSH_CLIENT_H
 #define _OSH_CLIENT_H
 
+#include "sock.h"
 #include "aio.h"
 #include "endpoints.h"
 #include "netaddr.h"
@@ -12,7 +13,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <netinet/in.h>
 
 #ifndef CLIENT_SENDQ_MIN_SIZE
 // Minimum size of the send queue
@@ -85,7 +85,7 @@ struct client_io {
 };
 
 struct client {
-    int fd;                      // Network socket
+    sock_t sockfd;               // Network socket
     struct sockaddr_storage sa;  // Socket address
     endpoint_t *sa_endpoint;     // Socket endpoint
     char *addrw;                 // Endpoint "address:port" string
@@ -169,7 +169,7 @@ void client_change_endpoint(client_t *c, const endpoint_t *endpoint,
     const struct sockaddr_storage *sa);
 
 void client_destroy(client_t *c);
-client_t *client_init(int fd, bool initiator, const endpoint_t *endpoint,
+client_t *client_init(sock_t sockfd, bool initiator, const endpoint_t *endpoint,
     const struct sockaddr_storage *sa);
 
 void client_set_keepalive(client_t *c, time_t interval, time_t timeout);

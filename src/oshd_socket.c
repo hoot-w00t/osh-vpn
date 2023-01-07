@@ -1,3 +1,4 @@
+#include "oshd_socket.h"
 #include "oshd.h"
 #include "oshd_process_packet.h"
 #include "events.h"
@@ -9,31 +10,31 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <netinet/tcp.h>
 
 // Set network socket options
-static bool oshd_setsockopts(int s)
+static bool oshd_setsockopts(sock_t sockfd)
 {
-    uint32_t optval;
+    unsigned int optval;
 
     // Enable keep alive probing on the socket
     optval = 1;
-    if (setsockopt(s, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval)) < 0) {
-        logger(LOG_ERR, "Failed to set SO_KEEPALIVE option on socket %i", s);
+    if (sock_setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval)) < 0) {
+        logger(LOG_ERR, "Failed to set SO_KEEPALIVE option on socket " PRI_SOCK_T, sockfd);
         return false;
     }
 
     // Set socket timeout to 30 seconds
     // The timeout value is in milliseconds
     optval = 30000;
-    if (setsockopt(s, SOL_TCP, TCP_USER_TIMEOUT, &optval, sizeof(optval)) < 0) {
-        logger(LOG_ERR, "Failed to set TCP_USER_TIMEOUT option on socket %i", s);
+    if (sock_setsockopt(sockfd, SOL_TCP, TCP_USER_TIMEOUT, &optval, sizeof(optval)) < 0) {
+        logger(LOG_ERR, "Failed to set TCP_USER_TIMEOUT option on socket " PRI_SOCK_T, sockfd);
         return false;
     }
 
     // Set the socket to non-blocking
-    if (set_nonblocking(s) < 0) {
-        logger(LOG_ERR, "Failed to set socket %i to non-blocking", s);
+    if (sock_set_nonblocking(sockfd) < 0) {
+        logger(LOG_ERR, "Failed to set socket " PRI_SOCK_T " to non-blocking: %s",
+            sockfd, sock_strerror(sock_errno));
         return false;
     }
     return true;
@@ -94,20 +95,22 @@ static void client_aio_read(aio_event_t *event)
     ssize_t recvd_size;
 
     // Receive available data
-    recvd_size = recv(c->fd, c->io.recvbuf + c->io.recvbuf_size,
+    recvd_size = sock_recv(c->sockfd, c->io.recvbuf + c->io.recvbuf_size,
         CLIENT_RECVBUF_SIZE - c->io.recvbuf_size, MSG_NOSIGNAL);
 
     if (recvd_size > 0) {
         logger_debug(DBG_SOCKETS, "%s: Received %zi bytes", c->addrw, recvd_size);
         c->io.recvbuf_size += recvd_size;
     } else if (recvd_size < 0) {
-        if (!IO_WOULDBLOCK(errno)) {
-            logger(LOG_ERR, "%s: recv: %s", c->addrw, strerror(errno));
+        const sock_errno_t err = sock_errno;
+
+        if (!sock_ewouldblock(err)) {
+            logger(LOG_ERR, "%s: %s: %s", c->addrw, "sock_recv", sock_strerror(err));
             aio_event_del(c->aio_event);
             return;
         }
     } else {
-        logger(LOG_ERR, "%s: recv: socket closed", c->addrw);
+        logger(LOG_ERR, "%s: %s: socket closed", c->addrw, "sock_recv");
         aio_event_del(c->aio_event);
         return;
     }
@@ -200,16 +203,18 @@ static void client_aio_write(aio_event_t *event)
     client_t *c = (client_t *) event->userdata;
     ssize_t sent_size;
 
-    sent_size = send(c->fd, netbuffer_data(c->io.sendq),
+    sent_size = sock_send(c->sockfd, netbuffer_data(c->io.sendq),
         netbuffer_data_size(c->io.sendq), MSG_NOSIGNAL);
 
     if (sent_size < 0) {
+        const sock_errno_t err = sock_errno;
+
         // send() would block, this is a safe error
-        if (IO_WOULDBLOCK(errno))
+        if (sock_ewouldblock(err))
             return;
 
         // Other errors probably mean that the connection is broken
-        logger(LOG_ERR, "%s: send: %s", c->addrw, strerror(errno));
+        logger(LOG_ERR, "%s: %s: %s", c->addrw, "sock_send", sock_strerror(err));
         aio_event_del(c->aio_event);
         return;
     }
@@ -232,17 +237,19 @@ static void client_aio_write(aio_event_t *event)
 static bool oshd_connect_async(client_t *c)
 {
     // We try to connect the socket
-    if (connect(c->fd, (struct sockaddr *) &c->sa, sizeof(c->sa)) < 0) {
+    if (sock_connect(c->sockfd, (struct sockaddr *) &c->sa, sizeof(c->sa)) < 0) {
+        const sock_errno_t err = sock_errno;
+
         // If error is EISCONN the connection is already established, so we can
         // proceed without processing any error
-        if (errno != EISCONN) {
+        if (!sock_eisconn(err)) {
             // If the error is EINPROGRESS or EALREADY we just need to wait longer
             // for the socket to finish connecting
-            if (errno == EINPROGRESS || errno == EALREADY)
+            if (sock_einprogress(err))
                 return true;
 
             // Otherwise something is wrong with the socket
-            logger(LOG_ERR, "connect: %s: %s", c->addrw, strerror(errno));
+            logger(LOG_ERR, "%s: %s: %s", "sock_connect", c->addrw, sock_strerror(err));
             aio_event_del(c->aio_event);
             return false;
         }
@@ -289,7 +296,7 @@ static void oshd_client_add(client_t *c)
     aio_event_t base_event;
 
     // Initialize the event's constants
-    base_event.fd = c->fd;
+    base_event.fd = c->sockfd;
     base_event.poll_events = AIO_READ;
     base_event.userdata = c;
     base_event.cb_add = client_aio_add;
@@ -318,7 +325,7 @@ static void oshd_client_add(client_t *c)
 bool oshd_client_connect(node_id_t *nid, endpoint_t *endpoint)
 {
     client_t *c;
-    int sockfd;
+    sock_t sockfd;
     struct sockaddr_storage sa;
 
     // If the endpoint is a hostname, lookup its IP addresses and insert them to
@@ -339,7 +346,7 @@ bool oshd_client_connect(node_id_t *nid, endpoint_t *endpoint)
 
     // Create TCP socket
     sockfd = tcp_outgoing_socket((const struct sockaddr *) &sa, sizeof(sa));
-    if (sockfd < 0) {
+    if (sockfd == invalid_sock_t) {
         // The socket could not be created, try the next endpoint
         node_connect_continue(nid);
         return false;
@@ -379,27 +386,29 @@ static void server_aio_read(aio_event_t *event)
     client_t *c;
     struct sockaddr_storage sa;
     socklen_t sa_len = sizeof(sa);
-    int client_fd;
+    sock_t client_sockfd;
     endpoint_t *endpoint;
 
     // Accept the incoming socket
-    if ((client_fd = accept(event->fd, (struct sockaddr *) &sa, &sa_len)) < 0) {
-        logger(LOG_ERR, "accept: %i: %s", event->fd, strerror(errno));
+    client_sockfd = sock_accept(event->fd, (struct sockaddr *) &sa, &sa_len);
+    if (client_sockfd == invalid_sock_t) {
+        logger(LOG_ERR, "%s: %i: %s", "sock_accept", event->fd,
+            sock_strerror(sock_errno));
         return;
     }
 
     endpoint = endpoint_from_sockaddr((const struct sockaddr *) &sa, sa_len,
         ENDPOINT_SOCKTYPE_TCP, true);
     if (!endpoint) {
-        close(client_fd);
+        sock_close(client_sockfd);
         return;
     }
 
     // Set all the socket options
-    oshd_setsockopts(client_fd);
+    oshd_setsockopts(client_sockfd);
 
     // Initialize the client with the newly created socket
-    c = client_init(client_fd, false, endpoint, &sa);
+    c = client_init(client_sockfd, false, endpoint, &sa);
     c->connected = true;
     oshd_client_add(c);
     logger(LOG_INFO, "Accepted connection from %s", c->addrw);
@@ -409,10 +418,10 @@ static void server_aio_read(aio_event_t *event)
 }
 
 // Add an aio event for a TCP server
-void oshd_server_add(int server_fd)
+void oshd_server_add(sock_t server_sockfd)
 {
     aio_event_add_inl(oshd.aio,
-        server_fd,
+        server_sockfd,
         AIO_READ,
         NULL,
         NULL,

@@ -1,9 +1,9 @@
 #ifndef _OSH_NETUTIL_H
 #define _OSH_NETUTIL_H
 
+#include "sock.h"
 #include <stddef.h>
 #include <stdint.h>
-#include <netinet/in.h>
 
 // IPv4 definitions
 

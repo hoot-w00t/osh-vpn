@@ -39,16 +39,20 @@ static void client_disconnect(client_t *c)
     }
 
     // CLose the network socket
-    if (c->fd > 0) {
+    if (c->sockfd != invalid_sock_t) {
         logger(LOG_INFO, "Disconnecting %s", c->addrw);
 
-        if (shutdown(c->fd, SHUT_RDWR) < 0)
-            logger_debug(DBG_SOCKETS, "%s: shutdown(%i): %s", c->addrw, c->fd, strerror(errno));
+        if (sock_shutdown(c->sockfd, sock_shut_rdwr) < 0) {
+            logger_debug(DBG_SOCKETS, "%s: %s(" PRI_SOCK_T "): %s",
+                c->addrw, "sock_shutdown", c->sockfd, sock_strerror(sock_errno));
+        }
 
-        if (close(c->fd) < 0)
-            logger(LOG_ERR, "%s: close(%i): %s", c->addrw, c->fd, strerror(errno));
+        if (sock_close(c->sockfd) < 0) {
+            logger(LOG_ERR, "%s: %s(" PRI_SOCK_T "): %s",
+                c->addrw, "sock_close", c->sockfd, sock_strerror(sock_errno));
+        }
 
-        c->fd = -1;
+        c->sockfd = invalid_sock_t;
     } else {
         logger(LOG_WARN, "%s: Already disconnected", c->addrw);
     }
@@ -120,12 +124,12 @@ void client_destroy(client_t *c)
 }
 
 // Create and initialize a new client
-client_t *client_init(int fd, bool initiator, const endpoint_t *endpoint,
+client_t *client_init(sock_t sockfd, bool initiator, const endpoint_t *endpoint,
     const struct sockaddr_storage *sa)
 {
     client_t *c = xzalloc(sizeof(client_t));
 
-    c->fd = fd;
+    c->sockfd = sockfd;
     c->initiator = initiator;
 
     // Set the client's socket address, endpoint and format addrw

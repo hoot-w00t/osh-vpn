@@ -202,6 +202,7 @@ set(OSHD_SOURCES
     src/oshpacket.c
     src/random_xoshiro256.c
     src/random.c
+    src/sock.c
     src/tcp.c
     src/xalloc.c
     ${OSH_VERSION_FILE_DEST}

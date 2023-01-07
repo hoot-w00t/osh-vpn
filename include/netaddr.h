@@ -1,11 +1,11 @@
 #ifndef _OSH_NETADDR_H
 #define _OSH_NETADDR_H
 
+#include "sock.h"
 #include "netarea.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <netinet/in.h>
 
 typedef enum netaddr_type {
     MAC = 0,

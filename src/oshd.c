@@ -25,15 +25,6 @@ oshd_t oshd;
 // Never times out by default (-1)
 static ssize_t poll_timeout = -1;
 
-// Set file descriptor flag O_NONBLOCK
-int set_nonblocking(int fd)
-{
-    int flags;
-
-    if ((flags = fcntl(fd, F_GETFL, 0)) < 0) return flags;
-    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-}
-
 // The first time we get a signal, set oshd_run to false
 // If oshd_run is already false, call exit()
 static void oshd_signal_exit(int sig)
@@ -98,20 +89,20 @@ bool oshd_init(void)
         endpoint_t *ipv4_any = endpoint_create("0.0.0.0", oshd.server_port, ENDPOINT_SOCKTYPE_NONE, false);
         endpoint_t *ipv6_any = endpoint_create("::", oshd.server_port, ENDPOINT_SOCKTYPE_NONE, false);
 
-        int fd4 = tcp_bind(ipv4_any, OSHD_TCP_SERVER_BACKLOG);
-        int fd6 = tcp_bind(ipv6_any, OSHD_TCP_SERVER_BACKLOG);
+        sock_t fd4 = tcp_bind(ipv4_any, OSHD_TCP_SERVER_BACKLOG);
+        sock_t fd6 = tcp_bind(ipv6_any, OSHD_TCP_SERVER_BACKLOG);
 
         // Free temporary endpoints
         endpoint_free(ipv4_any);
         endpoint_free(ipv6_any);
 
         // If no server was opened, stop here
-        if (fd4 < 0 && fd6 < 0)
+        if (fd4 == invalid_sock_t && fd6 == invalid_sock_t)
             return false;
 
-        if (fd4 >= 0)
+        if (fd4 != invalid_sock_t)
             oshd_server_add(fd4);
-        if (fd6 >= 0)
+        if (fd6 != invalid_sock_t)
             oshd_server_add(fd6);
     }
 
@@ -277,6 +268,8 @@ void oshd_free(void)
     free(oshd.conf_pubkeys);
 
     free(oshd.conf_routes);
+
+    sock_deinit();
 }
 
 void oshd_loop(void)
