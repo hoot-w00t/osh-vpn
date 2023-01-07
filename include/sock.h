@@ -25,8 +25,8 @@ typedef int                     sock_errno_t;
 #define sock_strerror(err)      strerror(err)
 
 #define sock_ewouldblock(err)   IO_WOULDBLOCK(err)
-#define sock_eisconn(err)       (err == EISCONN)
-#define sock_einprogress(err)   (err == EINPROGRESS || err == EALREADY)
+#define sock_eisconn(err)       ((err) == EISCONN)
+#define sock_einprogress(err)   ((err) == EINPROGRESS || (err) == EALREADY)
 
 #define sock_shut_rd            SHUT_RD
 #define sock_shut_wr            SHUT_WR
