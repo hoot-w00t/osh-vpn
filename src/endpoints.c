@@ -603,7 +603,7 @@ bool endpoint_to_sockaddr(struct sockaddr *sa, const socklen_t sa_len,
         case ENDPOINT_TYPE_IP4: {
             struct sockaddr_in *sin = (struct sockaddr_in *) sa;
 
-            if (sa_len < sizeof(*sin))
+            if (sa_len < (socklen_t) sizeof(*sin))
                 return false;
 
             memset(sa, 0, sa_len);
@@ -616,7 +616,7 @@ bool endpoint_to_sockaddr(struct sockaddr *sa, const socklen_t sa_len,
         case ENDPOINT_TYPE_IP6: {
             struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *) sa;
 
-            if (sa_len < sizeof(*sin6))
+            if (sa_len < (socklen_t) sizeof(*sin6))
                 return false;
 
             memset(sa, 0, sa_len);
@@ -638,14 +638,14 @@ endpoint_t *endpoint_from_sockaddr(const struct sockaddr *sa, const socklen_t sa
 {
     char addr_value[INET6_ADDRSTRLEN];
 
-    if (sa_len < sizeof(sa->sa_family))
+    if (sa_len < (socklen_t) sizeof(sa->sa_family))
         return NULL;
 
     switch (sa->sa_family) {
         case AF_INET: {
             const struct sockaddr_in *sin = (const struct sockaddr_in *) sa;
 
-            if (sa_len < sizeof(*sin))
+            if (sa_len < (socklen_t) sizeof(*sin))
                 return NULL;
 
             if (!inet_ntop(AF_INET, &sin->sin_addr, addr_value, sizeof(addr_value)))
@@ -657,7 +657,7 @@ endpoint_t *endpoint_from_sockaddr(const struct sockaddr *sa, const socklen_t sa
         case AF_INET6: {
             const struct sockaddr_in6 *sin6 = (const struct sockaddr_in6 *) sa;
 
-            if (sa_len < sizeof(*sin6))
+            if (sa_len < (socklen_t) sizeof(*sin6))
                 return NULL;
 
             if (!inet_ntop(AF_INET6, &sin6->sin6_addr, addr_value, sizeof(addr_value)))

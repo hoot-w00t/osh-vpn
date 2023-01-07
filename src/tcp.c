@@ -60,7 +60,7 @@ sock_t tcp_outgoing_socket(const struct sockaddr *sa, const socklen_t sa_len)
 {
     sock_t s;
 
-    if (sa_len < sizeof(*sa)) {
+    if (sa_len < (socklen_t) sizeof(*sa)) {
         logger(LOG_ERR, "%s: %s", __func__, "sa_len is too small");
         return invalid_sock_t;
     }
