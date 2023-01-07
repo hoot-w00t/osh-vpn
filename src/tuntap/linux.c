@@ -99,7 +99,7 @@ bool tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size)
     return true;
 }
 
-int tuntap_pollfd(tuntap_t *tuntap)
+void tuntap_init_aio_event(tuntap_t *tuntap, aio_event_t *event)
 {
-    return tuntap->data.fd;
+    event->fd = tuntap->data.fd;
 }

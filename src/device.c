@@ -111,15 +111,22 @@ static void device_aio_del(aio_event_t *event)
 // Add an aio event for the TUN/TAP device
 void device_add(tuntap_t *tuntap)
 {
-    aio_event_add_inl(oshd.aio,
-        tuntap_pollfd(tuntap),
-        AIO_READ,
-        xzalloc(sizeof(device_aio_data_t)),
-        NULL,
-        device_aio_del,
-        device_aio_read,
-        NULL,
-        device_aio_error);
+    aio_event_t event;
+
+    tuntap_init_aio_event(tuntap, &event);
+
+    // TODO: Maybe check that tuntap_init_aio_event() didn't modify callbacks,
+    //       userdata and poll events
+
+    event.poll_events = AIO_READ;
+    event.userdata = xzalloc(sizeof(device_aio_data_t));
+    event.cb_add = NULL;
+    event.cb_delete = device_aio_del;
+    event.cb_read = device_aio_read;
+    event.cb_write = NULL;
+    event.cb_error = device_aio_error;
+
+    aio_event_add(oshd.aio, &event);
 }
 
 // Compute a hash using the network name, node name and the seed

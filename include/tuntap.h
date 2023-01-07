@@ -1,6 +1,8 @@
 #ifndef _OSH_TUNTAP_H
 #define _OSH_TUNTAP_H
 
+#include "macros.h"
+#include "aio.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -60,8 +62,11 @@ bool tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
 // Returns false on error
 bool tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size);
 
-// Returns a non-blocking file descriptor that can be used by poll()
-int tuntap_pollfd(tuntap_t *tuntap);
+// Initialize an AIO event for the TUN/TAP device
+// This function should only modify the file descriptor/handle, other members
+// (poll events, userdata and callbacks) must not be modified as they can be
+// overwritten
+void tuntap_init_aio_event(tuntap_t *tuntap, aio_event_t *event);
 
 // Close TUN/TAP device pointed by tuntap, sets it to NULL after
 static inline void tuntap_close_at(tuntap_t **tuntap)
