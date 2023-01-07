@@ -243,9 +243,9 @@ static bool oshd_connect_async(client_t *c)
         // If error is EISCONN the connection is already established, so we can
         // proceed without processing any error
         if (!sock_eisconn(err)) {
-            // If the error is EINPROGRESS or EALREADY we just need to wait longer
-            // for the socket to finish connecting
-            if (sock_einprogress(err))
+            // If the error is EINPROGRESS, EALREADY or EWOULDBLOCK we just need
+            // to wait longer for the socket to finish connecting
+            if (sock_einprogress(err) || sock_ewouldblock(err))
                 return true;
 
             // Otherwise something is wrong with the socket
