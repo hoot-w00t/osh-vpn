@@ -4,7 +4,11 @@
 #include <time.h>
 #include <sys/time.h>
 
+#if defined(CLOCK_BOOTTIME)
 #define oshd_gettime_clock CLOCK_BOOTTIME
+#else
+#define oshd_gettime_clock CLOCK_MONOTONIC
+#endif
 
 void oshd_gettime(struct timespec *tp);
 void oshd_gettime_delay(struct timespec *tp, time_t delay);
