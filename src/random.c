@@ -17,7 +17,7 @@ bool random_bytes(void *buf, size_t buf_size)
     }
 
     if ((unsigned) r != buf_size) {
-        logger(LOG_ERR, "%s: %s: Written %zi/%zu bytes", __func__, "getrandom",
+        logger(LOG_ERR, "%s: %s: Read %zi/%zu bytes", __func__, "getrandom",
             r, buf_size);
         return false;
     }
@@ -40,8 +40,8 @@ bool random_bytes(void *buf, size_t buf_size)
     ssize_t rbytes;
 
     if (fd < 0) {
-        logger(LOG_ERR, "random_bytes: open: %s: %s",
-            random_filepath, strerror(errno));
+        logger(LOG_ERR, "%s: %s: %s: %s", __func__, "open", random_filepath,
+            strerror(errno));
         return false;
     }
 
@@ -50,13 +50,20 @@ bool random_bytes(void *buf, size_t buf_size)
             if (errno == EINTR)
                 continue;
 
-            logger(LOG_ERR, "random_bytes: read: %s: %s (%zi, %zu/%zu bytes)",
-                random_filepath, strerror(errno), rbytes, total, buf_size);
+            logger(LOG_ERR, "%s: %s: %s: %s (%zi, %zu/%zu bytes)", __func__,
+                "read", random_filepath, strerror(errno), rbytes, total, buf_size);
             break;
         }
         total += rbytes;
     }
     close(fd);
-    return total == buf_size;
+
+    if (total != buf_size) {
+        logger(LOG_ERR, "%s: %s: %s: Read %zu/%zu bytes", __func__, "read",
+            random_filepath, total, buf_size);
+        return false;
+    }
+
+    return true;
 }
 #endif
