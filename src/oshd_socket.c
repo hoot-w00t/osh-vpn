@@ -16,13 +16,16 @@ static bool oshd_setsockopts(sock_t sockfd)
 {
     unsigned int optval;
 
+#if defined(SOL_SOCKET) && defined(SO_KEEPALIVE)
     // Enable keep alive probing on the socket
     optval = 1;
     if (sock_setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval)) < 0) {
         logger(LOG_ERR, "Failed to set SO_KEEPALIVE option on socket " PRI_SOCK_T, sockfd);
         return false;
     }
+#endif
 
+#if defined(SOL_TCP) && defined(TCP_USER_TIMEOUT)
     // Set socket timeout to 30 seconds
     // The timeout value is in milliseconds
     optval = 30000;
@@ -30,6 +33,7 @@ static bool oshd_setsockopts(sock_t sockfd)
         logger(LOG_ERR, "Failed to set TCP_USER_TIMEOUT option on socket " PRI_SOCK_T, sockfd);
         return false;
     }
+#endif
 
     // Set the socket to non-blocking
     if (sock_set_nonblocking(sockfd) < 0) {
