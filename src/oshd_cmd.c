@@ -160,11 +160,11 @@ static int oshd_system(const char *command)
 
     memset(&si, 0, sizeof(si));
     memset(&pi, 0, sizeof(pi));
-    snprintf(process_cmdline, sizeof(process_cmdline), "%s /Q /C %s",
+    snprintf(process_cmdline, sizeof(process_cmdline), "%s /C %s",
         shell_fullpath, command);
 
     if (!CreateProcess(NULL, process_cmdline,
-        NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
+        NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
     {
         logger(LOG_CRIT, "%s: %s: %s", __func__, "CreateProcess",
             win_strerror_last());
