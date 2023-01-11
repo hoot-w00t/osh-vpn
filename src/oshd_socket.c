@@ -368,7 +368,7 @@ bool oshd_client_connect(node_id_t *nid, endpoint_t *endpoint)
 // If a server fails, stop the daemon
 static void server_aio_error(aio_event_t *event, aio_poll_event_t revents)
 {
-    logger(LOG_CRIT, "Server socket error (fd: %i, revents: " AIO_PE_FMT ")",
+    logger(LOG_CRIT, "Server socket error (fd: " PRI_AIO_FD_T ", revents: " AIO_PE_FMT ")",
         event->fd, revents);
     aio_event_del(event);
     oshd_stop();
@@ -392,7 +392,7 @@ static void server_aio_read(aio_event_t *event)
     // Accept the incoming socket
     client_sockfd = sock_accept(event->fd, (struct sockaddr *) &sa, &sa_len);
     if (client_sockfd == invalid_sock_t) {
-        logger(LOG_ERR, "%s: %i: %s", "sock_accept", event->fd,
+        logger(LOG_ERR, "%s: " PRI_AIO_FD_T ": %s", "sock_accept", event->fd,
             sock_strerror(sock_errno));
         return;
     }

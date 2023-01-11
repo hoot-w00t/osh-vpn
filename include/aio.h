@@ -40,10 +40,13 @@ typedef aio_cb_t aio_cb_read_t;
 typedef aio_cb_t aio_cb_write_t;
 typedef void (*aio_cb_error_t)(aio_event_t *event, aio_poll_event_t revents);
 
+typedef int aio_fd_t;
+#define PRI_AIO_FD_T "%d"
+
 // Generic data types for the aio_t and aio_event_t structures
 typedef union aio_data {
     void *ptr;
-    int fd;
+    aio_fd_t fd;
 } aio_data_t;
 typedef aio_data_t aio_event_data_t;
 
@@ -69,7 +72,7 @@ struct aio {
 
 struct aio_event {
     // File descriptor to poll for I/O events
-    int fd;
+    aio_fd_t fd;
 
     // I/O events to poll for
     aio_poll_event_t poll_events;
@@ -112,7 +115,7 @@ ssize_t aio_poll(aio_t *aio, ssize_t timeout);
 
 aio_event_t *aio_event_add(aio_t *aio, const aio_event_t *event);
 aio_event_t *aio_event_add_inl(aio_t *aio,
-    int fd,
+    aio_fd_t fd,
     aio_poll_event_t poll_events,
     void *userdata,
     aio_cb_add_t cb_add,
@@ -121,7 +124,7 @@ aio_event_t *aio_event_add_inl(aio_t *aio,
     aio_cb_write_t cb_write,
     aio_cb_error_t cb_error);
 void aio_event_del(aio_event_t *event);
-void aio_event_del_fd(aio_t *aio, int fd);
+void aio_event_del_fd(aio_t *aio, aio_fd_t fd);
 
 void aio_cb_delete_close_fd(aio_event_t *event);
 

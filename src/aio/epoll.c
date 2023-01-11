@@ -58,7 +58,7 @@ void _aio_event_free(aio_event_t *event)
         if (epoll_ctl(aio_data(event->aio)->epfd, EPOLL_CTL_DEL, event->fd,
                 &event_data_ep(event)) < 0)
         {
-            logger(LOG_CRIT, "Failed to free AIO event: epoll_ctl: %s (fd=%i)",
+            logger(LOG_CRIT, "Failed to free AIO event: epoll_ctl: %s (fd=" PRI_AIO_FD_T ")",
                 strerror(errno), event->fd);
             abort();
         }
@@ -88,7 +88,7 @@ void _aio_event_add(aio_t *aio, aio_event_t *event,
     if (epoll_ctl(aio_data(aio)->epfd, EPOLL_CTL_ADD, event->fd,
             &event_data_ep(event)) < 0)
     {
-        logger(LOG_CRIT, "Failed to add AIO event: epoll_ctl: %s (fd=%i)",
+        logger(LOG_CRIT, "Failed to add AIO event: epoll_ctl: %s (fd=" PRI_AIO_FD_T ")",
             strerror(errno), event->fd);
         abort();
     }
@@ -179,7 +179,7 @@ static void update_epoll_events(aio_event_t *event)
                 &event_data_ep(event)) < 0)
         {
             logger(LOG_CRIT,
-                "update_epoll_events: epoll_ctl: %s (fd=%i, events=%u)",
+                "update_epoll_events: epoll_ctl: %s (fd=" PRI_AIO_FD_T ", events=%u)",
                 strerror(errno), event->fd, event_data_ep(event).events);
             abort();
         }

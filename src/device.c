@@ -24,7 +24,7 @@ typedef struct device_aio_data {
 // Stops the daemon on any error
 static void device_aio_error(aio_event_t *event, aio_poll_event_t revents)
 {
-    logger(LOG_CRIT, "TUN/TAP device error (fd: %i, revents: " AIO_PE_FMT ")",
+    logger(LOG_CRIT, "TUN/TAP device error (fd: " PRI_AIO_FD_T ", revents: " AIO_PE_FMT ")",
         event->fd, revents);
     aio_event_del(event);
     oshd_stop();

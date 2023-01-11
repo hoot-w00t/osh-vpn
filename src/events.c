@@ -64,7 +64,8 @@ static bool update_timer_interval(void)
 
     // Arm the timer with the new timeout
     if (timerfd_settime(event_queue_aio->fd, 0, &aio_timer, NULL) < 0) {
-        logger(LOG_CRIT, "Failed to set events timer: %s (fd=%i, %li.%09lis)",
+        logger(LOG_CRIT,
+            "Failed to set events timer: %s (fd=" PRI_AIO_FD_T ", %li.%09lis)",
             strerror(errno),
             event_queue_aio->fd,
             aio_timer.it_value.tv_sec,
@@ -166,7 +167,8 @@ static void event_aio_process(aio_event_t *event)
         return;
     }
 
-    logger_debug(DBG_EVENTS, "Events timerfd expired %" PRIu64 " times (fd=%i)",
+    logger_debug(DBG_EVENTS,
+        "Events timerfd expired %" PRIu64 " times (fd=" PRI_AIO_FD_T ")",
         expirations, event->fd);
 
     // Process queued events (at least one event should be processed every time

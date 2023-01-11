@@ -185,7 +185,7 @@ ssize_t aio_poll(aio_t *aio, ssize_t timeout)
 {
     ssize_t n;
 
-    // Process all queued events to properly initialize/update events_pfd
+    // Process all queued events to properly initialize/update events
     aio_process_queue(aio);
 
     // Call the actual polling function
@@ -212,7 +212,7 @@ aio_event_t *aio_event_add(aio_t *aio, const aio_event_t *event)
 // Same as aio_event_add but initializes an aio_event_t structure from passed
 // arguments
 aio_event_t *aio_event_add_inl(aio_t *aio,
-    int fd,
+    aio_fd_t fd,
     aio_poll_event_t poll_events,
     void *userdata,
     aio_cb_add_t cb_add,
@@ -246,7 +246,7 @@ void aio_event_del(aio_event_t *event)
 
 // Delete all events with the given file descriptor
 // If multiple events share the same file descriptor they will all be deleted
-void aio_event_del_fd(aio_t *aio, int fd)
+void aio_event_del_fd(aio_t *aio, aio_fd_t fd)
 {
     for (size_t i = 0; i < aio->events_count; ++i) {
         if (aio->events[i]->fd == fd) {
