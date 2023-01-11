@@ -218,7 +218,7 @@ Test(netaddr_area, test_netaddr_area_link_local)
     addr.type = IP6;
     memset(&addr.data.ip6, 0, sizeof(addr.data.ip6));
     for (uint16_t i = 0; i <= 0x3ff; ++i) {
-        addr.data.ip6.__in6_u.__u6_addr16[0] = htons(i);
+        ((uint16_t *) &addr.data.ip6)[0] = htons(i);
         if (i == 0xfe8) {
             cr_assert_eq(netaddr_area(&addr), NETAREA_LAN);
         } else {
