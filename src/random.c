@@ -24,15 +24,13 @@ bool random_bytes(void *buf, size_t buf_size)
 
     return true;
 }
+
 #else // /dev/random
 
 #include <fcntl.h>
 #include <unistd.h>
 #define random_filepath "/dev/random"
 
-// Write buf_size random bytes starting at buf
-// This function can block
-// Returns false on any error (including incomplete reads)
 bool random_bytes(void *buf, size_t buf_size)
 {
     int fd = open(random_filepath, O_RDONLY);
