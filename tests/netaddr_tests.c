@@ -25,7 +25,7 @@ Test(netaddr_data_t, netaddr_data_union_pointers)
 Test(netaddr_dton, test_netaddr_dton)
 {
     const uint8_t macaddr[6] = {0x1, 0x2, 0x3, 0x4, 0x5, 0x6};
-    const struct in_addr sin = {htonl(INADDR_LOOPBACK)};
+    const struct in_addr sin = { .s_addr = htonl(INADDR_LOOPBACK) };
     const struct in6_addr sin6 = in6addr_loopback;
     netaddr_t nmac, nip4, nip6;
 
