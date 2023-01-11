@@ -177,7 +177,7 @@ Test(netroute_table_t, lookup_ipv4_networks)
     addr.type = IP4;
 
     // 192.168.0.0/16
-    for (in_addr_t i = 0; i <= 0x0000ffff; ++i) {
+    for (uint32_t i = 0; i <= 0x0000ffff; ++i) {
         addr.data.ip4.s_addr = htonl(0xC0A80000 | i);
         route = netroute_lookup(table, &addr);
         cr_assert_not_null(route);
@@ -185,7 +185,7 @@ Test(netroute_table_t, lookup_ipv4_networks)
     }
 
     // 172.16.0.0/12
-    for (in_addr_t i = 0; i <= 0x000fffff; ++i) {
+    for (uint32_t i = 0; i <= 0x000fffff; ++i) {
         addr.data.ip4.s_addr = htonl(0xAC100000 | i);
         route = netroute_lookup(table, &addr);
         cr_assert_not_null(route);
@@ -193,7 +193,7 @@ Test(netroute_table_t, lookup_ipv4_networks)
     }
 
     // 10.0.0.0/8
-    for (in_addr_t i = 0; i <= 0x00ffffff; ++i) {
+    for (uint32_t i = 0; i <= 0x00ffffff; ++i) {
         addr.data.ip4.s_addr = htonl(0x0A000000 | i);
         route = netroute_lookup(table, &addr);
         cr_assert_not_null(route);

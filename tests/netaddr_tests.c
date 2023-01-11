@@ -150,7 +150,7 @@ Test(netaddr_is_loopback, netaddr_is_loopback_ipv4)
         cr_assert_eq(netaddr_is_loopback(&addr), false);
     }
 
-    for (in_addr_t i = 0x7f000000; i <= 0x7fffffff; ++i) {
+    for (uint32_t i = 0x7f000000; i <= 0x7fffffff; ++i) {
         addr.data.ip4.s_addr = htonl(i);
         cr_assert_eq(netaddr_is_loopback(&addr), true);
     }
@@ -173,7 +173,7 @@ Test(netaddr_area, test_netaddr_area_10_0_0_0)
     netaddr_t addr;
 
     addr.type = IP4;
-    for (in_addr_t i = 0; i <= 0x00ffffff; ++i) {
+    for (uint32_t i = 0; i <= 0x00ffffff; ++i) {
         addr.data.ip4.s_addr = htonl(0x0A000000 | i);
         cr_assert_eq(netaddr_area(&addr), NETAREA_LAN);
     }
@@ -184,7 +184,7 @@ Test(netaddr_area, test_netaddr_area_172_16_0_0)
     netaddr_t addr;
 
     addr.type = IP4;
-    for (in_addr_t i = 0; i <= 0x000fffff; ++i) {
+    for (uint32_t i = 0; i <= 0x000fffff; ++i) {
         addr.data.ip4.s_addr = htonl(0xac100000 | i);
         cr_assert_eq(netaddr_area(&addr), NETAREA_LAN);
     }
@@ -195,7 +195,7 @@ Test(netaddr_area, test_netaddr_area_192_168_0_0)
     netaddr_t addr;
 
     addr.type = IP4;
-    for (in_addr_t i = 0; i <= 0x0000ffff; ++i) {
+    for (uint32_t i = 0; i <= 0x0000ffff; ++i) {
         addr.data.ip4.s_addr = htonl(0xc0a80000 | i);
         cr_assert_eq(netaddr_area(&addr), NETAREA_LAN);
     }
@@ -206,7 +206,7 @@ Test(netaddr_area, test_netaddr_area_ipv4_loopback)
     netaddr_t addr;
 
     addr.type = IP4;
-    for (in_addr_t i = 0; i <= 0x00ffffff; ++i) {
+    for (uint32_t i = 0; i <= 0x00ffffff; ++i) {
         addr.data.ip4.s_addr = htonl(0x7f000000 | i);
         cr_assert_eq(netaddr_area(&addr), NETAREA_LAN);
     }
