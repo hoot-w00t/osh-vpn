@@ -17,8 +17,8 @@ Test(random_bytes, test_nonzero)
 
 Test(random_bytes, test_randomness)
 {
-    const size_t buf_size = 1024;
-    const size_t buf_count = 64;
+    const size_t buf_size = 128;
+    const size_t buf_count = 128;
     uint8_t **buf = xalloc(sizeof(uint8_t *) * buf_count);
 
     for (size_t i = 0; i < buf_count; ++i) {
