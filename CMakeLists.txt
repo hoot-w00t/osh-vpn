@@ -262,6 +262,10 @@ if (CYGWIN)
     add_compiler_flag_nocheck(CMAKE_C_FLAGS "-D_GNU_SOURCE")
 endif()
 
+if (MINGW)
+    add_compiler_flag_nocheck(CMAKE_C_FLAGS "-D__USE_MINGW_ANSI_STDIO=1")
+endif()
+
 option(DISABLE_EVENTS_TIMERFD "Don't use timerfd for timed events even if it is available" OFF)
 check_include_file("sys/timerfd.h" timerfd_available)
 if (timerfd_available AND NOT DISABLE_EVENTS_TIMERFD)

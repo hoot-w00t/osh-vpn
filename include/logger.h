@@ -42,8 +42,14 @@ bool logger_toggle_debug_name(const char *name);
 const char *logger_get_debug_name(debug_what_t what);
 bool logger_is_debugged(debug_what_t what);
 
-#define _logger_attr __attribute__((format(printf, 2, 3)))
-#define _logger_debug_attr __attribute__((format(printf, 2, 3)))
+#ifdef __USE_MINGW_ANSI_STDIO
+#define _logger_fmt gnu_printf
+#else
+#define _logger_fmt printf
+#endif
+
+#define _logger_attr __attribute__((format(_logger_fmt, 2, 3)))
+#define _logger_debug_attr __attribute__((format(_logger_fmt, 2, 3)))
 
 _logger_attr
 void logger(loglevel_t level, const char *format, ...);
