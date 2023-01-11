@@ -6,8 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <netdb.h>
-#include <arpa/inet.h>
 
 // Return the endpoint type name
 const char *endpoint_type_name(const endpoint_type_t type)

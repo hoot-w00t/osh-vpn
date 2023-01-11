@@ -1,6 +1,5 @@
 #include "netaddr.h"
 #include <criterion/criterion.h>
-#include <netinet/in.h>
 
 Test(netaddr_data_t, netaddr_data_sizes)
 {

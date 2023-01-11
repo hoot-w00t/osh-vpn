@@ -2,8 +2,6 @@
 #include "xalloc.h"
 #include <stdio.h>
 #include <string.h>
-#include <arpa/inet.h>
-#include <netdb.h>
 
 // Lookup hostname and place the resolved address in addr
 // Returns false on error (errors are not logged)

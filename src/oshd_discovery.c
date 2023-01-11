@@ -1,13 +1,14 @@
 #include "oshd.h"
 #include "logger.h"
 #include "macros.h"
+#include "sock.h"
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <netdb.h>
-#include <ifaddrs.h>
 
 #if PLATFORM_IS_LINUX
+    #include <ifaddrs.h>
+
     // Contains the definitions for the interface flags
     #include <linux/if.h>
 #endif
