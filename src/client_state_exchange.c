@@ -68,7 +68,7 @@ bool client_queue_pubkey_exg(client_t *c)
         count += 1;
     }
 
-    success = queue_exg_fragmented(c, PUBKEY, pkt, count * sizeof(*pkt));
+    success = queue_exg_fragmented(c, OSHPKT_PUBKEY, pkt, count * sizeof(*pkt));
     free(pkt);
     return success;
 }
@@ -96,7 +96,7 @@ static bool client_queue_endpoint_exg_internal(client_t *c,
 
     logger_debug(DBG_STATEEXG, "%s: %s: Exchanging endpoint %s owned by %s",
         c->addrw, c->id->name, endpoint->addrstr, owner->name);
-    return client_queue_packet_exg(c, ENDPOINT, &buf, total_size);
+    return client_queue_packet_exg(c, OSHPKT_ENDPOINT, &buf, total_size);
 }
 
 // Exchange all known endpoints with the client
@@ -210,7 +210,7 @@ bool client_queue_edge_exg(client_t *c)
     logger_debug(DBG_STATEEXG, "%s: %s: Exchanging %zu edges",
         c->addrw, c->id->name, count);
 
-    success = queue_exg_fragmented(c, EDGE_ADD, pkt, count * sizeof(*pkt));
+    success = queue_exg_fragmented(c, OSHPKT_EDGE_ADD, pkt, count * sizeof(*pkt));
     free(pkt);
     return success;
 }
@@ -261,7 +261,7 @@ bool client_queue_route_exg(client_t *c)
         abort();
     }
 
-    success = queue_exg_fragmented(c, ROUTE_ADD, pkt, total_count * sizeof(*pkt));
+    success = queue_exg_fragmented(c, OSHPKT_ROUTE_ADD, pkt, total_count * sizeof(*pkt));
     free(pkt);
     return success;
 }

@@ -71,26 +71,26 @@ Test(oshpacket_type_name, oshpacket_type_has_name)
 
 static inline bool type_can_be_forwarded(const oshpacket_type_t type)
 {
-    return !(   type == HANDSHAKE
-             || type == HANDSHAKE_SIG
-             || type == HANDSHAKE_END
-             || type == HELLO
-             || type == GOODBYE
-             || type == PING
-             || type == PONG
-             || type == DEVMODE);
+    return !(   type == OSHPKT_HANDSHAKE
+             || type == OSHPKT_HANDSHAKE_SIG
+             || type == OSHPKT_HANDSHAKE_END
+             || type == OSHPKT_HELLO
+             || type == OSHPKT_GOODBYE
+             || type == OSHPKT_PING
+             || type == OSHPKT_PONG
+             || type == OSHPKT_DEVMODE);
 }
 
 static inline bool type_can_be_sent_unencrypted(const oshpacket_type_t type)
 {
-    return type == HANDSHAKE
-        || type == HANDSHAKE_SIG
-        || type == GOODBYE;
+    return type == OSHPKT_HANDSHAKE
+        || type == OSHPKT_HANDSHAKE_SIG
+        || type == OSHPKT_GOODBYE;
 }
 
 static inline bool type_is_reliable(const oshpacket_type_t type)
 {
-    return type != DATA;
+    return type != OSHPKT_DATA;
 }
 
 Test(oshpacket_lookup, oshpacket_lookup_has_valid_information)

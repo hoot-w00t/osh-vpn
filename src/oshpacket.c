@@ -24,7 +24,7 @@ static bool handler_reject(client_t *c, node_id_t *src, oshpacket_t *pkt)
 // checking their values first
 static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
     {
-        .type = HANDSHAKE,
+        .type = OSHPKT_HANDSHAKE,
         .name = "HANDSHAKE",
         .handler_unauth = oshpacket_handler_handshake,
         .handler = oshpacket_handler_handshake_auth,
@@ -35,7 +35,7 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = sizeof(oshpacket_handshake_t)
     },
     {
-        .type = HANDSHAKE_SIG,
+        .type = OSHPKT_HANDSHAKE_SIG,
         .name = "HANDSHAKE_SIG",
         .handler_unauth = oshpacket_handler_handshake_sig,
         .handler = oshpacket_handler_handshake_sig_auth,
@@ -46,7 +46,7 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = sizeof(oshpacket_handshake_sig_t)
     },
     {
-        .type = HANDSHAKE_END,
+        .type = OSHPKT_HANDSHAKE_END,
         .name = "HANDSHAKE_END",
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_handshake_end,
@@ -57,7 +57,7 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = 0
     },
     {
-        .type = HELLO,
+        .type = OSHPKT_HELLO,
         .name = "HELLO",
         .handler_unauth = oshpacket_handler_hello,
         .handler = handler_reject,
@@ -68,7 +68,7 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = sizeof(oshpacket_hello_t)
     },
     {
-        .type = DEVMODE,
+        .type = OSHPKT_DEVMODE,
         .name = "DEVMODE",
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_devmode,
@@ -79,7 +79,7 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = 0
     },
     {
-        .type = GOODBYE,
+        .type = OSHPKT_GOODBYE,
         .name = "GOODBYE",
         .handler_unauth = oshpacket_handler_goodbye_unauth,
         .handler = oshpacket_handler_goodbye,
@@ -90,7 +90,7 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = 0
     },
     {
-        .type = PING,
+        .type = OSHPKT_PING,
         .name = "PING",
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_ping,
@@ -101,7 +101,7 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = 0
     },
     {
-        .type = PONG,
+        .type = OSHPKT_PONG,
         .name = "PONG",
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_pong,
@@ -112,7 +112,7 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = 0
     },
     {
-        .type = DATA,
+        .type = OSHPKT_DATA,
         .name = "DATA",
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_data,
@@ -123,7 +123,7 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = 0
     },
     {
-        .type = PUBKEY,
+        .type = OSHPKT_PUBKEY,
         .name = "PUBKEY",
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_pubkey,
@@ -134,7 +134,7 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = sizeof(oshpacket_pubkey_t)
     },
     {
-        .type = ENDPOINT,
+        .type = OSHPKT_ENDPOINT,
         .name = "ENDPOINT",
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_endpoint,
@@ -145,7 +145,7 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = 0
     },
     {
-        .type = EDGE_ADD,
+        .type = OSHPKT_EDGE_ADD,
         .name = "EDGE_ADD",
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_edge_add,
@@ -156,7 +156,7 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = sizeof(oshpacket_edge_t)
     },
     {
-        .type = EDGE_DEL,
+        .type = OSHPKT_EDGE_DEL,
         .name = "EDGE_DEL",
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_edge_del,
@@ -167,7 +167,7 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = sizeof(oshpacket_edge_t)
     },
     {
-        .type = ROUTE_ADD,
+        .type = OSHPKT_ROUTE_ADD,
         .name = "ROUTE_ADD",
         .handler_unauth = unauth_handler_reject,
         .handler = oshpacket_handler_route,

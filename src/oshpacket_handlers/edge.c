@@ -38,7 +38,7 @@ static void process_edge_add(client_t *c, node_id_t *src_node, node_id_t *dest_n
                 src_node->name, dest_node->name);
 
             node_id_del_edge(src_node, dest_node);
-            client_queue_edge_broadcast(NULL, EDGE_DEL,
+            client_queue_edge_broadcast(NULL, OSHPKT_EDGE_DEL,
                 src_node->name, dest_node->name);
         }
         return;
@@ -65,7 +65,7 @@ static void process_edge_del(client_t *c, node_id_t *src_node, node_id_t *dest_n
                 src_node->name, dest_node->name);
 
             node_id_add_edge(src_node, dest_node);
-            client_queue_edge_broadcast(NULL, EDGE_ADD,
+            client_queue_edge_broadcast(NULL, OSHPKT_EDGE_ADD,
                 src_node->name, dest_node->name);
         }
         return;

@@ -67,7 +67,7 @@ static bool queue_state_exchange(client_t *c)
 
     // Advertise the new connection between us and the other node to our part of
     // the mesh (followed by its public key)
-    if (!client_queue_edge_broadcast(c, EDGE_ADD, oshd.name, c->id->name))
+    if (!client_queue_edge_broadcast(c, OSHPKT_EDGE_ADD, oshd.name, c->id->name))
         return false;
     if (!client_queue_pubkey_broadcast(c, c->id))
         return false;

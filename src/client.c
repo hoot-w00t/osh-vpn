@@ -35,7 +35,7 @@ static void client_disconnect(client_t *c)
         node_tree_update();
 
         // Broadcast this change to the rest of the network
-        client_queue_edge_broadcast(c, EDGE_DEL, me->name, c->id->name);
+        client_queue_edge_broadcast(c, OSHPKT_EDGE_DEL, me->name, c->id->name);
     }
 
     // CLose the network socket
@@ -530,7 +530,7 @@ bool client_queue_packet_broadcast_forward(client_t *exclude, const oshpacket_hd
 bool client_queue_packet_data(node_id_t *dest, const void *payload,
     const size_t payload_size)
 {
-    return client_queue_packet_indirect(dest, DATA, payload, payload_size);
+    return client_queue_packet_indirect(dest, OSHPKT_DATA, payload, payload_size);
 }
 
 // Broadcast a DATA packet for all nodes (indirectly)
@@ -731,7 +731,7 @@ bool client_queue_handshake(client_t *c)
            &packet, sizeof(packet));
 
     logger_debug(DBG_HANDSHAKE, "%s: Queuing local handshake packet", c->addrw);
-    return client_queue_packet_direct(c, HANDSHAKE, &packet, sizeof(packet));
+    return client_queue_packet_direct(c, OSHPKT_HANDSHAKE, &packet, sizeof(packet));
 }
 
 // Queue a HANDSHAKE packet to renew the encryption keys
@@ -761,19 +761,19 @@ bool client_queue_devmode(client_t *c)
         netaddr_cpy_data(&packet.prefix4, &oshd.dynamic_prefix4);
         packet.prefixlen4 = oshd.dynamic_prefixlen4;
 
-        return client_queue_packet_direct(c, DEVMODE, &packet, sizeof(packet));
+        return client_queue_packet_direct(c, OSHPKT_DEVMODE, &packet, sizeof(packet));
     } else {
         oshpacket_devmode_t packet;
 
         packet.devmode = oshd.device_mode;
-        return client_queue_packet_direct(c, DEVMODE, &packet, sizeof(packet));
+        return client_queue_packet_direct(c, OSHPKT_DEVMODE, &packet, sizeof(packet));
     }
 }
 
 // Queue GOODBYE request and gracefully disconnect the client
 bool client_queue_goodbye(client_t *c)
 {
-    bool success = client_queue_packet_empty(c, GOODBYE);
+    bool success = client_queue_packet_empty(c, OSHPKT_GOODBYE);
 
     client_graceful_disconnect(c);
     return success;
@@ -790,13 +790,13 @@ bool client_queue_ping(client_t *c)
 
     oshd_gettime(&c->rtt_ping);
     c->rtt_await = true;
-    return client_queue_packet_empty(c, PING);
+    return client_queue_packet_empty(c, OSHPKT_PING);
 }
 
 // Queue PONG request
 bool client_queue_pong(client_t *c)
 {
-    return client_queue_packet_empty(c, PONG);
+    return client_queue_packet_empty(c, OSHPKT_PONG);
 }
 
 // Broadcast a node's public key
@@ -817,7 +817,7 @@ bool client_queue_pubkey_broadcast(client_t *exclude, node_id_t *id)
     memcpy(packet.node_name, id->name, NODE_NAME_SIZE);
     memcpy(packet.node_pubkey, id->pubkey_raw, NODE_PUBKEY_SIZE);
 
-    return client_queue_packet_broadcast(exclude, PUBKEY, &packet, sizeof(packet));
+    return client_queue_packet_broadcast(exclude, OSHPKT_PUBKEY, &packet, sizeof(packet));
 }
 
 // Queue an endpoint
@@ -841,8 +841,8 @@ bool client_queue_endpoint(client_t *dest, const endpoint_t *endpoint,
     memcpy(pkt->owner_name, owner->name, NODE_NAME_SIZE);
     total_size = sizeof(*pkt) + data_size;
 
-    return broadcast ? client_queue_packet_broadcast(dest, ENDPOINT, buf, total_size)
-                     : client_queue_packet_direct(dest, ENDPOINT, buf, total_size);
+    return broadcast ? client_queue_packet_broadcast(dest, OSHPKT_ENDPOINT, buf, total_size)
+                     : client_queue_packet_direct(dest, OSHPKT_ENDPOINT, buf, total_size);
 }
 
 
@@ -854,8 +854,8 @@ bool client_queue_edge_broadcast(client_t *exclude, oshpacket_type_t type,
     oshpacket_edge_t buf;
 
     switch (type) {
-        case EDGE_ADD:
-        case EDGE_DEL:
+        case OSHPKT_EDGE_ADD:
+        case OSHPKT_EDGE_DEL:
             memcpy(buf.src_node, src,  NODE_NAME_SIZE);
             memcpy(buf.dest_node, dest, NODE_NAME_SIZE);
             return client_queue_packet_broadcast(exclude, type,
@@ -887,7 +887,7 @@ bool client_queue_route_add_local(client_t *exclude, const netaddr_t *addrs,
         buf[i].can_expire = can_expire;
     }
 
-    bool success = client_queue_packet_fragmented(exclude, ROUTE_ADD, buf, buf_size,
+    bool success = client_queue_packet_fragmented(exclude, OSHPKT_ROUTE_ADD, buf, buf_size,
         sizeof(oshpacket_route_t), true);
 
     // We need to free the memory before returning

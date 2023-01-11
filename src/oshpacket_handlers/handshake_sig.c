@@ -29,7 +29,7 @@ static bool queue_hello(client_t *c)
     packet.options = htonl(packet.options);
 
     logger_debug(DBG_HANDSHAKE, "%s: Queuing HELLO packet", c->addrw);
-    return client_queue_packet_direct(c, HELLO, &packet, sizeof(packet));
+    return client_queue_packet_direct(c, OSHPKT_HELLO, &packet, sizeof(packet));
 }
 
 // Load remote node's ECDH public keys
@@ -191,7 +191,7 @@ static bool handshake_setup_new_ciphers(client_t *c)
         // Ciphers were in use before
 
         // Send the HANDSHAKE_END
-        if (!client_queue_packet_empty(c, HANDSHAKE_END))
+        if (!client_queue_packet_empty(c, OSHPKT_HANDSHAKE_END))
             return false;
 
         // Start using the new send cipher immediately
