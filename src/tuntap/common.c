@@ -1,9 +1,12 @@
+#include "macros.h"
 #include "logger.h"
 #include "xalloc.h"
 #include "tuntap.h"
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+
+#if !(PLATFORM_IS_WINDOWS)
 #include <fcntl.h>
 
 // Set O_NONBLOCK for fd
@@ -23,6 +26,7 @@ bool tuntap_nonblock(int fd)
     }
     return true;
 }
+#endif
 
 // Allocate a zeroed-out tuntap_t
 // Initialize is_tap

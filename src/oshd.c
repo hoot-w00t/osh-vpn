@@ -15,8 +15,6 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <signal.h>
 
 // Global variable
 oshd_t oshd;
@@ -24,6 +22,21 @@ oshd_t oshd;
 // Timeout for aio_poll
 // Never times out by default (-1)
 static ssize_t poll_timeout = -1;
+
+#if PLATFORM_IS_WINDOWS
+static BOOL exit_handler(__attribute__((unused)) DWORD dwCtrlType)
+{
+    if (oshd.run) {
+        logger_debug(DBG_OSHD, "Received exit signal");
+        oshd_stop();
+    } else {
+        logger(LOG_CRIT, "Uncaught exit signal");
+        exit(EXIT_FAILURE);
+    }
+    return TRUE;
+}
+#else
+#include <signal.h>
 
 // The first time we get a signal, set oshd_run to false
 // If oshd_run is already false, call exit()
@@ -44,6 +57,7 @@ static void oshd_signal_digraph(__attribute__((unused)) int sig)
     logger_debug(DBG_OSHD, "Received digraph signal");
     node_tree_dump_digraph();
 }
+#endif
 
 // Stop the daemon
 // Set the oshd.run variable to false
@@ -202,9 +216,13 @@ bool oshd_init(void)
     if (oshd.tuntap && !oshd_cmd_execute("DevUp"))
         return false;
 
+#if PLATFORM_IS_WINDOWS
+    SetConsoleCtrlHandler(exit_handler, TRUE);
+#else
     signal(SIGINT, oshd_signal_exit);
     signal(SIGTERM, oshd_signal_exit);
     signal(SIGUSR1, oshd_signal_digraph);
+#endif
 
     return true;
 }

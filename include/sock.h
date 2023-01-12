@@ -7,31 +7,58 @@
 #include <stdint.h>
 #include <inttypes.h>
 
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <errno.h>
-#include <string.h>
+#if PLATFORM_IS_WINDOWS
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #include <windows.h>
+    #include "macros_windows.h"
 
-typedef int                     sock_t;
-#define PRI_SOCK_T              "%d"
-#define invalid_sock_t          (-1)
+    typedef SOCKET                  sock_t;
+    #define PRI_SOCK_T              "%llu"
+    #define invalid_sock_t          (INVALID_SOCKET)
 
-typedef int                     sock_errno_t;
-#define sock_errno              errno
-#define sock_strerror(err)      strerror(err)
+    typedef DWORD                   sock_errno_t;
+    #define sock_errno              WSAGetLastError()
+    #define sock_strerror(err)      win_strerror(err)
 
-#define sock_ewouldblock(err)   IO_WOULDBLOCK(err)
-#define sock_eisconn(err)       ((err) == EISCONN)
-#define sock_einprogress(err)   ((err) == EINPROGRESS || (err) == EALREADY)
+    #define sock_ewouldblock(err)   ((err) == WSAEWOULDBLOCK)
+    #define sock_eisconn(err)       ((err) == WSAEISCONN)
+    #define sock_einprogress(err)   ((err) == WSAEINPROGRESS || (err) == WSAEALREADY)
 
-#define sock_shut_rd            SHUT_RD
-#define sock_shut_wr            SHUT_WR
-#define sock_shut_rdwr          SHUT_RDWR
+    #define sock_shut_rd            SD_RECEIVE
+    #define sock_shut_wr            SD_SEND
+    #define sock_shut_rdwr          SD_BOTH
+
+    // There is no SIGPIPE on Windows
+    #define MSG_NOSIGNAL 0
+
+#else
+    #include <netinet/in.h>
+    #include <netinet/tcp.h>
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <arpa/inet.h>
+    #include <netdb.h>
+    #include <unistd.h>
+    #include <errno.h>
+    #include <string.h>
+
+    typedef int                     sock_t;
+    #define PRI_SOCK_T              "%d"
+    #define invalid_sock_t          (-1)
+
+    typedef int                     sock_errno_t;
+    #define sock_errno              errno
+    #define sock_strerror(err)      strerror(err)
+
+    #define sock_ewouldblock(err)   ((err) == EAGAIN || (err) == EWOULDBLOCK)
+    #define sock_eisconn(err)       ((err) == EISCONN)
+    #define sock_einprogress(err)   ((err) == EINPROGRESS || (err) == EALREADY)
+
+    #define sock_shut_rd            SHUT_RD
+    #define sock_shut_wr            SHUT_WR
+    #define sock_shut_rdwr          SHUT_RDWR
+#endif
 
 // Initialize sockets (if the platform requires it)
 // Returns 0 on success, -1 on error
@@ -54,7 +81,11 @@ static inline sock_t sock_open(int domain, int type, int protocol)
 // close() / closesocket()
 static inline int sock_close(sock_t s)
 {
+#if PLATFORM_IS_WINDOWS
+    return closesocket(s);
+#else
     return close(s);
+#endif
 }
 
 // shutdown()

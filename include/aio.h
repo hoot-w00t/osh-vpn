@@ -1,6 +1,7 @@
 #ifndef _OSH_AIO_H
 #define _OSH_AIO_H
 
+#include "macros.h"
 #include <sys/types.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -40,8 +41,18 @@ typedef aio_cb_t aio_cb_read_t;
 typedef aio_cb_t aio_cb_write_t;
 typedef void (*aio_cb_error_t)(aio_event_t *event, aio_poll_event_t revents);
 
-typedef int aio_fd_t;
-#define PRI_AIO_FD_T "%d"
+#if PLATFORM_IS_WINDOWS
+    #include "sock.h"
+
+    typedef sock_t aio_fd_t;
+    #define PRI_AIO_FD_T PRI_SOCK_T
+
+    typedef HANDLE aio_handle_t;
+    #define PRI_AIO_HANDLE_T "%p"
+#else
+    typedef int aio_fd_t;
+    #define PRI_AIO_FD_T "%d"
+#endif
 
 // Generic data types for the aio_t and aio_event_t structures
 typedef union aio_data {
@@ -73,6 +84,20 @@ struct aio {
 struct aio_event {
     // File descriptor to poll for I/O events
     aio_fd_t fd;
+
+#if PLATFORM_IS_WINDOWS
+    // Windows HANDLE/WSAEVENT to poll for I/O events
+    // Socket events only need a file descriptor, the handles are automatically
+    // set up
+    // Non-socket events must use aio_event_set_handles() to configure the
+    // handles correctly
+    // Each handle is used to signal the corresponding callback (read/write)
+    aio_handle_t read_handle;
+    bool read_auto_reset;
+
+    aio_handle_t write_handle;
+    bool write_auto_reset;
+#endif
 
     // I/O events to poll for
     aio_poll_event_t poll_events;
@@ -133,6 +158,17 @@ void aio_cb_delete_close_fd(aio_event_t *event);
 void aio_enable_poll_events(aio_event_t *event, aio_poll_event_t poll_events);
 void aio_disable_poll_events(aio_event_t *event, aio_poll_event_t poll_events);
 
+#endif
+
+#if PLATFORM_IS_WINDOWS
+// Windows-specific functions
+
+// Set the AIO event's read/write handles and mark it as a non-socket event
+// The manual reset boolean should reflect the event handle's bManualReset value
+// Unused handles must be set to NULL
+void aio_event_set_handles(aio_event_t *event,
+    aio_handle_t read_handle, bool read_manual_reset,
+    aio_handle_t write_handle, bool write_manual_reset);
 #endif
 
 #ifdef _OSH_AIO_C

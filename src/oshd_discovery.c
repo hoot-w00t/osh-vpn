@@ -11,7 +11,6 @@
 
     // Contains the definitions for the interface flags
     #include <linux/if.h>
-#endif
 
 // Discover all addresses on the TUN/TAP device and add them to our local routes
 void oshd_discover_local_routes(void)
@@ -182,3 +181,17 @@ void oshd_discover_local_endpoints(void)
     }
     freeifaddrs(ifaces);
 }
+
+#else
+
+// TODO
+
+void oshd_discover_local_endpoints(void)
+{
+}
+
+void oshd_discover_local_routes(void)
+{
+}
+
+#endif

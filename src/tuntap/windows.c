@@ -2,44 +2,30 @@
 #include "xalloc.h"
 #include "tuntap.h"
 #include "netaddr.h"
-#include "macros_windows.h"
 #include "netutil.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <unistd.h>
-
 #include "tap-windows.h"
+#include "macros_windows.h"
+#include <stdio.h>
+#include <string.h>
 #include <windows.h>
 #include <winioctl.h>
-#include <winerror.h>
-#include <pthread.h>
 
 // This code for interfacing with the tap-windows6 driver is heavily inspired by
 // https://github.com/OpenVPN/openvpn/blob/master/src/openvpn/tun.c
 
 typedef struct tt_data_win {
     void *device_handle;     // Windows file handle for the TUN/TAP device
-    int pollfd_read;         // File descriptor of a pipe for reading from the device
-    int pollfd_write;        // File descriptor of the same pipe for writing on it
-    pthread_t pollfd_thread; // Thread to pipe the adapter's data to pollfd_read
-    pthread_mutex_t pollfd_mtx;      // Mutex to prevent writing and reading at the
-                                     // same time on the pollfd pipe
-    pthread_cond_t pollfd_cond;      // Condition to block the pollfd thread when the
-                                     // pipe is full until tuntap_read is called
-    pthread_mutex_t pollfd_cond_mtx; // Mutex for the condition
-    void *read_ol;  // TUN/TAP overlapped structure for reading
-    void *write_ol; // TUN/TAP overlapped structure for writing
 
-    pthread_mutex_t write_mtx; // Mutex used by tuntap_write()
+    OVERLAPPED read_ol;  // Overlapped structure for reading
+    OVERLAPPED write_ol; // Overlapped structure for writing
 
-    struct netaddr_data_mac mac_int; // The device's MAC address
-    struct netaddr_data_mac mac_ext; // Generic MAC address for TUN emulation
+    uint8_t read_buf[TUNTAP_BUFSIZE];   // Buffer used for overlapped reads
+    uint8_t write_buf[TUNTAP_BUFSIZE];  // Buffer used for overlapped writes
 
-    bool tun_emu; // true if the device is supposed to operate at layer 3
-                  // Enables an emulation layer to provide this transparently
-    uint8_t tun_pkt[TUNTAP_BUFSIZE]; // TUN packet buffer
+    bool write_pending; // true while an overlapped write is active
+
+    struct netaddr_data_mac mac_int;    // The device's MAC address
+    struct netaddr_data_mac mac_ext;    // Generic MAC address for TUN emulation
 } tt_data_win_t;
 #define tuntap_data(tt) ((tt_data_win_t *) (tt)->data.ptr)
 
@@ -229,124 +215,32 @@ static bool tun_handle(tuntap_t *tuntap, uint16_t ether_type,
     }
 }
 
-// Read from the device handle and write the data to the pollfd pipe
-#define pollfd_hdr_size (sizeof(DWORD))
-static void *tuntap_pollfd_thread(void *data)
+// Initiate an asynchronous read which will be processed by the AIO event loop
+// This function must not be called if an overlapped read is pending
+static bool initiate_overlapped_read(tuntap_t *tuntap)
 {
-    tuntap_t *tuntap = (tuntap_t *) data;
-    OVERLAPPED *ol = (OVERLAPPED *) tuntap_data(tuntap)->read_ol;
+    // Read the next TAP packet
+    if (ReadFile(tuntap_data(tuntap)->device_handle, tuntap_data(tuntap)->read_buf,
+            TUNTAP_BUFSIZE, NULL, &tuntap_data(tuntap)->read_ol))
+    {
+        // The read returned immediately
+        SetEvent(tuntap_data(tuntap)->read_ol.hEvent);
+        logger_debug(DBG_TUNTAP, "%s: %s", __func__, "immediate");
+    } else {
+        // The read did not finish immediately
+        const DWORD err = GetLastError();
 
-    uint8_t _buf[pollfd_hdr_size + TUNTAP_BUFSIZE];
-    uint8_t *buf = _buf + pollfd_hdr_size;
-    DWORD buf_size = sizeof(_buf) - pollfd_hdr_size;
-    DWORD read_bytes;
-    DWORD err;
-    int ierr;
-
-    while (1) {
-        // Reset the overlapped event
-        ResetEvent(ol->hEvent);
-
-        // Read the next TAP packet
-        if (ReadFile(tuntap_data(tuntap)->device_handle, buf, buf_size, &read_bytes, ol)) {
-            // The read returned immediately
-            SetEvent(ol->hEvent);
-            logger_debug(DBG_TUNTAP, "Immediate read of %u bytes", read_bytes);
+        if (err == ERROR_IO_PENDING) {
+            // The read is queued, wait for it to finish
+            logger_debug(DBG_TUNTAP, "%s: %s", __func__, "async");
         } else {
-            // The read did not finish immediately
-            err = GetLastError();
-            if (err == ERROR_IO_PENDING) {
-                // The read is queued, wait for it to finish
-                GetOverlappedResult(ol->hEvent, ol, &read_bytes, TRUE);
-                logger_debug(DBG_TUNTAP, "Async read of %u bytes", read_bytes);
-            } else {
-                // There was an error
-                logger(LOG_CRIT, "%s: Failed to read from device handle: %s",
-                    tuntap->dev_name, win_strerror(err));
-                break;
-            }
-        }
-
-        if (tuntap_data(tuntap)->tun_emu) {
-            const uint16_t ether_type = ntohs(*((uint16_t *) &buf[12]));
-
-            if (read_bytes <= 14)
-                continue;
-
-            read_bytes -= 14;
-            memmove(buf, buf + 14, read_bytes);
-
-            if (!tun_handle(tuntap, ether_type, buf, read_bytes))
-                continue;
-        }
-
-        // Write the packet's size
-        *((DWORD *) _buf) = read_bytes;
-
-        // Write the packet size followed by the packet data to the pollfd pipe
-        size_t total_size = read_bytes + pollfd_hdr_size;
-        ssize_t wb;
-
-retry_write:
-        // Lock the pollfd mutex before writing
-        ierr = pthread_mutex_lock(&tuntap_data(tuntap)->pollfd_mtx);
-        if (ierr) {
-            logger(LOG_CRIT, "pollfd_thread: Failed to lock pollfd_mtx: %s",
-                strerror(ierr));
-            break;
-        }
-
-        wb = write(tuntap_data(tuntap)->pollfd_write, _buf, total_size);
-
-        // Unlock mutex after writing
-        ierr = pthread_mutex_unlock(&tuntap_data(tuntap)->pollfd_mtx);
-        if (ierr) {
-            logger(LOG_CRIT, "pollfd_thread: Failed to unlock pollfd_mtx: %s",
-                strerror(ierr));
-            break;
-        }
-
-        if (wb < 0 || (size_t) wb != total_size) {
-            if (IO_WOULDBLOCK(errno)) {
-                // If write() will block we have to wait until tuntap_read is called
-                // This will happen when the pipe is full, after enough calls from
-                // tuntap_read the pipe won't be full anymore so we can retry to write
-                // the packet to it
-                // If we block on the write() call it will deadlock the whole program
-                // because the mutex won't ever be unlocked
-                ierr = pthread_mutex_lock(&tuntap_data(tuntap)->pollfd_cond_mtx);
-                if (ierr) {
-                    logger(LOG_CRIT, "pollfd_thread: Failed to lock pollfd_cond_mtx: %s",
-                        strerror(ierr));
-                    break;
-                }
-
-                logger_debug(DBG_TUNTAP, "pollfd_thread: write is blocking, waiting");
-                pthread_cond_wait(&tuntap_data(tuntap)->pollfd_cond, &tuntap_data(tuntap)->pollfd_cond_mtx);
-
-                ierr = pthread_mutex_unlock(&tuntap_data(tuntap)->pollfd_cond_mtx);
-                if (ierr) {
-                    logger(LOG_CRIT, "pollfd_thread: Failed to lock pollfd_cond_mtx: %s",
-                        strerror(ierr));
-                    break;
-                }
-                logger_debug(DBG_TUNTAP, "pollfd_thread: write should no longer block, retrying");
-                goto retry_write;
-            }
-
-            logger(LOG_CRIT, "%s: Failed to write packet to pollfd: %s (%zi/%u)",
-                tuntap->dev_name, strerror(errno), wb, read_bytes);
+            // There was an error
+            logger(LOG_CRIT, "%s: %s", __func__, win_strerror(err));
+            return false;
         }
     }
 
-    // The pipe is not useful anymore, close it
-    close(tuntap_data(tuntap)->pollfd_read);
-    close(tuntap_data(tuntap)->pollfd_write);
-    tuntap_data(tuntap)->pollfd_read = -1;
-    tuntap_data(tuntap)->pollfd_write = -1;
-
-    logger(LOG_CRIT, "tuntap_pollfd_thread exiting");
-    pthread_exit(NULL);
+    return true;
 }
 
 tuntap_t *tuntap_open(const char *devname, bool tap)
@@ -395,7 +289,7 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
             if (hkey_status == ERROR_NO_MORE_ITEMS)
                 break;
 
-            logger(LOG_CRIT, "Failed to enumerate %s: index %u: %s",
+            logger(LOG_CRIT, "Failed to enumerate %s: index %lu: %s",
                 NETWORK_CONNECTIONS_KEY, i, win_strerror(hkey_status));
             goto err;
         }
@@ -410,7 +304,7 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
         hkey_status = RegOpenKeyExA(HKEY_LOCAL_MACHINE, adapter_path, 0,
             KEY_READ, &adapter_subkey);
         if (hkey_status != ERROR_SUCCESS) {
-            logger(LOG_WARN, "Failed to open %s: index %u: %s", adapter_path,
+            logger(LOG_WARN, "Failed to open %s: index %lu: %s", adapter_path,
                 i, win_strerror(hkey_status));
             continue;
         }
@@ -421,7 +315,7 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
             (BYTE *) adapter_name, &adapter_name_len);
         RegCloseKey(adapter_subkey);
         if (hkey_status != ERROR_SUCCESS) {
-            logger(LOG_CRIT, "Failed to query %s: index %u: %s", adapter_path,
+            logger(LOG_CRIT, "Failed to query %s: index %lu: %s", adapter_path,
                 i, win_strerror(hkey_status));
             goto err;
         }
@@ -460,6 +354,8 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
     }
 
     // Create the TUN/TAP device
+    // The tap-windows6 driver only supports TAP (layer 2) mode, so in order to
+    // work with a TUN network Osh will translate between both layers
     tuntap_t *tuntap = tuntap_empty(tap);
     tt_data_win_t *data;
 
@@ -470,162 +366,95 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
     tuntap->dev_id_size = strlen(tuntap->dev_id) + 1;
 
     // Allocate the tuntap data
+    // Initialize all members to 0 since error handling checks those
     tuntap->data.ptr = xzalloc(sizeof(tt_data_win_t));
     data = tuntap_data(tuntap);
-
-    // The tap-windows6 driver only supports TAP (layer 2) mode, so in order to
-    // work with a TUN network Osh will translate between both layers
-    data->tun_emu = !tap;
 
     // Set the handle
     data->device_handle = adapter_handle;
 
-    // Create the OVERLAPPED structures and events for reading and writing
+    // Initialize the OVERLAPPED structures and events for reading/writing
     // asynchronously from/to the TUN/TAP device
-    data->read_ol = xzalloc(sizeof(OVERLAPPED));
-    ((OVERLAPPED *) data->read_ol)->hEvent = CreateEventA(NULL, TRUE, FALSE, NULL);
-    if (((OVERLAPPED *) data->read_ol)->hEvent == NULL) {
+    data->read_ol.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    if (data->read_ol.hEvent == NULL) {
         logger(LOG_CRIT, "Failed to create read event handle: %s", win_strerror_last());
-        tuntap_close(tuntap);
-        return NULL;
+        goto err_tuntap;
     }
 
-    data->write_ol = xzalloc(sizeof(OVERLAPPED));
-    ((OVERLAPPED *) data->write_ol)->hEvent = CreateEventA(NULL, TRUE, FALSE, NULL);
-    if (((OVERLAPPED *) data->write_ol)->hEvent == NULL) {
+    data->write_ol.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    if (data->write_ol.hEvent == NULL) {
         logger(LOG_CRIT, "Failed to create write event handle: %s", win_strerror_last());
-        tuntap_close(tuntap);
-        return NULL;
+        goto err_tuntap;
     }
-
-    // Create a Unix pipe to poll local packets from the device
-    int pollfd_pipe[2];
-
-    if (pipe(pollfd_pipe) < 0) {
-        logger(LOG_CRIT, "Failed to create pollfd pipe: %s", strerror(errno));
-        tuntap_close(tuntap);
-        return NULL;
-    }
-    data->pollfd_read = pollfd_pipe[0];
-    data->pollfd_write = pollfd_pipe[1];
-
-    // Both file descriptors need to be non-blocking, a blocking write() will
-    // deadlock the program
-    tuntap_nonblock(data->pollfd_read);
-    tuntap_nonblock(data->pollfd_write);
 
     // Enable the adapter
-    if (!tuntap_device_enable(tuntap)) {
-        tuntap_close(tuntap);
-        return NULL;
-    }
+    if (!tuntap_device_enable(tuntap))
+        goto err_tuntap;
 
     // Get the device's MAC address
-    if (!tuntap_device_get_mac(tuntap)) {
-        tuntap_close(tuntap);
-        return NULL;
+    if (!tuntap_device_get_mac(tuntap))
+        goto err_tuntap;
+
+    // Initialize destination/source MAC addresses of the TUN packets if the
+    // device is in TUN mode
+    // These don't change so we can initialize them here once
+    if (tuntap_is_tun(tuntap)) {
+        // We don't check the buffer size as it should always be big enough
+        memcpy(data->write_buf + 0, &data->mac_int, sizeof(data->mac_int));
+        memcpy(data->write_buf + 6, &data->mac_ext, sizeof(data->mac_ext));
     }
 
-    // Initialize destination/source MAC addresses of the TUN packets
-    // These don't change so we can initialize them here
-    memcpy(data->tun_pkt + 0, &data->mac_int, sizeof(data->mac_int));
-    memcpy(data->tun_pkt + 6, &data->mac_ext, sizeof(data->mac_ext));
+    // Initiate reading from the device
+    if (!initiate_overlapped_read(tuntap))
+        goto err_tuntap;
 
-    int err;
-
-    // Initialize the pollfd mutex
-    err = pthread_mutex_init(&data->pollfd_mtx, NULL);
-    if (err) {
-        logger(LOG_CRIT, "Failed to create pollfd mutex: %s", strerror(err));
-        tuntap_close(tuntap);
-        return NULL;
-    }
-
-    // Initialize the pollfd condition and its mutex
-    err = pthread_cond_init(&data->pollfd_cond, NULL);
-    if (err) {
-        logger(LOG_CRIT, "Failed to create pollfd condition: %s", strerror(err));
-        tuntap_close(tuntap);
-        return NULL;
-    }
-
-    err = pthread_mutex_init(&data->pollfd_cond_mtx, NULL);
-    if (err) {
-        logger(LOG_CRIT, "Failed to create pollfd condition mutex: %s", strerror(err));
-        tuntap_close(tuntap);
-        return NULL;
-    }
-
-    // Initialize tuntap_write() mutex
-    err = pthread_mutex_init(&data->write_mtx, NULL);
-    if (err) {
-        logger(LOG_CRIT, "Failed to create tuntap_write() mutex: %s", strerror(err));
-        tuntap_close(tuntap);
-        return NULL;
-    }
-
-    // Create the thread to read from the device handle and write the packets to
-    // the pollfd pipe
-    err = pthread_create(&data->pollfd_thread, NULL,
-        &tuntap_pollfd_thread, tuntap);
-    if (err) {
-        logger(LOG_CRIT, "Failed to create pollfd thread: %s", strerror(err));
-        data->pollfd_thread = NULL;
-        tuntap_close(tuntap);
-        return NULL;
-    }
-
-    logger(LOG_INFO, "Opened %s device: %s (%s) (handle: %p, pollfd: %i <- %i)",
+    logger(LOG_INFO, "Opened %s device: %s (%s, handle: %p)",
         tuntap->is_tap ? "TAP" : "TUN",
         tuntap->dev_name,
         tuntap->dev_id,
-        data->device_handle,
-        data->pollfd_read,
-        data->pollfd_write);
+        data->device_handle);
+
     return tuntap;
 
-err:
+err: // Initialization error, no tuntap_t created yet
     if (netconn_key)
         RegCloseKey(netconn_key);
     if (adapter_handle == INVALID_HANDLE_VALUE)
         CloseHandle(adapter_handle);
     return NULL;
+
+err_tuntap: // TUN/TAP error after tuntap_t was created
+    tuntap_close(tuntap);
+    return NULL;
 }
 
 void tuntap_close(tuntap_t *tuntap)
 {
-    tt_data_win_t *data = tuntap_data(tuntap);
+    // Cancel any pending I/O read/write
+    if (!CancelIoEx(tuntap_data(tuntap)->device_handle, NULL)) {
+        const DWORD err = GetLastError();
 
-    // Cancel the pollfd thread before freeing data that it uses
-    if (data->pollfd_thread) {
-        pthread_cancel(data->pollfd_thread);
-        pthread_join(data->pollfd_thread, NULL);
+        // ERROR_NOT_FOUND is returned when there was nothing to cancel
+        if (err != ERROR_NOT_FOUND)
+            logger(LOG_ERR, "%s: %s: %s", __func__, "CancelIoEx", win_strerror(err));
     }
 
-    // Free the OVERLAPPED structures and close the event handles
-    if (data->read_ol) {
-        CloseHandle(((OVERLAPPED *) data->read_ol)->hEvent);
-        free(data->read_ol);
-    }
-    if (data->write_ol) {
-        CloseHandle(((OVERLAPPED *) data->write_ol)->hEvent);
-        free(data->write_ol);
-    }
+    // Wait until overlapped I/O is finished
+    DWORD bytes_transferred;
+
+    GetOverlappedResult(tuntap_data(tuntap)->device_handle,
+        &tuntap_data(tuntap)->read_ol, &bytes_transferred, TRUE);
+    GetOverlappedResult(tuntap_data(tuntap)->device_handle,
+        &tuntap_data(tuntap)->write_ol, &bytes_transferred, TRUE);
+
+    // Free the OVERLAPPED events
+    if (tuntap_data(tuntap)->read_ol.hEvent)
+        CloseHandle(tuntap_data(tuntap)->read_ol.hEvent);
+    if (tuntap_data(tuntap)->write_ol.hEvent)
+        CloseHandle(tuntap_data(tuntap)->write_ol.hEvent);
 
     // Close the device handle
-    CloseHandle(data->device_handle);
-
-    // Close the pollfd pipe
-    if (data->pollfd_read > 0)
-        close(data->pollfd_read);
-    if (data->pollfd_write > 0)
-        close(data->pollfd_write);
-
-    // Destroy the pollfd mutex and condition
-    pthread_mutex_destroy(&data->pollfd_mtx);
-    pthread_cond_destroy(&data->pollfd_cond);
-    pthread_mutex_destroy(&data->pollfd_cond_mtx);
-    pthread_mutex_destroy(&data->write_mtx);
+    CloseHandle(tuntap_data(tuntap)->device_handle);
 
     // Free the tuntap data
     free(tuntap->data.ptr);
@@ -637,175 +466,161 @@ void tuntap_close(tuntap_t *tuntap)
 
 bool tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
 {
+    // Ethernet header offset to add to layer 3 packets
+    const size_t tun_offset = tuntap_is_tun(tuntap) ? 14 : 0;
     tt_data_win_t *data = tuntap_data(tuntap);
-    bool success = false;
-    DWORD size;
-    ssize_t n;
-    int err;
+    DWORD read_bytes;
+    DWORD size_without_offset;
 
-    // Lock the mutex before reading
-    err = pthread_mutex_lock(&data->pollfd_mtx);
-    if (err) {
-        logger(LOG_CRIT, "tuntap_read: Failed to lock pollfd_mtx: %s",
-            strerror(err));
-        goto end;
-    }
+    // Initialize the result values for a successful read of 0 bytes which
+    // will be identified as a recoverable tuntap_read() error
+    // Some error cases below will return true to use this soft error case
+    *pkt_size = 0;
 
-    // Read the size of the next packet on the pipe
-    n = read(data->pollfd_read, &size, pollfd_hdr_size);
-    if (n < 0) {
-        // If the read would block, no more data is ready to be read on the pipe
-        if (IO_WOULDBLOCK(errno)) {
-            *pkt_size = 0;
-            success = true;
-            goto end;
+    if (!GetOverlappedResult(data->device_handle, &data->read_ol, &read_bytes, FALSE)) {
+        const DWORD err = GetLastError();
+
+        // This should not happen, if it does this shouldn't be a fatal error
+        if (err == ERROR_IO_INCOMPLETE) {
+            logger(LOG_WARN, "%s: %s: %s", __func__, "GetOverlappedResult",
+                "Invoked but the read is still pending");
+            return true;
         }
 
-        // Otherwise the error will be handled by the caller
-        goto end;
+        logger(LOG_ERR, "%s: %s: %s", __func__, "GetOverlappedResult",
+            win_strerror(err));
+        return false;
     }
 
-    // The packet size must be fully read
-    if (n != pollfd_hdr_size) {
-        logger(LOG_CRIT, "tuntap_read: Incomplete packet header (%zi/%zu bytes)",
-            n, pollfd_hdr_size);
-        errno = EIO;
-        goto end;
+    // At this point the read is finished, so we have to always initiate a new
+    // overlapped read before returning or no more packets will be read from the
+    // device
+
+    // The packet is invalid
+    if (read_bytes <= tun_offset)
+        return initiate_overlapped_read(tuntap);
+
+    size_without_offset = read_bytes - tun_offset;
+
+    // With TUN emulation some packets will be read but are not compatible
+    // with layer 3 (ARP/NDP)
+    if (tuntap_is_tun(tuntap)) {
+        const uint16_t ether_type = ntohs(*((uint16_t *) &data->read_buf[12]));
+
+        // If the packet is not TUN compatible, don't return it
+        if (!tun_handle(tuntap, ether_type, data->read_buf + tun_offset, size_without_offset))
+            return initiate_overlapped_read(tuntap);
     }
 
     // The destination buffer must be large enough to hold the packet
-    if (size > buf_size) {
-        logger(LOG_CRIT, "tuntap_read: Buffer size is too small (%u/%zu bytes)",
-            size, buf_size);
+    if (size_without_offset > buf_size) {
+        logger(LOG_CRIT, "%s: Buffer size is too small (%lu/%zu bytes)",
+            __func__, size_without_offset, buf_size);
         errno = EINVAL;
-        goto end;
-    }
-
-    // Read the packet
-    n = read(data->pollfd_read, buf, size);
-    if (n < 0)
-        goto end;
-    if (n != size) {
-        logger(LOG_CRIT, "tuntap_read: Incomplete packet (%zi/%u bytes)",
-            n, size);
-        errno = EIO;
-        goto end;
-    }
-
-    // Set the read packet's size
-    *pkt_size = size;
-    success = true;
-
-end:
-    // Always unlock the mutex after all reads are done
-    err = pthread_mutex_unlock(&data->pollfd_mtx);
-    if (err) {
-        logger(LOG_CRIT, "tuntap_read: Failed to unlock pollfd_mtx: %s",
-            strerror(err));
+        initiate_overlapped_read(tuntap);
         return false;
     }
 
-    // Signal the condition for the pollfd thread
-    logger_debug(DBG_TUNTAP, "tuntap_read: Signaling pollfd_cond");
-    err = pthread_cond_signal(&data->pollfd_cond);
-    if (err) {
-        logger(LOG_CRIT, "tuntap_read: Failed to signal pollfd_cond: %s",
-            strerror(err));
-        return false;
-    }
-
-    return success;
+    // Set the read packet's size and copy it
+    memcpy(buf, data->read_buf + tun_offset, size_without_offset);
+    *pkt_size = size_without_offset;
+    return initiate_overlapped_read(tuntap);
 }
 
-static bool _unsafe_tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size)
+bool tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size)
 {
-    OVERLAPPED *ol = (OVERLAPPED *) tuntap_data(tuntap)->write_ol;
+    // Ethernet header offset to add to layer 3 packets
+    const size_t tun_offset = tuntap_is_tun(tuntap) ? 14 : 0;
+    const size_t size_with_offset = packet_size + tun_offset;
+    tt_data_win_t *data = tuntap_data(tuntap);
     DWORD written_bytes;
 
-    if (tuntap_data(tuntap)->tun_emu) {
-        // Make sure that we won't overflow
-        if ((14 + packet_size) > sizeof(tuntap_data(tuntap)->tun_pkt)) {
-            logger(LOG_CRIT, "tuntap_write: packet_size is too big for the TUN packet buffer");
-            return false;
+    // If a previous write was not finished we have to wait until it is
+    if (data->write_pending) {
+        if (!GetOverlappedResult(data->device_handle, &data->write_ol,
+                &written_bytes, FALSE))
+        {
+            const DWORD err = GetLastError();
+
+            if (err == ERROR_IO_PENDING) {
+                // The write is still in progress, drop the current packet
+                logger(LOG_WARN,
+                    "%s: Dropping packet of %zu bytes (previous overlapped write still pending)",
+                    __func__, packet_size);
+                return true;
+            } else {
+                // The previous write failed
+                logger(LOG_ERR, "%s: %s: %s", __func__, "GetOverlappedResult",
+                    win_strerror(err));
+                return false;
+            }
         }
 
-        // Initialize fake Ethernet frame header
+        // Write is finished
+        data->write_pending = false;
+        logger_debug(DBG_TUNTAP, "Async write of %lu bytes (finished)", written_bytes);
+    }
+
+    // Check that the packet can fit in the write buffer
+    if (size_with_offset > TUNTAP_BUFSIZE) {
+        logger(LOG_WARN,
+            "%s: Dropping packet bigger than the buffer size (%zu/%d, offset %zu)",
+            __func__, size_with_offset, TUNTAP_BUFSIZE, tun_offset);
+        return true;
+    }
+
+    // Copy the packet to the write buffer
+    // This must be done in case the overlapped write can run in the background
+    // and the packet pointer is unsafe to use after returning
+    memcpy(data->write_buf + tun_offset, packet, packet_size);
+
+    // If the device is in TUN mode, add an Ethernet header
+    if (tuntap_is_tun(tuntap)) {
         // Destination/source MAC addresses don't change and are already
         // initialized in tuntap_open()
 
         // Ether type
         switch (((const uint8_t *) packet)[0] >> 4) {
         case 4: // IPv4
-            *((uint16_t *) &tuntap_data(tuntap)->tun_pkt[12]) = htons(0x0800);
+            *((uint16_t *) &data->write_buf[12]) = htons(0x0800);
             break;
         case 6: // IPv6
-            *((uint16_t *) &tuntap_data(tuntap)->tun_pkt[12]) = htons(0x86DD);
+            *((uint16_t *) &data->write_buf[12]) = htons(0x86DD);
             break;
         default: // Any other value defaults to an ARP packet
-            *((uint16_t *) &tuntap_data(tuntap)->tun_pkt[12]) = htons(0x0806);
+            *((uint16_t *) &data->write_buf[12]) = htons(0x0806);
             break;
         }
-
-        // Append the actual packet
-        memcpy(tuntap_data(tuntap)->tun_pkt + 14, packet, packet_size);
-
-        // Use the encapsulated packet
-        packet = tuntap_data(tuntap)->tun_pkt;
-        packet_size += 14;
     }
 
-    // Reset the overlapped event handle
-    ResetEvent(ol->hEvent);
-    if (WriteFile(tuntap_data(tuntap)->device_handle,
-                  packet,
-                  (DWORD) packet_size,
-                  &written_bytes,
-                  ol))
+    // Write the packet
+    if (WriteFile(data->device_handle, data->write_buf, size_with_offset,
+            &written_bytes, &data->write_ol))
     {
         // The packet was written immediately
-        SetEvent(ol->hEvent);
-        logger_debug(DBG_TUNTAP, "Immediate write of %u bytes", written_bytes);
-        return true;
+        SetEvent(data->write_ol.hEvent);
+        logger_debug(DBG_TUNTAP, "Immediate write of %lu bytes", written_bytes);
+
     } else {
-        DWORD err = GetLastError();
+        const DWORD err = GetLastError();
 
         if (err == ERROR_IO_PENDING) {
             // The packet will be written asynchronously
-            logger_debug(DBG_TUNTAP, "Async write of %u bytes (pending)",
-                (DWORD) packet_size);
-            return true;
+            logger_debug(DBG_TUNTAP, "Async write of %zu bytes (pending)",
+                packet_size);
+            data->write_pending = true;
         } else {
             // The packet could not be written
-            logger(LOG_CRIT, "%s: Failed to write %u bytes to device handle: %s",
-                tuntap->dev_name, (DWORD) packet_size, win_strerror(err));
+            logger(LOG_CRIT, "%s: Failed to write %zu bytes to device handle: %s",
+                tuntap->dev_name, packet_size, win_strerror(err));
             return false;
         }
     }
-}
 
-bool tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size)
-{
-    bool result;
-    int err;
-
-    err = pthread_mutex_lock(&tuntap_data(tuntap)->write_mtx);
-    if (err) {
-        logger(LOG_CRIT, "tuntap_write: Failed to lock mutex: %s", strerror(err));
-        return false;
-    }
-
-    result = _unsafe_tuntap_write(tuntap, packet, packet_size);
-
-    err = pthread_mutex_unlock(&tuntap_data(tuntap)->write_mtx);
-    if (err) {
-        logger(LOG_CRIT, "tuntap_write: Failed to unlock mutex: %s", strerror(err));
-        return false;
-    }
-
-    return result;
+    return true;
 }
 
 void tuntap_init_aio_event(tuntap_t *tuntap, aio_event_t *event)
 {
-    event->fd = tuntap_data(tuntap)->pollfd_read;
+    aio_event_set_handles(event, tuntap_data(tuntap)->read_ol.hEvent, true, NULL, true);
 }

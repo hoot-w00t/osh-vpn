@@ -25,6 +25,24 @@ bool random_bytes(void *buf, size_t buf_size)
     return true;
 }
 
+#elif PLATFORM_IS_WINDOWS
+
+#include "macros_windows.h"
+#include <bcrypt.h>
+#include <ntstatus.h>
+
+bool random_bytes(void *buf, size_t buf_size)
+{
+    NTSTATUS err = BCryptGenRandom(NULL, buf, buf_size, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+
+    if (err != STATUS_SUCCESS) {
+        logger(LOG_ERR, "%s: %s: %s", __func__, "BCryptGenRandom", win_strerror(err));
+        return false;
+    }
+
+    return true;
+}
+
 #else // /dev/random
 
 #include <fcntl.h>

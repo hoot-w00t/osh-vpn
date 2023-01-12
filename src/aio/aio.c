@@ -15,6 +15,12 @@ static aio_event_t *aio_event_dup(const aio_event_t *src)
     aio_event_t *dest = xzalloc(sizeof(aio_event_t));
 
     dest->fd = src->fd;
+#if PLATFORM_IS_WINDOWS
+    dest->read_handle = src->read_handle;
+    dest->read_auto_reset = src->read_auto_reset;
+    dest->write_handle = src->write_handle;
+    dest->write_auto_reset = src->write_auto_reset;
+#endif
     dest->poll_events = src->poll_events;
     dest->userdata = src->userdata;
 
@@ -181,6 +187,8 @@ void aio_free(aio_t *aio)
 // If timeout is -1, blocks until an I/O event occurs
 // If a polled I/O event does not have a callback it will keep being polled
 // every time
+// Returns -1 on error, or the number of events polled (this can exceed the
+// number of events in the AIO)
 ssize_t aio_poll(aio_t *aio, ssize_t timeout)
 {
     ssize_t n;
@@ -255,10 +263,14 @@ void aio_event_del_fd(aio_t *aio, aio_fd_t fd)
     }
 }
 
-// Generic delete callback that closes the event's file descriptor if it is not
-// a negative value
+// Generic delete callback that closes the event's file descriptor if it is valid
 void aio_cb_delete_close_fd(aio_event_t *event)
 {
+#if PLATFORM_IS_WINDOWS
+    if (event->fd != invalid_sock_t)
+        sock_close(event->fd);
+#else
     if (event->fd >= 0)
         close(event->fd);
+#endif
 }

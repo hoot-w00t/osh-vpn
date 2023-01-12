@@ -71,6 +71,14 @@ set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_CONTACT}")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libssl1.1")
 
 # Libraries
+# Winsock2 and bcrypt
+if (WIN32)
+    list(APPEND OSH_LINK_LIBRARIES wsock32)
+    list(APPEND OSH_LINK_LIBRARIES ws2_32)
+    list(APPEND OSH_LINK_LIBRARIES bcrypt)
+endif()
+
+# OpenSSL
 find_package(OpenSSL 1.1.0 REQUIRED COMPONENTS Crypto)
 include_directories(${OPENSSL_INCLUDE_DIR})
 list(APPEND OSH_LINK_LIBRARIES ${OPENSSL_CRYPTO_LIBRARIES})
@@ -123,10 +131,14 @@ if (AIO_BACKEND STREQUAL "auto")
     check_include_file("poll.h"  poll_available)
     check_include_file("sys/epoll.h" epoll_available)
 
-    if (epoll_available)
-        set(AIO_BACKEND_CONFIGURED "epoll")
-    elseif (poll_available)
-        set(AIO_BACKEND_CONFIGURED "poll")
+    if (WIN32)
+        set(AIO_BACKEND_CONFIGURED "windows")
+    else()
+        if (epoll_available)
+            set(AIO_BACKEND_CONFIGURED "epoll")
+        elseif (poll_available)
+            set(AIO_BACKEND_CONFIGURED "poll")
+        endif()
     endif()
 
     if (AIO_BACKEND_CONFIGURED STREQUAL "unknown")
@@ -142,6 +154,8 @@ if (AIO_BACKEND_CONFIGURED STREQUAL "epoll")
     set(OSH_AIO_SOURCES ${OSH_AIO_SOURCES} src/aio/epoll.c)
 elseif (AIO_BACKEND_CONFIGURED STREQUAL "poll")
     set(OSH_AIO_SOURCES ${OSH_AIO_SOURCES} src/aio/poll.c)
+elseif (AIO_BACKEND_CONFIGURED STREQUAL "windows")
+    set(OSH_AIO_SOURCES ${OSH_AIO_SOURCES} src/aio/windows.c)
 else()
     message(FATAL_ERROR "Invalid configured AIO backend: ${AIO_BACKEND_CONFIGURED}")
 endif()
@@ -264,6 +278,10 @@ endif()
 
 if (MINGW)
     add_compiler_flag_nocheck(CMAKE_C_FLAGS "-D__USE_MINGW_ANSI_STDIO=1")
+endif()
+
+if (WIN32)
+    add_compiler_flag_nocheck(CMAKE_C_FLAGS "-DWIN32_LEAN_AND_MEAN")
 endif()
 
 option(DISABLE_EVENTS_TIMERFD "Don't use timerfd for timed events even if it is available" OFF)
