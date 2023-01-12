@@ -81,4 +81,7 @@ bool tuntap_nonblock(int fd);
 tuntap_t *tuntap_empty(bool is_tap);
 void tuntap_free_common(tuntap_t *tuntap);
 
+#define tuntap_is_tap(tuntap) ((tuntap)->is_tap)
+#define tuntap_is_tun(tuntap) (!tuntap_is_tap(tuntap))
+
 #endif
