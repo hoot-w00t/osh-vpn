@@ -243,6 +243,203 @@ static bool initiate_overlapped_read(tuntap_t *tuntap)
     return true;
 }
 
+static void _tuntap_close(tuntap_t *tuntap)
+{
+    // Cancel any pending I/O read/write
+    if (!CancelIoEx(tuntap_data(tuntap)->device_handle, NULL)) {
+        const DWORD err = GetLastError();
+
+        // ERROR_NOT_FOUND is returned when there was nothing to cancel
+        if (err != ERROR_NOT_FOUND)
+            logger(LOG_ERR, "%s: %s: %s", __func__, "CancelIoEx", win_strerror(err));
+    }
+
+    // Wait until overlapped I/O is finished
+    DWORD bytes_transferred;
+
+    GetOverlappedResult(tuntap_data(tuntap)->device_handle,
+        &tuntap_data(tuntap)->read_ol, &bytes_transferred, TRUE);
+    GetOverlappedResult(tuntap_data(tuntap)->device_handle,
+        &tuntap_data(tuntap)->write_ol, &bytes_transferred, TRUE);
+
+    // Free the OVERLAPPED events
+    if (tuntap_data(tuntap)->read_ol.hEvent)
+        CloseHandle(tuntap_data(tuntap)->read_ol.hEvent);
+    if (tuntap_data(tuntap)->write_ol.hEvent)
+        CloseHandle(tuntap_data(tuntap)->write_ol.hEvent);
+
+    // Close the device handle
+    CloseHandle(tuntap_data(tuntap)->device_handle);
+
+    // Free the tuntap data
+    free(tuntap->data.ptr);
+
+    // Free the common parts of the tuntap_t structure and the structure itself
+    tuntap_free_common(tuntap);
+    free(tuntap);
+}
+
+static bool _tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
+{
+    // Ethernet header offset to add to layer 3 packets
+    const size_t tun_offset = tuntap_is_tun(tuntap) ? 14 : 0;
+    tt_data_win_t *data = tuntap_data(tuntap);
+    DWORD read_bytes;
+    DWORD size_without_offset;
+
+    // Initialize the result values for a successful read of 0 bytes which
+    // will be identified as a recoverable tuntap_read() error
+    // Some error cases below will return true to use this soft error case
+    *pkt_size = 0;
+
+    if (!GetOverlappedResult(data->device_handle, &data->read_ol, &read_bytes, FALSE)) {
+        const DWORD err = GetLastError();
+
+        // This should not happen, if it does this shouldn't be a fatal error
+        if (err == ERROR_IO_INCOMPLETE) {
+            logger(LOG_WARN, "%s: %s: %s", __func__, "GetOverlappedResult",
+                "Invoked but the read is still pending");
+            return true;
+        }
+
+        logger(LOG_ERR, "%s: %s: %s", __func__, "GetOverlappedResult",
+            win_strerror(err));
+        return false;
+    }
+
+    // At this point the read is finished, so we have to always initiate a new
+    // overlapped read before returning or no more packets will be read from the
+    // device
+
+    // The packet is invalid
+    if (read_bytes <= tun_offset)
+        return initiate_overlapped_read(tuntap);
+
+    size_without_offset = read_bytes - tun_offset;
+
+    // With TUN emulation some packets will be read but are not compatible
+    // with layer 3 (ARP/NDP)
+    if (tuntap_is_tun(tuntap)) {
+        const uint16_t ether_type = ntohs(*((uint16_t *) &data->read_buf[12]));
+
+        // If the packet is not TUN compatible, don't return it
+        if (!tun_handle(tuntap, ether_type, data->read_buf + tun_offset, size_without_offset))
+            return initiate_overlapped_read(tuntap);
+    }
+
+    // The destination buffer must be large enough to hold the packet
+    if (size_without_offset > buf_size) {
+        logger(LOG_CRIT, "%s: Buffer size is too small (%lu/%zu bytes)",
+            __func__, size_without_offset, buf_size);
+        errno = EINVAL;
+        initiate_overlapped_read(tuntap);
+        return false;
+    }
+
+    // Set the read packet's size and copy it
+    memcpy(buf, data->read_buf + tun_offset, size_without_offset);
+    *pkt_size = size_without_offset;
+    return initiate_overlapped_read(tuntap);
+}
+
+static bool _tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size)
+{
+    // Ethernet header offset to add to layer 3 packets
+    const size_t tun_offset = tuntap_is_tun(tuntap) ? 14 : 0;
+    const size_t size_with_offset = packet_size + tun_offset;
+    tt_data_win_t *data = tuntap_data(tuntap);
+    DWORD written_bytes;
+
+    // If a previous write was not finished we have to wait until it is
+    if (data->write_pending) {
+        if (!GetOverlappedResult(data->device_handle, &data->write_ol,
+                &written_bytes, FALSE))
+        {
+            const DWORD err = GetLastError();
+
+            if (err == ERROR_IO_PENDING) {
+                // The write is still in progress, drop the current packet
+                logger(LOG_WARN,
+                    "%s: Dropping packet of %zu bytes (previous overlapped write still pending)",
+                    __func__, packet_size);
+                return true;
+            } else {
+                // The previous write failed
+                logger(LOG_ERR, "%s: %s: %s", __func__, "GetOverlappedResult",
+                    win_strerror(err));
+                return false;
+            }
+        }
+
+        // Write is finished
+        data->write_pending = false;
+        logger_debug(DBG_TUNTAP, "Async write of %lu bytes (finished)", written_bytes);
+    }
+
+    // Check that the packet can fit in the write buffer
+    if (size_with_offset > TUNTAP_BUFSIZE) {
+        logger(LOG_WARN,
+            "%s: Dropping packet bigger than the buffer size (%zu/%d, offset %zu)",
+            __func__, size_with_offset, TUNTAP_BUFSIZE, tun_offset);
+        return true;
+    }
+
+    // Copy the packet to the write buffer
+    // This must be done in case the overlapped write can run in the background
+    // and the packet pointer is unsafe to use after returning
+    memcpy(data->write_buf + tun_offset, packet, packet_size);
+
+    // If the device is in TUN mode, add an Ethernet header
+    if (tuntap_is_tun(tuntap)) {
+        // Destination/source MAC addresses don't change and are already
+        // initialized in tuntap_open()
+
+        // Ether type
+        switch (((const uint8_t *) packet)[0] >> 4) {
+        case 4: // IPv4
+            *((uint16_t *) &data->write_buf[12]) = htons(0x0800);
+            break;
+        case 6: // IPv6
+            *((uint16_t *) &data->write_buf[12]) = htons(0x86DD);
+            break;
+        default: // Any other value defaults to an ARP packet
+            *((uint16_t *) &data->write_buf[12]) = htons(0x0806);
+            break;
+        }
+    }
+
+    // Write the packet
+    if (WriteFile(data->device_handle, data->write_buf, size_with_offset,
+            &written_bytes, &data->write_ol))
+    {
+        // The packet was written immediately
+        SetEvent(data->write_ol.hEvent);
+        logger_debug(DBG_TUNTAP, "Immediate write of %lu bytes", written_bytes);
+
+    } else {
+        const DWORD err = GetLastError();
+
+        if (err == ERROR_IO_PENDING) {
+            // The packet will be written asynchronously
+            logger_debug(DBG_TUNTAP, "Async write of %zu bytes (pending)",
+                packet_size);
+            data->write_pending = true;
+        } else {
+            // The packet could not be written
+            logger(LOG_CRIT, "%s: Failed to write %zu bytes to device handle: %s",
+                tuntap->dev_name, packet_size, win_strerror(err));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void _tuntap_init_aio_event(tuntap_t *tuntap, aio_event_t *event)
+{
+    aio_event_set_handles(event, tuntap_data(tuntap)->read_ol.hEvent, true, NULL, true);
+}
+
 tuntap_t *tuntap_open(const char *devname, bool tap)
 {
     // We cannot create a TAP device on the fly, it must already exist so we
@@ -359,6 +556,8 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
     tuntap_t *tuntap = tuntap_empty(tap);
     tt_data_win_t *data;
 
+    tuntap_set_funcs(tuntap, _tuntap_close, _tuntap_read, _tuntap_write, _tuntap_init_aio_event);
+
     // Copy the adapter's name and ID
     tuntap->dev_name = xstrdup(adapter_name);
     tuntap->dev_name_size = strlen(tuntap->dev_name) + 1;
@@ -426,201 +625,4 @@ err: // Initialization error, no tuntap_t created yet
 err_tuntap: // TUN/TAP error after tuntap_t was created
     tuntap_close(tuntap);
     return NULL;
-}
-
-void tuntap_close(tuntap_t *tuntap)
-{
-    // Cancel any pending I/O read/write
-    if (!CancelIoEx(tuntap_data(tuntap)->device_handle, NULL)) {
-        const DWORD err = GetLastError();
-
-        // ERROR_NOT_FOUND is returned when there was nothing to cancel
-        if (err != ERROR_NOT_FOUND)
-            logger(LOG_ERR, "%s: %s: %s", __func__, "CancelIoEx", win_strerror(err));
-    }
-
-    // Wait until overlapped I/O is finished
-    DWORD bytes_transferred;
-
-    GetOverlappedResult(tuntap_data(tuntap)->device_handle,
-        &tuntap_data(tuntap)->read_ol, &bytes_transferred, TRUE);
-    GetOverlappedResult(tuntap_data(tuntap)->device_handle,
-        &tuntap_data(tuntap)->write_ol, &bytes_transferred, TRUE);
-
-    // Free the OVERLAPPED events
-    if (tuntap_data(tuntap)->read_ol.hEvent)
-        CloseHandle(tuntap_data(tuntap)->read_ol.hEvent);
-    if (tuntap_data(tuntap)->write_ol.hEvent)
-        CloseHandle(tuntap_data(tuntap)->write_ol.hEvent);
-
-    // Close the device handle
-    CloseHandle(tuntap_data(tuntap)->device_handle);
-
-    // Free the tuntap data
-    free(tuntap->data.ptr);
-
-    // Free the common parts of the tuntap_t structure and the structure itself
-    tuntap_free_common(tuntap);
-    free(tuntap);
-}
-
-bool tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
-{
-    // Ethernet header offset to add to layer 3 packets
-    const size_t tun_offset = tuntap_is_tun(tuntap) ? 14 : 0;
-    tt_data_win_t *data = tuntap_data(tuntap);
-    DWORD read_bytes;
-    DWORD size_without_offset;
-
-    // Initialize the result values for a successful read of 0 bytes which
-    // will be identified as a recoverable tuntap_read() error
-    // Some error cases below will return true to use this soft error case
-    *pkt_size = 0;
-
-    if (!GetOverlappedResult(data->device_handle, &data->read_ol, &read_bytes, FALSE)) {
-        const DWORD err = GetLastError();
-
-        // This should not happen, if it does this shouldn't be a fatal error
-        if (err == ERROR_IO_INCOMPLETE) {
-            logger(LOG_WARN, "%s: %s: %s", __func__, "GetOverlappedResult",
-                "Invoked but the read is still pending");
-            return true;
-        }
-
-        logger(LOG_ERR, "%s: %s: %s", __func__, "GetOverlappedResult",
-            win_strerror(err));
-        return false;
-    }
-
-    // At this point the read is finished, so we have to always initiate a new
-    // overlapped read before returning or no more packets will be read from the
-    // device
-
-    // The packet is invalid
-    if (read_bytes <= tun_offset)
-        return initiate_overlapped_read(tuntap);
-
-    size_without_offset = read_bytes - tun_offset;
-
-    // With TUN emulation some packets will be read but are not compatible
-    // with layer 3 (ARP/NDP)
-    if (tuntap_is_tun(tuntap)) {
-        const uint16_t ether_type = ntohs(*((uint16_t *) &data->read_buf[12]));
-
-        // If the packet is not TUN compatible, don't return it
-        if (!tun_handle(tuntap, ether_type, data->read_buf + tun_offset, size_without_offset))
-            return initiate_overlapped_read(tuntap);
-    }
-
-    // The destination buffer must be large enough to hold the packet
-    if (size_without_offset > buf_size) {
-        logger(LOG_CRIT, "%s: Buffer size is too small (%lu/%zu bytes)",
-            __func__, size_without_offset, buf_size);
-        errno = EINVAL;
-        initiate_overlapped_read(tuntap);
-        return false;
-    }
-
-    // Set the read packet's size and copy it
-    memcpy(buf, data->read_buf + tun_offset, size_without_offset);
-    *pkt_size = size_without_offset;
-    return initiate_overlapped_read(tuntap);
-}
-
-bool tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size)
-{
-    // Ethernet header offset to add to layer 3 packets
-    const size_t tun_offset = tuntap_is_tun(tuntap) ? 14 : 0;
-    const size_t size_with_offset = packet_size + tun_offset;
-    tt_data_win_t *data = tuntap_data(tuntap);
-    DWORD written_bytes;
-
-    // If a previous write was not finished we have to wait until it is
-    if (data->write_pending) {
-        if (!GetOverlappedResult(data->device_handle, &data->write_ol,
-                &written_bytes, FALSE))
-        {
-            const DWORD err = GetLastError();
-
-            if (err == ERROR_IO_PENDING) {
-                // The write is still in progress, drop the current packet
-                logger(LOG_WARN,
-                    "%s: Dropping packet of %zu bytes (previous overlapped write still pending)",
-                    __func__, packet_size);
-                return true;
-            } else {
-                // The previous write failed
-                logger(LOG_ERR, "%s: %s: %s", __func__, "GetOverlappedResult",
-                    win_strerror(err));
-                return false;
-            }
-        }
-
-        // Write is finished
-        data->write_pending = false;
-        logger_debug(DBG_TUNTAP, "Async write of %lu bytes (finished)", written_bytes);
-    }
-
-    // Check that the packet can fit in the write buffer
-    if (size_with_offset > TUNTAP_BUFSIZE) {
-        logger(LOG_WARN,
-            "%s: Dropping packet bigger than the buffer size (%zu/%d, offset %zu)",
-            __func__, size_with_offset, TUNTAP_BUFSIZE, tun_offset);
-        return true;
-    }
-
-    // Copy the packet to the write buffer
-    // This must be done in case the overlapped write can run in the background
-    // and the packet pointer is unsafe to use after returning
-    memcpy(data->write_buf + tun_offset, packet, packet_size);
-
-    // If the device is in TUN mode, add an Ethernet header
-    if (tuntap_is_tun(tuntap)) {
-        // Destination/source MAC addresses don't change and are already
-        // initialized in tuntap_open()
-
-        // Ether type
-        switch (((const uint8_t *) packet)[0] >> 4) {
-        case 4: // IPv4
-            *((uint16_t *) &data->write_buf[12]) = htons(0x0800);
-            break;
-        case 6: // IPv6
-            *((uint16_t *) &data->write_buf[12]) = htons(0x86DD);
-            break;
-        default: // Any other value defaults to an ARP packet
-            *((uint16_t *) &data->write_buf[12]) = htons(0x0806);
-            break;
-        }
-    }
-
-    // Write the packet
-    if (WriteFile(data->device_handle, data->write_buf, size_with_offset,
-            &written_bytes, &data->write_ol))
-    {
-        // The packet was written immediately
-        SetEvent(data->write_ol.hEvent);
-        logger_debug(DBG_TUNTAP, "Immediate write of %lu bytes", written_bytes);
-
-    } else {
-        const DWORD err = GetLastError();
-
-        if (err == ERROR_IO_PENDING) {
-            // The packet will be written asynchronously
-            logger_debug(DBG_TUNTAP, "Async write of %zu bytes (pending)",
-                packet_size);
-            data->write_pending = true;
-        } else {
-            // The packet could not be written
-            logger(LOG_CRIT, "%s: Failed to write %zu bytes to device handle: %s",
-                tuntap->dev_name, packet_size, win_strerror(err));
-            return false;
-        }
-    }
-
-    return true;
-}
-
-void tuntap_init_aio_event(tuntap_t *tuntap, aio_event_t *event)
-{
-    aio_event_set_handles(event, tuntap_data(tuntap)->read_ol.hEvent, true, NULL, true);
 }
