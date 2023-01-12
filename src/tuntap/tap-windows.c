@@ -3,7 +3,7 @@
 #include "tuntap.h"
 #include "netaddr.h"
 #include "netutil.h"
-#include "tap-windows.h"
+#include "tuntap/tap-windows.h"
 #include "macros_windows.h"
 #include <stdio.h>
 #include <string.h>
