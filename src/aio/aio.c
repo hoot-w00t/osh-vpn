@@ -158,7 +158,7 @@ void aio_free(aio_t *aio)
         // If this happens then one of the delete handlers must have created and
         // added a new event to the AIO, this should not happen as the events'
         // resources will not be freed
-        if (aio->queue_head) {
+        if (aio_has_queued_events(aio)) {
             logger(LOG_CRIT, "%s: %s", __func__,
                 "queue_head is not NULL after deleting all events");
         }

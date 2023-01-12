@@ -112,6 +112,7 @@ void aio_free(aio_t *aio);
 ssize_t aio_poll(aio_t *aio, ssize_t timeout);
 
 #define aio_events_count(aio) ((aio)->events_count)
+#define aio_has_queued_events(aio) ((aio)->queue_head != NULL)
 
 aio_event_t *aio_event_add(aio_t *aio, const aio_event_t *event);
 aio_event_t *aio_event_add_inl(aio_t *aio,
