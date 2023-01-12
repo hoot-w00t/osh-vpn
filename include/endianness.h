@@ -39,7 +39,26 @@
     #endif
 
 #else
-    #warning "Unsupported platform"
+    // Try to detect endianness using compiler definitions
+
+    #if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && defined(__ORDER_BIG_ENDIAN__)
+        #if (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+            #define _OSH_ENDIANNESS _OSH_ENDIANNESS_LITTLE
+        #elif (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+            #define _OSH_ENDIANNESS _OSH_ENDIANNESS_BIG
+        #else
+            #error "Unknown __BYTE_ORDER__ value"
+        #endif
+    #else
+        #if (__LITTLE_ENDIAN__)
+            #define _OSH_ENDIANNESS _OSH_ENDIANNESS_LITTLE
+        #elif (__BIG_ENDIAN__)
+            #define _OSH_ENDIANNESS _OSH_ENDIANNESS_BIG
+        #else
+            #error "Failed to detect endianness"
+        #endif
+    #endif
+
 #endif
 
 // If _OSH_ENDIANNESS is defined and is not disabled, define the byte swapping
