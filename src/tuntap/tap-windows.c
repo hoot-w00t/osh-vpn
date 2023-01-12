@@ -440,7 +440,7 @@ static void _tuntap_init_aio_event(tuntap_t *tuntap, aio_event_t *event)
     aio_event_set_handles(event, tuntap_data(tuntap)->read_ol.hEvent, true, NULL, true);
 }
 
-tuntap_t *tuntap_open(const char *devname, bool tap)
+tuntap_t *tuntap_open_tap_windows(const char *devname, bool tap)
 {
     // We cannot create a TAP device on the fly, it must already exist so we
     // need to have its name to find and open it

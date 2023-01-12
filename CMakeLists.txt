@@ -116,7 +116,7 @@ endif()
 # TUN/TAP sources
 set(OSH_TUNTAP_SOURCES src/tuntap/common.c)
 if (CYGWIN OR MSYS OR WIN32)
-    set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} "src/tuntap/tap-windows.c")
+    set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} src/tuntap/windows.c "src/tuntap/tap-windows.c")
 else()
     set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} src/tuntap/linux.c)
 endif()
