@@ -16,6 +16,46 @@
 
 #define tuntap_filepath "/dev/net/tun"
 
+static void _tuntap_close(tuntap_t *tuntap)
+{
+    close(tuntap->data.fd);
+    tuntap_free_common(tuntap);
+    free(tuntap);
+}
+
+static bool _tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
+{
+    ssize_t n = read(tuntap->data.fd, buf, buf_size);
+
+    if (n < 0) {
+        if (IO_WOULDBLOCK(errno)) {
+            *pkt_size = 0;
+            return true;
+        }
+
+        logger(LOG_CRIT, "%s: read: %s", tuntap->dev_name, strerror(errno));
+        return false;
+    }
+    *pkt_size = (size_t) n;
+    return true;
+}
+
+static bool _tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size)
+{
+    ssize_t n = write(tuntap->data.fd, packet, packet_size);
+
+    if (n < 0) {
+        logger(LOG_CRIT, "%s: write: %s", tuntap->dev_name, strerror(errno));
+        return false;
+    }
+    return true;
+}
+
+static void _tuntap_init_aio_event(tuntap_t *tuntap, aio_event_t *event)
+{
+    event->fd = tuntap->data.fd;
+}
+
 tuntap_t *tuntap_open(const char *devname, bool tap)
 {
     tuntap_t *tuntap;
@@ -52,6 +92,7 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
     }
 
     tuntap = tuntap_empty(tap);
+    tuntap_set_funcs(tuntap, _tuntap_close, _tuntap_read, _tuntap_write, _tuntap_init_aio_event);
     tuntap->dev_name_size = IFNAMSIZ + 1;
     tuntap->dev_name = xzalloc(tuntap->dev_name_size);
     strcpy(tuntap->dev_name, ifr.ifr_name);
@@ -61,45 +102,6 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
         tuntap->is_tap ? "TAP" : "TUN",
         tuntap->dev_name,
         tuntap->data.fd);
+
     return tuntap;
-}
-
-void tuntap_close(tuntap_t *tuntap)
-{
-    close(tuntap->data.fd);
-    tuntap_free_common(tuntap);
-    free(tuntap);
-}
-
-bool tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
-{
-    ssize_t n = read(tuntap->data.fd, buf, buf_size);
-
-    if (n < 0) {
-        if (IO_WOULDBLOCK(errno)) {
-            *pkt_size = 0;
-            return true;
-        }
-
-        logger(LOG_CRIT, "%s: read: %s", tuntap->dev_name, strerror(errno));
-        return false;
-    }
-    *pkt_size = (size_t) n;
-    return true;
-}
-
-bool tuntap_write(tuntap_t *tuntap, const void *packet, size_t packet_size)
-{
-    ssize_t n = write(tuntap->data.fd, packet, packet_size);
-
-    if (n < 0) {
-        logger(LOG_CRIT, "%s: write: %s", tuntap->dev_name, strerror(errno));
-        return false;
-    }
-    return true;
-}
-
-void tuntap_init_aio_event(tuntap_t *tuntap, aio_event_t *event)
-{
-    event->fd = tuntap->data.fd;
 }
