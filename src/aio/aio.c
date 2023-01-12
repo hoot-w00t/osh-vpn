@@ -263,14 +263,11 @@ void aio_event_del_fd(aio_t *aio, aio_fd_t fd)
     }
 }
 
+#if !(PLATFORM_IS_WINDOWS)
 // Generic delete callback that closes the event's file descriptor if it is valid
 void aio_cb_delete_close_fd(aio_event_t *event)
 {
-#if PLATFORM_IS_WINDOWS
-    if (event->fd != invalid_sock_t)
-        sock_close(event->fd);
-#else
     if (event->fd >= 0)
         close(event->fd);
-#endif
 }
+#endif

@@ -152,7 +152,9 @@ aio_event_t *aio_event_add_inl(aio_t *aio,
 void aio_event_del(aio_event_t *event);
 void aio_event_del_fd(aio_t *aio, aio_fd_t fd);
 
+#if !(PLATFORM_IS_WINDOWS)
 void aio_cb_delete_close_fd(aio_event_t *event);
+#endif
 
 // These functions are implementation specific
 void aio_enable_poll_events(aio_event_t *event, aio_poll_event_t poll_events);
