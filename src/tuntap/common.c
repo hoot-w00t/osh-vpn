@@ -38,6 +38,19 @@ tuntap_t *tuntap_empty(bool is_tap)
     return tuntap;
 }
 
+// Set the TUN/TAP API function pointers
+void tuntap_set_funcs(tuntap_t *tuntap,
+    tuntap_func_close_t func_close,
+    tuntap_func_read_t func_read,
+    tuntap_func_write_t func_write,
+    tuntap_func_init_aio_event_t func_init_aio_event)
+{
+    tuntap->close = func_close;
+    tuntap->read = func_read;
+    tuntap->write = func_write;
+    tuntap->init_aio_event = func_init_aio_event;
+}
+
 // Free common allocated resources in tuntap_t
 void tuntap_free_common(tuntap_t *tuntap)
 {
