@@ -2,6 +2,8 @@
 #define _OSH_ENDIANNESS_H
 
 // This header includes the definitions for byte order conversions
+// If _OSH_ENDIANNESS_DEBUG is defined warnings will be emitted to debug the
+// endianness detection
 
 #include "macros.h"
 
@@ -23,7 +25,15 @@
     #define _OSH_ENDIANNESS _OSH_ENDIANNESS_DISABLE
     #include <endian.h>
 
+    #if defined(_OSH_ENDIANNESS_DEBUG)
+        #warning "Endianness: Linux (endian.h)"
+    #endif
+
 #elif PLATFORM_IS_WINDOWS
+    #if defined(_OSH_ENDIANNESS_DEBUG)
+        #warning "Endianness: Windows (detect with sys/param.h)"
+    #endif
+
     #include <sys/param.h>
 
     #if !defined(BYTE_ORDER)
@@ -42,6 +52,10 @@
     // Try to detect endianness using compiler definitions
 
     #if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && defined(__ORDER_BIG_ENDIAN__)
+        #if defined(_OSH_ENDIANNESS_DEBUG)
+            #warning "Endianness: Unknown (detect using __BYTE_ORDER__)"
+        #endif
+
         #if (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
             #define _OSH_ENDIANNESS _OSH_ENDIANNESS_LITTLE
         #elif (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
@@ -50,6 +64,10 @@
             #error "Unknown __BYTE_ORDER__ value"
         #endif
     #else
+        #if defined(_OSH_ENDIANNESS_DEBUG)
+            #warning "Endianness: Unknown (detect using __LITTLE_ENDIAN__, __BIG_ENDIAN__)"
+        #endif
+
         #if (__LITTLE_ENDIAN__)
             #define _OSH_ENDIANNESS _OSH_ENDIANNESS_LITTLE
         #elif (__BIG_ENDIAN__)
@@ -69,6 +87,10 @@
     #if (_OSH_ENDIANNESS == _OSH_ENDIANNESS_LITTLE)
         // Little-endian
 
+        #if defined(_OSH_ENDIANNESS_DEBUG)
+            #warning "Endianness: Defining little-endian macros"
+        #endif
+
         #define htole16(x)  (x)
         #define letoh16(x)  (x)
         #define htobe16(x)  osh_bswap16(x)
@@ -87,6 +109,10 @@
     #elif (_OSH_ENDIANNESS == _OSH_ENDIANNESS_BIG)
         // Big-endian
 
+        #if defined(_OSH_ENDIANNESS_DEBUG)
+            #warning "Endianness: Defining big-endian macros"
+        #endif
+
         #define htole16(x)  osh_bswap16(x)
         #define letoh16(x)  osh_bswap16(x)
         #define htobe16(x)  (x)
@@ -103,6 +129,10 @@
         #define betoh64(x)  (x)
     #else
         #error "Unknown _OSH_ENDIANNESS value"
+    #endif
+#else
+    #if defined(_OSH_ENDIANNESS_DEBUG)
+        #warning "Endianness: Not defining macros"
     #endif
 #endif
 
