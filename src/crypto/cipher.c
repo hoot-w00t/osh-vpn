@@ -2,6 +2,7 @@
 #include "xalloc.h"
 #include "crypto/common.h"
 #include "crypto/cipher.h"
+#include "endianness.h"
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>

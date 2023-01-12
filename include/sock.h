@@ -2,6 +2,7 @@
 #define _OSH_SOCK_H
 
 #include "macros.h"
+#include "endianness.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <inttypes.h>
