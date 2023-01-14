@@ -273,10 +273,6 @@ static void _tuntap_close(tuntap_t *tuntap)
 
     // Free the tuntap data
     free(tuntap->data.ptr);
-
-    // Free the common parts of the tuntap_t structure and the structure itself
-    tuntap_free_common(tuntap);
-    free(tuntap);
 }
 
 static bool _tuntap_read(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size)
@@ -553,16 +549,12 @@ tuntap_t *tuntap_open_tap_windows(const char *devname, bool tap)
     // Create the TUN/TAP device
     // The tap-windows6 driver only supports TAP (layer 2) mode, so in order to
     // work with a TUN network Osh will translate between both layers
-    tuntap_t *tuntap = tuntap_empty(tap);
+    tuntap_t *tuntap = tuntap_empty(tap, _tuntap_close, _tuntap_read, _tuntap_write, _tuntap_init_aio_event);
     tt_data_win_t *data;
 
-    tuntap_set_funcs(tuntap, _tuntap_close, _tuntap_read, _tuntap_write, _tuntap_init_aio_event);
-
     // Copy the adapter's name and ID
-    tuntap->dev_name = xstrdup(adapter_name);
-    tuntap->dev_name_size = strlen(tuntap->dev_name) + 1;
-    tuntap->dev_id = xstrdup(adapter_id);
-    tuntap->dev_id_size = strlen(tuntap->dev_id) + 1;
+    tuntap_set_devname(tuntap, adapter_name, strlen(adapter_name));
+    tuntap_set_devid(tuntap, adapter_id, strlen(adapter_id));
 
     // Allocate the tuntap data
     // Initialize all members to 0 since error handling checks those

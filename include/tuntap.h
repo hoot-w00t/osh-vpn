@@ -45,11 +45,11 @@ struct tuntap {
     char *dev_name;
     size_t dev_name_size;
 
-    // Device ID (depends on the platform)
+    // Device ID (can be NULL, depends on the platform)
     char *dev_id;
     size_t dev_id_size;
 
-    // Any data needed by the TUN/TAP interface we are compiling
+    // Any data needed by the TUN/TAP driver
     tuntap_data_t data;
 };
 
@@ -64,7 +64,7 @@ tuntap_t *tuntap_open(const char *devname, bool tap);
 // Close TUN/TAP device and free all resources
 // The pointer will also be freed, it should not be used after calling this
 // function
-#define tuntap_close(tuntap) (tuntap)->close(tuntap)
+void tuntap_close(tuntap_t *tuntap);
 
 // Read a packet from the TUN/TAP device to buf which should be of buf_size
 // Sets *pkt_size to the actual size of the packet (<= buf_size)
@@ -96,15 +96,17 @@ static inline void tuntap_close_at(tuntap_t **tuntap)
 // Defined in src/tuntap/common.c
 bool tuntap_nonblock(int fd);
 
-tuntap_t *tuntap_empty(bool is_tap);
-
-void tuntap_set_funcs(tuntap_t *tuntap,
+tuntap_t *tuntap_empty(
+    bool is_tap,
     tuntap_func_close_t func_close,
     tuntap_func_read_t func_read,
     tuntap_func_write_t func_write,
     tuntap_func_init_aio_event_t func_init_aio_event);
 
-void tuntap_free_common(tuntap_t *tuntap);
+void tuntap_set_devname(tuntap_t *tuntap, const char *devname,
+    const size_t devname_len);
+void tuntap_set_devid(tuntap_t *tuntap, const char *devid,
+    const size_t devid_len);
 
 #define tuntap_is_tap(tuntap) ((tuntap)->is_tap)
 #define tuntap_is_tun(tuntap) (!tuntap_is_tap(tuntap))
