@@ -268,7 +268,7 @@ static bool qm_packet_should_drop(const client_t *c)
         // gets closer to the maximum.
         // When the queue size is at or above the maximum we drop every packet
         if (netbuffer_data_size(c->io.sendq) >= random_drop_above) {
-            logger_debug(DBG_TUNTAP,
+            logger_debug(DBG_TUNTAP_TRAFFIC,
                 "%s: Data packet should drop: queue at %zu/%i bytes (%zu%%, drop above: %zu)",
                 c->addrw,
                 netbuffer_data_size(c->io.sendq),
@@ -382,7 +382,7 @@ bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
     // Apply queue management for unreliable packets to limit network congestion
     if (!(def->is_reliable) && qm_packet_should_drop(c))
     {
-        logger_debug(DBG_TUNTAP, "%s: Dropping %s packet of %zu bytes (%s)",
+        logger_debug(DBG_TUNTAP_TRAFFIC, "%s: Dropping %s packet of %zu bytes (%s)",
             c->addrw, oshpacket_type_name(hdr->type), payload_size, "qm");
         return false;
     }

@@ -87,14 +87,14 @@ static void device_aio_read(aio_event_t *event)
         client_queue_packet_data_broadcast(NULL, data->buf, pkt_size);
     }
 
-    if (logger_is_debugged(DBG_TUNTAP)) {
+    if (logger_is_debugged(DBG_TUNTAP_TRAFFIC)) {
         char pkt_src[INET6_ADDRSTRLEN];
         char pkt_dest[INET6_ADDRSTRLEN];
 
         netaddr_ntop(pkt_src, sizeof(pkt_src), &pkt_hdr.src);
         netaddr_ntop(pkt_dest, sizeof(pkt_dest), &pkt_hdr.dest);
 
-        logger_debug(DBG_TUNTAP, "%s: %s: %s -> %s (%zu bytes, to %s)",
+        logger_debug(DBG_TUNTAP_TRAFFIC, "%s: %s: %s -> %s (%zu bytes, to %s)",
             oshd.tuntap->dev_name, oshd.name, pkt_src, pkt_dest, pkt_size,
             netroute_owner_name(route));
     }

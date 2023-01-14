@@ -18,13 +18,13 @@ bool oshpacket_handler_data(client_t *c, node_id_t *src, oshpacket_t *pkt)
     }
 
     // Log it
-    if (logger_is_debugged(DBG_TUNTAP)) {
+    if (logger_is_debugged(DBG_TUNTAP_TRAFFIC)) {
         char netpkt_src[INET6_ADDRSTRLEN];
         char netpkt_dest[INET6_ADDRSTRLEN];
 
         netaddr_ntop(netpkt_src, sizeof(netpkt_src), &netpkt.src);
         netaddr_ntop(netpkt_dest, sizeof(netpkt_dest), &netpkt.dest);
-        logger_debug(DBG_TUNTAP, "%s: %s: %s <- %s (%zu bytes, from %s)",
+        logger_debug(DBG_TUNTAP_TRAFFIC, "%s: %s: %s <- %s (%zu bytes, from %s)",
             c->addrw, c->id->name, netpkt_dest, netpkt_src,
             pkt->payload_size, src->name);
     }

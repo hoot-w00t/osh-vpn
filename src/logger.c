@@ -7,6 +7,7 @@ static bool enabled_debug[debug_what_size] = {0};
 static const char *debug_names[debug_what_size] = {
     "oshd",
     "tuntap",
+    "tuntap_traffic",
     "routing",
     "netbuffer",
     "nodetree",

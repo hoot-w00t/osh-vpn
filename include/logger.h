@@ -16,6 +16,7 @@ typedef enum loglevel {
 typedef enum debug_what {
     DBG_OSHD = 0,
     DBG_TUNTAP,
+    DBG_TUNTAP_TRAFFIC,
     DBG_ROUTING,
     DBG_NETBUFFER,
     DBG_NODETREE,
