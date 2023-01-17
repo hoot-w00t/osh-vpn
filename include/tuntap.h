@@ -43,11 +43,9 @@ struct tuntap {
 
     // Device name
     char *dev_name;
-    size_t dev_name_size;
 
     // Device ID (can be NULL, depends on the platform)
     char *dev_id;
-    size_t dev_id_size;
 
     // Any data needed by the TUN/TAP driver
     tuntap_data_t data;

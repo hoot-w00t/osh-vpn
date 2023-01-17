@@ -53,8 +53,7 @@ void tuntap_set_devname(tuntap_t *tuntap, const char *devname,
 {
     free(tuntap->dev_name);
 
-    tuntap->dev_name_size = devname_len + 1;
-    tuntap->dev_name = xzalloc(tuntap->dev_name_size);
+    tuntap->dev_name = xzalloc(devname_len + 1);
     memcpy(tuntap->dev_name, devname, devname_len);
 }
 
@@ -64,8 +63,7 @@ void tuntap_set_devid(tuntap_t *tuntap, const char *devid,
 {
     free(tuntap->dev_id);
 
-    tuntap->dev_id_size = devid_len + 1;
-    tuntap->dev_id = xzalloc(tuntap->dev_id_size);
+    tuntap->dev_id = xzalloc(devid_len + 1);
     memcpy(tuntap->dev_id, devid, devid_len);
 }
 
