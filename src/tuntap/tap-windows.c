@@ -553,8 +553,8 @@ tuntap_t *tuntap_open_tap_windows(const char *devname, bool tap)
     tt_data_win_t *data;
 
     // Copy the adapter's name and ID
-    tuntap_set_devname(tuntap, adapter_name, strlen(adapter_name));
-    tuntap_set_devid(tuntap, adapter_id, strlen(adapter_id));
+    tuntap_set_devname(tuntap, adapter_name);
+    tuntap_set_devid(tuntap, adapter_id);
 
     // Allocate the tuntap data
     // Initialize all members to 0 since error handling checks those

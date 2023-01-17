@@ -48,23 +48,17 @@ tuntap_t *tuntap_empty(
 }
 
 // Set TUN/TAP device name
-void tuntap_set_devname(tuntap_t *tuntap, const char *devname,
-    const size_t devname_len)
+void tuntap_set_devname(tuntap_t *tuntap, const char *devname)
 {
     free(tuntap->dev_name);
-
-    tuntap->dev_name = xzalloc(devname_len + 1);
-    memcpy(tuntap->dev_name, devname, devname_len);
+    tuntap->dev_name = xstrdup(devname);
 }
 
 // Set TUN/TAP device ID
-void tuntap_set_devid(tuntap_t *tuntap, const char *devid,
-    const size_t devid_len)
+void tuntap_set_devid(tuntap_t *tuntap, const char *devid)
 {
     free(tuntap->dev_id);
-
-    tuntap->dev_id = xzalloc(devid_len + 1);
-    memcpy(tuntap->dev_id, devid, devid_len);
+    tuntap->dev_id = xstrdup(devid);
 }
 
 void tuntap_close(tuntap_t *tuntap)

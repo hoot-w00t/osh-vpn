@@ -84,7 +84,7 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
     }
 
     tuntap = tuntap_empty(tap, _tuntap_close, _tuntap_read, _tuntap_write, _tuntap_init_aio_event);
-    tuntap_set_devname(tuntap, ifr.ifr_name, strlen(ifr.ifr_name));
+    tuntap_set_devname(tuntap, ifr.ifr_name);
 
     tuntap->data.fd = fd;
 

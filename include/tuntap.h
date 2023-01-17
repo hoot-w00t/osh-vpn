@@ -101,10 +101,8 @@ tuntap_t *tuntap_empty(
     tuntap_func_write_t func_write,
     tuntap_func_init_aio_event_t func_init_aio_event);
 
-void tuntap_set_devname(tuntap_t *tuntap, const char *devname,
-    const size_t devname_len);
-void tuntap_set_devid(tuntap_t *tuntap, const char *devid,
-    const size_t devid_len);
+void tuntap_set_devname(tuntap_t *tuntap, const char *devname);
+void tuntap_set_devid(tuntap_t *tuntap, const char *devid);
 
 #define tuntap_is_tap(tuntap) ((tuntap)->is_tap)
 #define tuntap_is_tun(tuntap) (!tuntap_is_tap(tuntap))
