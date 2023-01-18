@@ -48,15 +48,21 @@ static void aio_event_free(aio_event_t *event)
     }
 }
 
+// Set aio->events_count to count and re-size aio->events array
+static void resize_aio_events(aio_t *aio, size_t count)
+{
+    aio->events_count = count;
+    aio->events = xreallocarray(aio->events, aio->events_count,
+        sizeof(aio_event_t *));
+}
+
 // Add event to aio
 static void aio_events_add(aio_t *aio, aio_event_t *event)
 {
     const size_t idx = aio->events_count;
-    const size_t new_count = aio->events_count + 1;
 
     // Allocate space for the new event and add it
-    aio->events = xreallocarray(aio->events, new_count, sizeof(aio_event_t *));
-    aio->events_count = new_count;
+    resize_aio_events(aio, aio->events_count + 1);
     aio->events[idx] = event;
 
     // Initialize the event's internal values
@@ -90,9 +96,7 @@ static void aio_events_delete(aio_event_t *event)
     }
 
     // Update dynamic arrays' sizes
-    aio->events_count -= 1;
-    aio->events = xreallocarray(aio->events, aio->events_count,
-        sizeof(aio_event_t *));
+    resize_aio_events(aio, aio->events_count - 1);
 
     // Disable the event if it was previously enabled before freeing it
     if (aio_event_is_enabled(event))

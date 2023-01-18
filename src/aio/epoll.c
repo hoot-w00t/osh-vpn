@@ -76,8 +76,8 @@ void _aio_event_enable(aio_t *aio, aio_event_t *event)
     if (epoll_ctl(aio_data(aio)->epfd, EPOLL_CTL_ADD, event->fd,
             &event_data_ep(event)) < 0)
     {
-        logger(LOG_CRIT, "Failed to add AIO event: epoll_ctl: %s (fd=" PRI_AIO_FD_T ")",
-            strerror(errno), event->fd);
+        logger(LOG_CRIT, "Failed to add AIO event: %s: %s (fd=" PRI_AIO_FD_T ")",
+            "epoll_ctl", strerror(errno), event->fd);
         abort();
     }
 }
@@ -88,8 +88,8 @@ void _aio_event_disable(aio_t *aio, aio_event_t *event)
     if (epoll_ctl(aio_data(aio)->epfd, EPOLL_CTL_DEL, event->fd,
             &event_data_ep(event)) < 0)
     {
-        logger(LOG_CRIT, "Failed to free AIO event: epoll_ctl: %s (fd=" PRI_AIO_FD_T ")",
-            strerror(errno), event->fd);
+        logger(LOG_CRIT, "Failed to free AIO event: %s: %s (fd=" PRI_AIO_FD_T ")",
+            "epoll_ctl", strerror(errno), event->fd);
         abort();
     }
 }
@@ -101,7 +101,7 @@ aio_t *_aio_create(aio_t *aio)
     // Create the epoll file descriptor
     aio_data(aio)->epfd = epoll_create1(EPOLL_CLOEXEC);
     if (aio_data(aio)->epfd < 0) {
-        logger(LOG_CRIT, "epoll_create1: %s", strerror(errno));
+        logger(LOG_CRIT, "%s: %s", "epoll_create1", strerror(errno));
         free(aio->data.ptr);
         return NULL;
     }
@@ -123,7 +123,7 @@ ssize_t _aio_poll(aio_t *aio, ssize_t timeout)
         if (errno == EINTR)
             return 0;
 
-        logger(LOG_CRIT, "aio_poll: epoll_wait: %s", strerror(errno));
+        logger(LOG_CRIT, "%s: %s: %s", __func__, "epoll_wait", strerror(errno));
         return -1;
     }
 
@@ -160,6 +160,7 @@ static void update_epoll_events(aio_event_t *event)
     // Update only if the event was added to epoll and its events have changed
     // since the last update
     if (   event->added_to_aio
+        && aio_event_is_enabled(event)
         && event_data_ep(event).events != event_data_shadow(event).events)
     {
         // Remember the new events

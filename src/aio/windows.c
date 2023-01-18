@@ -143,6 +143,7 @@ void _aio_event_free(__attribute__((unused)) aio_event_t *event)
 void _aio_event_init(aio_event_t *event)
 {
     event->data.ptr = xzalloc(sizeof(aio_event_data_windows_t));
+    event_data(event)->shadow_poll_events = event->poll_events;
 }
 
 void _aio_event_enable(aio_t *aio, aio_event_t *event)
@@ -365,7 +366,7 @@ static void update_poll_events(aio_event_t *event)
 
     event_data(event)->shadow_poll_events = event->poll_events;
 
-    if (event->added_to_aio) {
+    if (event->added_to_aio && aio_event_is_enabled(event)) {
         if (event_is_socket(event)) {
             update_socket_poll_events(event);
         } else {
