@@ -53,16 +53,6 @@ typedef struct event_data_epoll {
 
 void _aio_event_free(aio_event_t *event)
 {
-    if (event->aio) {
-        // Delete file descriptor from the interest list
-        if (epoll_ctl(aio_data(event->aio)->epfd, EPOLL_CTL_DEL, event->fd,
-                &event_data_ep(event)) < 0)
-        {
-            logger(LOG_CRIT, "Failed to free AIO event: epoll_ctl: %s (fd=" PRI_AIO_FD_T ")",
-                strerror(errno), event->fd);
-            abort();
-        }
-    }
     free(event->data.ptr);
 }
 
@@ -92,10 +82,16 @@ void _aio_event_add(aio_t *aio, aio_event_t *event)
     }
 }
 
-void _aio_event_delete(
-    __attribute__((unused)) aio_t *aio,
-    __attribute__((unused)) aio_event_t *event)
+void _aio_event_delete(aio_t *aio, aio_event_t *event)
 {
+    // Delete file descriptor from the interest list
+    if (epoll_ctl(aio_data(aio)->epfd, EPOLL_CTL_DEL, event->fd,
+            &event_data_ep(event)) < 0)
+    {
+        logger(LOG_CRIT, "Failed to free AIO event: epoll_ctl: %s (fd=" PRI_AIO_FD_T ")",
+            strerror(errno), event->fd);
+        abort();
+    }
 }
 
 aio_t *_aio_create(aio_t *aio)
