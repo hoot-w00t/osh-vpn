@@ -177,7 +177,8 @@ void aio_event_set_handles(aio_event_t *event,
 // Implementation specific function prototypes that should not be used outside
 // of the AIO
 
-// This function should free any generic data from the aio_event_t
+// This function should free any generic data from the aio_event_t that was
+// allocated by _aio_event_init()
 void _aio_event_free(aio_event_t *event);
 
 // This function is called after the aio_event_t is allocated but before
@@ -185,18 +186,10 @@ void _aio_event_free(aio_event_t *event);
 void _aio_event_init(aio_event_t *event);
 
 // This function is called when the aio_event_t is inserted in the aio_t
-// idx is the index at which the event is in the aio->events array
-// new_count is the number of elements in the array including this one
-void _aio_event_add(aio_t *aio, aio_event_t *event, size_t idx, size_t new_count);
+void _aio_event_add(aio_t *aio, aio_event_t *event);
 
 // This function is called when an event is being deleted from an AIO
-// idx is the index of this event in the aio->events array
-// move_size is the number of elements that will be shifted in the array
-//     memmove(&aio->events[idx], &aio->events[idx + 1],
-//         sizeof(aio->events) * move_size);
-// old_count is the number of elements in the aio->events array including this one
-void _aio_event_delete(aio_t *aio, aio_event_t *event,
-    size_t idx, size_t move_size, size_t old_count);
+void _aio_event_delete(aio_t *aio, aio_event_t *event);
 
 // This function is called after the aio_t is allocated
 // On success it must return the aio pointer passed to it, on error it should

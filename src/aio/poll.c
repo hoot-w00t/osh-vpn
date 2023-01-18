@@ -16,52 +16,94 @@ static const short _poll_flags[4] = {
 };
 #define poll_flags(x) _poll_flags[aio_poll_event_idx(x)]
 
-#define aio_data(aio) ((struct pollfd *) aio->data.ptr)
+typedef struct aio_data_poll {
+    struct pollfd *pfd;
+    size_t pfd_count;
+} aio_data_poll_t;
+#define aio_data(aio) ((aio_data_poll_t *) (aio)->data.ptr)
 
-void _aio_event_free(__attribute__((unused)) aio_event_t *event)
+typedef struct event_data_poll {
+    bool added_to_pfd;
+    size_t pfd_idx;
+} event_data_poll_t;
+#define event_data(event) ((event_data_poll_t *) (event)->data.ptr)
+
+void _aio_event_free(aio_event_t *event)
 {
+    free(event->data.ptr);
 }
 
-void _aio_event_init(__attribute__((unused)) aio_event_t *event)
+void _aio_event_init(aio_event_t *event)
 {
+    event->data.ptr = xalloc(sizeof(event_data_poll_t));
+    event_data(event)->added_to_pfd = false;
 }
 
-void _aio_event_add(aio_t *aio, aio_event_t *event, size_t idx, size_t new_count)
+// Re-size pfd array to hold count elements
+static void resize_pfd(aio_t *aio, size_t count)
 {
+    aio_data(aio)->pfd_count = count;
+    aio_data(aio)->pfd = xreallocarray(aio_data(aio)->pfd,
+        count, sizeof(struct pollfd));
+}
+
+void _aio_event_add(aio_t *aio, aio_event_t *event)
+{
+    const size_t idx = aio_data(aio)->pfd_count;
+
     // Allocate space for the new event in the pollfd array and initialize it
-    aio->data.ptr = xreallocarray(aio->data.ptr, new_count,
-        sizeof(struct pollfd));
-    aio_data(aio)[idx].fd = event->fd;
-    aio_data(aio)[idx].events = poll_flags(event->poll_events);
+    resize_pfd(aio, aio_data(aio)->pfd_count + 1);
+    aio_data(aio)->pfd[idx].fd = event->fd;
+    aio_data(aio)->pfd[idx].events = poll_flags(event->poll_events);
+
+    // Set the event's index in the pfd array
+    event_data(event)->pfd_idx = idx;
+    event_data(event)->added_to_pfd = true;
 }
 
-void _aio_event_delete(aio_t *aio, __attribute__((unused)) aio_event_t *event,
-    size_t idx, size_t move_size, __attribute__((unused)) size_t old_count)
+void _aio_event_delete(aio_t *aio, aio_event_t *event)
 {
+    // Don't try to delete events which are not in the pfd array
+    if (!event_data(event)->added_to_pfd)
+        return;
+
+    const size_t idx = event_data(event)->pfd_idx;
+    const size_t move_size = aio_data(aio)->pfd_count - idx - 1;
+
+    // If the pollfd entry is not the last of the array, move everything that
+    // comes after to prevent the last entry from being erased
     if (move_size) {
-        memmove(&aio_data(aio)[idx], &aio_data(aio)[idx + 1],
+        memmove(&aio_data(aio)->pfd[idx], &aio_data(aio)->pfd[idx + 1],
             sizeof(struct pollfd) * move_size);
+
+        // Update the moved events' pfd_idx
+        for (size_t i = 0; i < aio->events_count; ++i) {
+            aio_event_t *moved = aio->events[i];
+
+            if (event_data(moved)->added_to_pfd && event_data(moved)->pfd_idx > idx)
+                event_data(moved)->pfd_idx -= 1;
+        }
     }
 
-    // Re-size the events_pfd array
-    aio->data.ptr = xreallocarray(aio->data.ptr, aio->events_count,
-        sizeof(struct pollfd));
+    resize_pfd(aio, aio_data(aio)->pfd_count - 1);
 }
 
 aio_t *_aio_create(aio_t *aio)
 {
+    aio->data.ptr = xzalloc(sizeof(aio_data_poll_t));
     return aio;
 }
 
 void _aio_free(aio_t *aio)
 {
+    free(aio_data(aio)->pfd);
     free(aio->data.ptr);
 }
 
 ssize_t _aio_poll(aio_t *aio, ssize_t timeout)
 {
     // Poll all events
-    ssize_t n = poll(aio_data(aio), aio->events_count, timeout);
+    ssize_t n = poll(aio_data(aio)->pfd, aio_data(aio)->pfd_count, timeout);
 
     if (n < 0) {
         // Polling errors can occur when receiving signals, in this case the
@@ -69,7 +111,7 @@ ssize_t _aio_poll(aio_t *aio, ssize_t timeout)
         if (errno == EINTR)
             return 0;
 
-        logger(LOG_CRIT, "aio_poll: poll: %s", strerror(errno));
+        logger(LOG_CRIT, "%s: %s: %s", __func__, "poll", strerror(errno));
         return -1;
     }
 
@@ -77,8 +119,16 @@ ssize_t _aio_poll(aio_t *aio, ssize_t timeout)
     ssize_t remaining = n;
 
     for (size_t i = 0; n > 0 && i < aio->events_count; ++i) {
-        // If there are no revents skip this event
-        if (!aio_data(aio)[i].revents)
+        aio_event_t *event = aio->events[i];
+
+        // Skip events which are not polled
+        if (!event_data(event)->added_to_pfd)
+            continue;
+
+        const struct pollfd *pfd = &aio_data(aio)->pfd[event_data(event)->pfd_idx];
+
+        // Skip the event if no I/O events were polled
+        if (pfd->revents == 0)
             continue;
 
         // Decrement the number of remaining events
@@ -86,25 +136,24 @@ ssize_t _aio_poll(aio_t *aio, ssize_t timeout)
 
         // If there is an error call the error callback and ignore any other
         // events
-        if (aio_data(aio)[i].revents & (POLLERR | POLLHUP)) {
-            if (aio->events[i]->cb_error) {
-                aio->events[i]->cb_error(
-                    aio->events[i],
-                    (aio_data(aio)[i].revents & POLLERR) ? AIO_ERR : AIO_HUP);
+        if (pfd->revents & (POLLERR | POLLHUP)) {
+            if (event->cb_error) {
+                event->cb_error(event,
+                    (pfd->revents & POLLERR) ? AIO_ERR : AIO_HUP);
             }
             continue;
         }
 
         // If data is ready to be read, call the read callback
-        if (aio_data(aio)[i].revents & (POLLIN)) {
-            if (aio->events[i]->cb_read)
-                aio->events[i]->cb_read(aio->events[i]);
+        if (pfd->revents & (POLLIN)) {
+            if (event->cb_read)
+                event->cb_read(event);
         }
 
         // If data is ready to be written, call the write callback
-        if (aio_data(aio)[i].revents & (POLLOUT)) {
-            if (aio->events[i]->cb_write)
-                aio->events[i]->cb_write(aio->events[i]);
+        if (pfd->revents & (POLLOUT)) {
+            if (event->cb_write)
+                event->cb_write(event);
         }
     }
 
@@ -114,8 +163,8 @@ ssize_t _aio_poll(aio_t *aio, ssize_t timeout)
 // Enables the given poll events
 void aio_enable_poll_events(aio_event_t *event, aio_poll_event_t poll_events)
 {
-    if (event->added_to_aio) {
-        aio_data(event->aio)[event->aio_idx].events |= poll_flags(poll_events);
+    if (event_data(event)->added_to_pfd) {
+        aio_data(event->aio)->pfd[event_data(event)->pfd_idx].events |= poll_flags(poll_events);
     } else {
         event->poll_events |= poll_events;
     }
@@ -124,8 +173,8 @@ void aio_enable_poll_events(aio_event_t *event, aio_poll_event_t poll_events)
 // Disables the given poll events
 void aio_disable_poll_events(aio_event_t *event, aio_poll_event_t poll_events)
 {
-    if (event->added_to_aio) {
-        aio_data(event->aio)[event->aio_idx].events &= ~(poll_flags(poll_events));
+    if (event_data(event)->added_to_pfd) {
+        aio_data(event->aio)->pfd[event_data(event)->pfd_idx].events &= ~(poll_flags(poll_events));
     } else {
         event->poll_events &= ~(poll_events);
     }

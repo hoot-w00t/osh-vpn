@@ -142,11 +142,7 @@ void _aio_event_init(aio_event_t *event)
     event->data.ptr = xzalloc(sizeof(aio_event_data_windows_t));
 }
 
-void _aio_event_add(
-    aio_t *aio,
-    aio_event_t *event,
-    __attribute__((unused)) size_t idx,
-    __attribute__((unused)) size_t new_count)
+void _aio_event_add(aio_t *aio, aio_event_t *event)
 {
     event_data(event)->shadow_poll_events = event->poll_events;
 
@@ -171,12 +167,7 @@ void _aio_event_add(
     aio_data(aio)->handles_need_update = true;
 }
 
-void _aio_event_delete(
-    aio_t *aio,
-    aio_event_t *event,
-    __attribute__((unused)) size_t idx,
-    __attribute__((unused)) size_t move_size,
-    __attribute__((unused)) size_t old_count)
+void _aio_event_delete(aio_t *aio, aio_event_t *event)
 {
     if (event_is_socket(event)) {
         // Deinitialize socket handle and close it

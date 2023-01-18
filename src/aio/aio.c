@@ -56,7 +56,7 @@ static void aio_events_add(aio_t *aio, aio_event_t *event)
     aio->events_count = new_count;
     aio->events[idx] = event;
 
-    _aio_event_add(aio, event, idx, new_count);
+    _aio_event_add(aio, event);
 
     // Initialize the event's internal values
     event->aio_idx = idx;
@@ -89,7 +89,7 @@ static void aio_events_delete(aio_event_t *event)
     aio->events = xreallocarray(aio->events, aio->events_count,
         sizeof(aio_event_t *));
 
-    _aio_event_delete(aio, event, idx, move_size, aio->events_count);
+    _aio_event_delete(aio, event);
 
     // Free the event
     aio_event_free(event);

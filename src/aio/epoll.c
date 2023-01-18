@@ -77,9 +77,7 @@ void _aio_event_init(aio_event_t *event)
     event_data_shadow(event) = event_data_ep(event);
 }
 
-void _aio_event_add(aio_t *aio, aio_event_t *event,
-    __attribute__((unused)) size_t idx,
-    __attribute__((unused)) size_t new_count)
+void _aio_event_add(aio_t *aio, aio_event_t *event)
 {
     // Update the copy of the epoll event data in case its events were changed
     event_data_shadow(event) = event_data_ep(event);
@@ -96,10 +94,7 @@ void _aio_event_add(aio_t *aio, aio_event_t *event,
 
 void _aio_event_delete(
     __attribute__((unused)) aio_t *aio,
-    __attribute__((unused)) aio_event_t *event,
-    __attribute__((unused)) size_t idx,
-    __attribute__((unused)) size_t move_size,
-    __attribute__((unused)) size_t old_count)
+    __attribute__((unused)) aio_event_t *event)
 {
 }
 
