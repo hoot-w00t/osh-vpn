@@ -113,6 +113,7 @@ void device_add(tuntap_t *tuntap)
 {
     aio_event_t event;
 
+    aio_event_init_base(&event);
     tuntap_init_aio_event(tuntap, &event);
 
     // TODO: Maybe check that tuntap_init_aio_event() didn't modify callbacks,

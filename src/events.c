@@ -192,6 +192,7 @@ static void event_aio_error(__attribute__((unused)) aio_event_t *event,
 bool event_init(void)
 {
     int timerfd = timerfd_create(oshd_gettime_clock, TFD_NONBLOCK | TFD_CLOEXEC);
+    aio_event_t base_event;
 
     if (timerfd < 0) {
         logger(LOG_CRIT, "event_init: Failed to create timerfd: %s", strerror(errno));
@@ -199,15 +200,15 @@ bool event_init(void)
     }
 
     memset(&timer_next_timeout, 0, sizeof(timer_next_timeout));
-    event_queue_aio = aio_event_add_inl(oshd.aio,
-        timerfd,
-        AIO_READ,
-        NULL,
-        NULL,
-        aio_cb_delete_close_fd,
-        event_aio_process,
-        NULL,
-        event_aio_error);
+
+    aio_event_init_base(&base_event);
+    base_event.fd = timerfd;
+    base_event.poll_events = AIO_READ;
+    base_event.cb_delete = aio_cb_delete_close_fd;
+    base_event.cb_read = event_aio_process;
+    base_event.cb_error = event_aio_error;
+    event_queue_aio = aio_event_add(oshd.aio, &base_event);
+
     return true;
 }
 #else

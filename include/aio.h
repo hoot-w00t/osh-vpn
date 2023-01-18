@@ -145,16 +145,9 @@ ssize_t aio_poll(aio_t *aio, ssize_t timeout);
 #define aio_events_count(aio) ((aio)->events_count)
 #define aio_has_queued_events(aio) ((aio)->queue_head != NULL)
 
+void aio_event_init_base(aio_event_t *base_event);
 aio_event_t *aio_event_add(aio_t *aio, const aio_event_t *event);
-aio_event_t *aio_event_add_inl(aio_t *aio,
-    aio_fd_t fd,
-    aio_poll_event_t poll_events,
-    void *userdata,
-    aio_cb_add_t cb_add,
-    aio_cb_delete_t cb_delete,
-    aio_cb_read_t cb_read,
-    aio_cb_write_t cb_write,
-    aio_cb_error_t cb_error);
+
 void aio_event_del(aio_event_t *event);
 void aio_event_del_fd(aio_t *aio, aio_fd_t fd);
 

@@ -299,6 +299,8 @@ static void oshd_client_add(client_t *c)
 {
     aio_event_t base_event;
 
+    aio_event_init_base(&base_event);
+
     // Initialize the event's constants
     base_event.fd = c->sockfd;
     base_event.poll_events = AIO_READ;
@@ -431,13 +433,13 @@ static void server_aio_del(aio_event_t *event)
 // Add an aio event for a TCP server
 void oshd_server_add(sock_t server_sockfd)
 {
-    aio_event_add_inl(oshd.aio,
-        server_sockfd,
-        AIO_READ,
-        NULL,
-        NULL,
-        server_aio_del,
-        server_aio_read,
-        NULL,
-        server_aio_error);
+    aio_event_t event;
+
+    aio_event_init_base(&event);
+    event.fd = server_sockfd;
+    event.poll_events = AIO_READ;
+    event.cb_delete = server_aio_del;
+    event.cb_read = server_aio_read;
+    event.cb_error = server_aio_error;
+    aio_event_add(oshd.aio, &event);
 }

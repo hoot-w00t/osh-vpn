@@ -30,7 +30,7 @@ static aio_event_t *aio_event_dup(const aio_event_t *src)
     dest->cb_write = src->cb_write;
     dest->cb_error = src->cb_error;
 
-    dest->enabled = true; // Events are enabled by default
+    dest->enabled = src->enabled;
 
     return dest;
 }
@@ -212,6 +212,35 @@ ssize_t aio_poll(aio_t *aio, ssize_t timeout)
     return n;
 }
 
+// Initialize a base AIO event to pass to aio_event_add()
+// This initializes all fields to safe values (file descriptor, handles, poll
+// events and callbacks)
+// The event defaults to being enabled
+void aio_event_init_base(aio_event_t *base_event)
+{
+#if PLATFORM_IS_WINDOWS
+    base_event->fd                  = invalid_sock_t;
+    base_event->read_handle         = NULL;
+    base_event->read_auto_reset     = false;
+    base_event->write_handle        = NULL;
+    base_event->write_auto_reset    = false;
+#else
+    base_event->fd = -1;
+#endif
+
+    base_event->poll_events = AIO_NOPOLL;
+    base_event->userdata    = NULL;
+
+    base_event->cb_add      = NULL;
+    base_event->cb_delete   = NULL;
+    base_event->cb_read     = NULL;
+    base_event->cb_write    = NULL;
+    base_event->cb_error    = NULL;
+
+    // Events are enabled by default
+    base_event->enabled = true;
+}
+
 // Add a new async I/O event to aio
 // Duplicates relevant definitions from event to create the event
 // Returns the event's pointer which can be used to modify it
@@ -222,31 +251,6 @@ aio_event_t *aio_event_add(aio_t *aio, const aio_event_t *event)
     _aio_event_init(e);
     aio_events_queue(aio, e, true);
     return e;
-}
-
-// Same as aio_event_add but initializes an aio_event_t structure from passed
-// arguments
-aio_event_t *aio_event_add_inl(aio_t *aio,
-    aio_fd_t fd,
-    aio_poll_event_t poll_events,
-    void *userdata,
-    aio_cb_add_t cb_add,
-    aio_cb_delete_t cb_delete,
-    aio_cb_read_t cb_read,
-    aio_cb_write_t cb_write,
-    aio_cb_error_t cb_error)
-{
-    aio_event_t event;
-
-    event.fd = fd;
-    event.poll_events = poll_events;
-    event.userdata = userdata;
-    event.cb_add = cb_add;
-    event.cb_delete = cb_delete;
-    event.cb_read = cb_read;
-    event.cb_write = cb_write;
-    event.cb_error = cb_error;
-    return aio_event_add(aio, &event);
 }
 
 // Delete an event from its aio and free it
