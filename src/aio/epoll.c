@@ -67,7 +67,7 @@ void _aio_event_init(aio_event_t *event)
     event_data_shadow(event) = event_data_ep(event);
 }
 
-void _aio_event_add(aio_t *aio, aio_event_t *event)
+void _aio_event_enable(aio_t *aio, aio_event_t *event)
 {
     // Update the copy of the epoll event data in case its events were changed
     event_data_shadow(event) = event_data_ep(event);
@@ -82,7 +82,7 @@ void _aio_event_add(aio_t *aio, aio_event_t *event)
     }
 }
 
-void _aio_event_delete(aio_t *aio, aio_event_t *event)
+void _aio_event_disable(aio_t *aio, aio_event_t *event)
 {
     // Delete file descriptor from the interest list
     if (epoll_ctl(aio_data(aio)->epfd, EPOLL_CTL_DEL, event->fd,

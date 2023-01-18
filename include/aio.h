@@ -116,6 +116,12 @@ struct aio_event {
     aio_cb_write_t cb_write;
     aio_cb_error_t cb_error;
 
+    // Boolean indicating whether I/O events should be watched or not
+    // This can be used for safely adding events to the AIO with duplicate file
+    // descriptors or for dummy events (without file descriptors)
+    // This cannot be changed after adding the event
+    bool enabled;
+
     // Pointer to the aio_t this event is a part of
     aio_t *aio;
 
@@ -152,6 +158,11 @@ aio_event_t *aio_event_add_inl(aio_t *aio,
 void aio_event_del(aio_event_t *event);
 void aio_event_del_fd(aio_t *aio, aio_fd_t fd);
 
+static inline bool aio_event_is_enabled(const aio_event_t *event)
+{
+    return event->enabled;
+}
+
 #if !(PLATFORM_IS_WINDOWS)
 void aio_cb_delete_close_fd(aio_event_t *event);
 #endif
@@ -185,11 +196,13 @@ void _aio_event_free(aio_event_t *event);
 // it is inserted in an aio_t
 void _aio_event_init(aio_event_t *event);
 
-// This function is called when the aio_event_t is inserted in the aio_t
-void _aio_event_add(aio_t *aio, aio_event_t *event);
+// This function is called to enable watching the aio_event_t
+// It is only called if the event is enabled
+void _aio_event_enable(aio_t *aio, aio_event_t *event);
 
-// This function is called when an event is being deleted from an AIO
-void _aio_event_delete(aio_t *aio, aio_event_t *event);
+// This function is called to disable watching the aio_event_t
+// It is only called if the event is enabled
+void _aio_event_disable(aio_t *aio, aio_event_t *event);
 
 // This function is called after the aio_t is allocated
 // On success it must return the aio pointer passed to it, on error it should

@@ -91,6 +91,9 @@ static void update_aio_handles(aio_t *aio)
     for (size_t i = 0; i < aio->events_count; ++i) {
         aio_event_t *event = aio->events[i];
 
+        if (!aio_event_is_enabled(event))
+            continue;
+
         if (event_is_socket(event)) {
             add_aio_handle(aio, event_socket_handle(event));
         } else {
@@ -142,7 +145,7 @@ void _aio_event_init(aio_event_t *event)
     event->data.ptr = xzalloc(sizeof(aio_event_data_windows_t));
 }
 
-void _aio_event_add(aio_t *aio, aio_event_t *event)
+void _aio_event_enable(aio_t *aio, aio_event_t *event)
 {
     event_data(event)->shadow_poll_events = event->poll_events;
 
@@ -167,7 +170,7 @@ void _aio_event_add(aio_t *aio, aio_event_t *event)
     aio_data(aio)->handles_need_update = true;
 }
 
-void _aio_event_delete(aio_t *aio, aio_event_t *event)
+void _aio_event_disable(aio_t *aio, aio_event_t *event)
 {
     if (event_is_socket(event)) {
         // Deinitialize socket handle and close it

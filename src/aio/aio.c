@@ -29,6 +29,9 @@ static aio_event_t *aio_event_dup(const aio_event_t *src)
     dest->cb_read = src->cb_read;
     dest->cb_write = src->cb_write;
     dest->cb_error = src->cb_error;
+
+    dest->enabled = true; // Events are enabled by default
+
     return dest;
 }
 
@@ -56,11 +59,13 @@ static void aio_events_add(aio_t *aio, aio_event_t *event)
     aio->events_count = new_count;
     aio->events[idx] = event;
 
-    _aio_event_add(aio, event);
-
     // Initialize the event's internal values
     event->aio_idx = idx;
     event->added_to_aio = true;
+
+    // Enable the event if it should be
+    if (aio_event_is_enabled(event))
+        _aio_event_enable(aio, event);
 
     // Call the add callback (if set)
     if (event->cb_add)
@@ -89,7 +94,9 @@ static void aio_events_delete(aio_event_t *event)
     aio->events = xreallocarray(aio->events, aio->events_count,
         sizeof(aio_event_t *));
 
-    _aio_event_delete(aio, event);
+    // Disable the event if it was previously enabled before freeing it
+    if (aio_event_is_enabled(event))
+        _aio_event_disable(aio, event);
 
     // Free the event
     aio_event_free(event);

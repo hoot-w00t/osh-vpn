@@ -47,7 +47,7 @@ static void resize_pfd(aio_t *aio, size_t count)
         count, sizeof(struct pollfd));
 }
 
-void _aio_event_add(aio_t *aio, aio_event_t *event)
+void _aio_event_enable(aio_t *aio, aio_event_t *event)
 {
     const size_t idx = aio_data(aio)->pfd_count;
 
@@ -61,7 +61,7 @@ void _aio_event_add(aio_t *aio, aio_event_t *event)
     event_data(event)->added_to_pfd = true;
 }
 
-void _aio_event_delete(aio_t *aio, aio_event_t *event)
+void _aio_event_disable(aio_t *aio, aio_event_t *event)
 {
     // Don't try to delete events which are not in the pfd array
     if (!event_data(event)->added_to_pfd)
