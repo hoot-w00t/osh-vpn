@@ -24,7 +24,7 @@ static void connect_event_freedata(const event_t *event, void *data)
 static bool connection_attempt_is_valid(node_id_t *nid)
 {
     // If a connection was made since the event was queued, stop here
-    if (nid->node_socket) {
+    if (node_id_linked_client(nid)) {
         node_connect_end(nid, false, "Already connected");
         return false;
     }

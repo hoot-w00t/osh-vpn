@@ -80,6 +80,10 @@ void node_id_del_edge(node_id_t *src, node_id_t *dest);
 bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
     size_t pubkey_size);
 
+#define node_id_linked_client(nid) ((nid)->node_socket)
+client_t *node_id_link_client(node_id_t *nid, client_t *c);
+bool node_id_unlink_client(node_id_t *nid, const client_t *c);
+
 client_t *node_id_next_hop(node_id_t *id);
 
 void node_tree_dump_digraph(void);

@@ -270,6 +270,53 @@ bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
     return true;
 }
 
+// Link a client to a node
+// If a client is already linked it will be disconnected and the node tree will
+// be updated to remove obsolete references to it
+// Returns the previously linked client, or NULL if there was none
+client_t *node_id_link_client(node_id_t *nid, client_t *c)
+{
+    client_t *prev = node_id_linked_client(nid);
+
+    logger_debug(DBG_NODETREE, "Linking client %s to %s", c->addrw, nid->name);
+    node_id_linked_client(nid) = c;
+
+    if (prev) {
+        logger_debug(DBG_NODETREE, "Unlinked client %s from %s",
+            prev->addrw, nid->name);
+
+        client_reconnect_disable(prev);
+
+        // We don't gracefully terminate the connection because both nodes
+        // should do it at the same time, this can suspend the connection until
+        // it times out
+        aio_event_del(prev->aio_event);
+
+        // Update the node tree since the next hops can reference the previous
+        // client
+        node_tree_update();
+    }
+
+    return prev;
+}
+
+// Unlink a client from a node
+// If a different client is linked this doesn't do anything
+// The node tree must be updated after a client is unlinked since nodes' next
+// hops can still reference it
+// Returns true if the client was unlinked
+bool node_id_unlink_client(node_id_t *nid, const client_t *c)
+{
+    const bool unlink = node_id_linked_client(nid) == c;
+
+    if (unlink) {
+        logger_debug(DBG_NODETREE, "Unlinking client %s from %s",
+            node_id_linked_client(nid)->addrw, nid->name);
+        node_id_linked_client(nid) = NULL;
+    }
+    return unlink;
+}
+
 static client_t *node_id_find_next_hop(node_id_t *dest_node)
 {
     const size_t queue_maxcount = oshd.node_tree_count;
@@ -305,14 +352,14 @@ static client_t *node_id_find_next_hop(node_id_t *dest_node)
 
                 // If we have a direct connection to this node it is a candidate
                 // for being the next hop
-                if (queue[i]->edges[j]->node_socket) {
+                if (node_id_linked_client(queue[i]->edges[j])) {
                     // If we don't have a next_hop, set it to this direct connection
                     // If we do have a next_hop already, replace it with this
                     // direct connection if its latency is higher
                     if (   !next_hop
-                        ||  next_hop->rtt > queue[i]->edges[j]->node_socket->rtt)
+                        ||  next_hop->rtt > node_id_linked_client(queue[i]->edges[j])->rtt)
                     {
-                        next_hop = queue[i]->edges[j]->node_socket;
+                        next_hop = node_id_linked_client(queue[i]->edges[j]);
                     }
                 }
             }
@@ -355,10 +402,10 @@ static void node_tree_dump_digraph_to(FILE *out)
         } else if (oshd.node_tree[i]->online) {
             // Direct and indirect nodes are outlined in either green or turquoise
             style = "solid";
-            if (oshd.node_tree[i]->node_socket) {
+            if (node_id_linked_client(oshd.node_tree[i])) {
                 color = "green";
                 snprintf(route, sizeof(route), "(direct, %ims, %zu hops)",
-                    oshd.node_tree[i]->node_socket->rtt,
+                    node_id_linked_client(oshd.node_tree[i])->rtt,
                     oshd.node_tree[i]->hops_count);
             } else {
                 color = "turquoise";
@@ -443,7 +490,7 @@ void node_tree_dump(void)
     for (size_t i = 1; i < oshd.node_tree_count; ++i) {
         printf("    %s (%s, next hop: %s, %zu hops): %zi edges: ",
             oshd.node_tree[i]->name,
-            oshd.node_tree[i]->node_socket ? "direct" : "indirect",
+            node_id_linked_client(oshd.node_tree[i]) ? "direct" : "indirect",
             oshd.node_tree[i]->next_hop ? oshd.node_tree[i]->next_hop->id->name : "(unknown)",
             oshd.node_tree[i]->hops_count,
             oshd.node_tree[i]->edges_count);
@@ -506,8 +553,8 @@ static size_t node_tree_calc_hops_count(void)
 
                 // If we have a direct connection to this node, set its next_hop
                 // now
-                if (queue[i]->edges[j]->node_socket) {
-                    queue[i]->edges[j]->next_hop = queue[i]->edges[j]->node_socket;
+                if (node_id_linked_client(queue[i]->edges[j])) {
+                    queue[i]->edges[j]->next_hop = node_id_linked_client(queue[i]->edges[j]);
                     queue[i]->edges[j]->next_hop_searched = true;
                 }
             }

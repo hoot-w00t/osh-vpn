@@ -100,7 +100,7 @@ static time_t automatic_connections_handler(
         // The delta will be positive when enough time has elapsed
         timespecsub(&now, &id->endpoints_next_retry, &delta);
 
-        if (   !id->node_socket
+        if (   !node_id_linked_client(id)
             && !node_connect_in_progress(id)
             && !endpoint_group_is_empty(id->endpoints)
             &&  node_has_trusted_pubkey(id)

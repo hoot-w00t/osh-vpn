@@ -120,7 +120,7 @@ bool oshd_process_packet(client_t *c, oshpacket_t *pkt)
     }
 
     // If this packet was forwarded but shouldn't have been, drop it
-    if (!def->can_be_forwarded && src->node_socket != c) {
+    if (!def->can_be_forwarded && node_id_linked_client(src) != c) {
         logger(LOG_ERR, "%s: %s: Rejecting forwarded %s packet (from %s)",
             c->addrw, c->id->name, def->name, src->name);
         return false;

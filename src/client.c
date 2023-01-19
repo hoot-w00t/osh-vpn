@@ -25,17 +25,20 @@ static void client_disconnect(client_t *c)
     // If the client is authenticated we have to remove our connection to it
     // from the node tree
     if (c->authenticated) {
-        node_id_t *me = node_id_find_local();
-
         // Remove the direct connection from this node
-        c->id->node_socket = NULL;
+        if (node_id_unlink_client(c->id, c)) {
+            node_id_t *me = node_id_find_local();
 
-        // Delete the edge between our two nodes
-        node_id_del_edge(me, c->id);
-        node_tree_update();
+            // Delete the edge between our two nodes if the client was unlinked
+            //
+            // If it was not unlinked this means that another connection was
+            // established with the node, so the edge still exists
+            node_id_del_edge(me, c->id);
+            node_tree_update();
 
-        // Broadcast this change to the rest of the network
-        client_queue_edge_broadcast(c, OSHPKT_EDGE_DEL, me->name, c->id->name);
+            // Broadcast this change to the rest of the network
+            client_queue_edge_broadcast(c, OSHPKT_EDGE_DEL, me->name, c->id->name);
+        }
     }
 
     // CLose the network socket

@@ -1,30 +1,6 @@
 #include "oshd.h"
 #include "logger.h"
 
-// Returns true if the client's handshake_id is already authenticated on another
-// direct connection
-static bool already_has_another_connection(client_t *c)
-{
-    logger_debug(DBG_HANDSHAKE, "%s: Checking for other direct connections", c->addrw);
-
-    // If we already have another direct connection with this node we will keep
-    // it and disconnect this client
-    if (c->handshake_id->node_socket && c->handshake_id->node_socket != c) {
-        logger(LOG_WARN, "%s: Another socket is already authenticated as %s (%s)",
-            c->addrw, c->handshake_id->name, c->handshake_id->node_socket->addrw);
-
-        // If the node has some reconnection endpoints we will transfer those to
-        // the existing connection to prevent duplicate connections (which would
-        // be refused by the remote node while the other socket is connected)
-        if (c->reconnect_nid) {
-            node_connect_end(c->reconnect_nid, false, "Already connected (hello)");
-            client_reconnect_disable(c);
-        }
-        return true;
-    }
-    return false;
-}
-
 // Finish the handshake and authenticate the client
 static void finish_authentication(client_t *c)
 {
@@ -35,12 +11,13 @@ static void finish_authentication(client_t *c)
     // Mark the client as authenticated
     c->authenticated = c->handshake_valid_signature;
     c->id = c->handshake_id;
-    c->id->node_socket = c;
+    node_id_link_client(c->id, c);
 
     // Finish the handshake
     client_finish_handshake(c);
 
     // Add the new connection with the other node
+    // This is redundant if another client was already linked
     node_id_add_edge(me, c->id);
     node_tree_update();
 
@@ -129,12 +106,6 @@ bool oshpacket_handler_hello(client_t *c, oshpacket_t *pkt)
     logger_debug(DBG_HANDSHAKE, "%s: Remote options 0x%08X", c->addrw, hello->options);
 
     // At this point both nodes have authenticated
-
-    // Check if we already have another direct connection to this node, if we do
-    // this connection will be closed
-    if (already_has_another_connection(c))
-        return false;
-
     finish_authentication(c);
 
     return queue_state_exchange(c);
