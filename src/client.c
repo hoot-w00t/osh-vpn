@@ -41,18 +41,26 @@ static void client_disconnect(client_t *c)
         }
     }
 
-    // CLose the network socket
+    // Close the network socket
     if (c->sockfd != invalid_sock_t) {
         logger(LOG_INFO, "Disconnecting %s", c->addrw);
 
-        if (sock_shutdown(c->sockfd, sock_shut_rdwr) < 0) {
-            logger_debug(DBG_SOCKETS, "%s: %s(" PRI_SOCK_T "): %s",
-                c->addrw, "sock_shutdown", c->sockfd, sock_strerror(sock_errno));
-        }
+        // Only close the socket if the AIO event is enabled
+        // Otherwise the socket is shared with other events and must not be
+        // released here
+        if (aio_event_is_enabled(c->aio_event)) {
+            logger_debug(DBG_SOCKETS, "%s: Closing socket " PRI_SOCK_T,
+                c->addrw, c->sockfd);
 
-        if (sock_close(c->sockfd) < 0) {
-            logger(LOG_ERR, "%s: %s(" PRI_SOCK_T "): %s",
-                c->addrw, "sock_close", c->sockfd, sock_strerror(sock_errno));
+            if (sock_shutdown(c->sockfd, sock_shut_rdwr) < 0) {
+                logger_debug(DBG_SOCKETS, "%s: %s(" PRI_SOCK_T "): %s",
+                    c->addrw, "sock_shutdown", c->sockfd, sock_strerror(sock_errno));
+            }
+
+            if (sock_close(c->sockfd) < 0) {
+                logger(LOG_ERR, "%s: %s(" PRI_SOCK_T "): %s",
+                    c->addrw, "sock_close", c->sockfd, sock_strerror(sock_errno));
+            }
         }
 
         c->sockfd = invalid_sock_t;
