@@ -20,7 +20,7 @@ typedef enum oshd_conf_param_type {
 } oshd_conf_param_type_t;
 
 typedef struct oshd_conf_param {
-    char *name;
+    const char *name;
     oshd_conf_param_type_t type;
     oshd_conf_handler_t handler;
 } oshd_conf_param_t;

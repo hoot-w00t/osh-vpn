@@ -270,7 +270,7 @@ install(TARGETS oshd RUNTIME)
 add_compiler_flag(CMAKE_C_FLAGS -pipe)
 add_compiler_flags(CMAKE_C_FLAGS -Wall -Wextra -Wshadow)
 add_compiler_flags(CMAKE_C_FLAGS -Wformat-security -Wformat-signedness)
-add_compiler_flags(CMAKE_C_FLAGS -Wcast-qual -Wpointer-arith)
+add_compiler_flags(CMAKE_C_FLAGS -Wcast-qual -Wpointer-arith -Wwrite-strings)
 
 if (CYGWIN)
     add_compiler_flag_nocheck(CMAKE_C_FLAGS "-D_GNU_SOURCE")

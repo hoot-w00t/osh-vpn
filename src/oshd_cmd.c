@@ -27,8 +27,8 @@
 #endif
 
 typedef struct command {
-    char *name;    // Command name (not case sensitive)
-    char *cmdline; // Actual command to execute
+    const char *name;   // Command name (not case sensitive)
+    char *cmdline;      // Actual command to execute
 } command_t;
 
 static command_t commands[] = {

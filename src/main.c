@@ -14,7 +14,7 @@
 static const char *av_cmd = NULL;
 
 #define default_conf_file "oshd.conf"
-static char *conf_file = NULL;
+static const char *conf_file = NULL;
 
 static bool stop_after_conf_loaded = false;
 

@@ -390,8 +390,8 @@ static void node_tree_dump_digraph_to(FILE *out)
 
     // We start by defining and labeling every node on the network
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
-        char *color;
-        char *style;
+        const char *color;
+        const char *style;
         char route[64];
 
         if (oshd.node_tree[i]->local_node) {
