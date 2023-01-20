@@ -64,8 +64,8 @@ void event_queue_connect(node_id_t *nid, time_t delay)
 
     // If there is a delay for this connection then it is a reconnection
     if (delay > 0) {
-        logger(LOG_INFO, "Retrying to connect to %s in %" PRId64 " seconds",
-            nid->name, delay);
+        logger(LOG_INFO, "Retrying to connect to %s in %" PRI_TIME_T " seconds",
+            nid->name, (pri_time_t) delay);
     }
 
     nid->connect_event = event_create("connect", connect_event_handler,

@@ -245,8 +245,8 @@ static bool oshd_param_automaticconnectionsinterval(ecp_t *ecp)
         return false;
     }
     oshd.automatic_connections_interval = interval;
-    logger_debug(DBG_CONF, "Set %s to %" PRId64 " seconds", ecp_name(ecp),
-        oshd.automatic_connections_interval);
+    logger_debug(DBG_CONF, "Set %s to %" PRI_TIME_T " seconds", ecp_name(ecp),
+        (pri_time_t) oshd.automatic_connections_interval);
     return true;
 }
 
@@ -423,8 +423,8 @@ static bool oshd_param_reconnectdelaymin(ecp_t *ecp)
         return false;
     }
     oshd.reconnect_delay_min = delay;
-    logger_debug(DBG_CONF, "Set %s to %" PRId64, ecp_name(ecp),
-        oshd.reconnect_delay_min);
+    logger_debug(DBG_CONF, "Set %s to %" PRI_TIME_T, ecp_name(ecp),
+        (pri_time_t) oshd.reconnect_delay_min);
     return true;
 }
 
@@ -442,8 +442,8 @@ static bool oshd_param_reconnectdelaymax(ecp_t *ecp)
         return false;
     }
     oshd.reconnect_delay_max = delay;
-    logger_debug(DBG_CONF, "Set %s to %" PRId64, ecp_name(ecp),
-        oshd.reconnect_delay_max);
+    logger_debug(DBG_CONF, "Set %s to %" PRI_TIME_T, ecp_name(ecp),
+        (pri_time_t) oshd.reconnect_delay_max);
     return true;
 }
 
@@ -809,8 +809,8 @@ static bool validate_configuration(void)
 
     if (oshd.reconnect_delay_max < oshd.reconnect_delay_min) {
         logger(LOG_ERR,
-            "ReconnectDelayMax (%" PRId64 "s) cannot be smaller than ReconnectDelayMin (%" PRId64 "s)",
-            oshd.reconnect_delay_max, oshd.reconnect_delay_min);
+            "ReconnectDelayMax (%" PRI_TIME_T "s) cannot be smaller than ReconnectDelayMin (%" PRI_TIME_T "s)",
+            (pri_time_t) oshd.reconnect_delay_max, (pri_time_t) oshd.reconnect_delay_min);
         return false;
     }
 

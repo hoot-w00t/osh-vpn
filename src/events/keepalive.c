@@ -7,8 +7,8 @@
 
 static time_t timeout(client_t *c, const struct timespec *delay)
 {
-    logger(LOG_INFO, "%s: Timed out (after %" PRId64 " seconds)",
-        c->addrw, delay->tv_sec);
+    logger(LOG_INFO, "%s: Timed out (after %" PRI_TIME_T " seconds)",
+        c->addrw, (pri_time_t) delay->tv_sec);
     aio_event_del(c->aio_event);
     return EVENT_IS_DONE;
 }

@@ -3,6 +3,11 @@
 
 #include <time.h>
 #include <sys/time.h>
+#include <inttypes.h>
+
+// Used to cast time_t when printing it using printf()
+typedef int64_t pri_time_t;
+#define PRI_TIME_T PRId64
 
 #if defined(CLOCK_BOOTTIME)
 #define oshd_gettime_clock CLOCK_BOOTTIME

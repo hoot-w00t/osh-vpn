@@ -65,17 +65,17 @@ static bool update_timer_interval(void)
     // Arm the timer with the new timeout
     if (timerfd_settime(event_queue_aio->fd, 0, &aio_timer, NULL) < 0) {
         logger(LOG_CRIT,
-            "Failed to set events timer: %s (fd=" PRI_AIO_FD_T ", %" PRId64 ".%09lis)",
+            "Failed to set events timer: %s (fd=" PRI_AIO_FD_T ", %" PRI_TIME_T ".%09lis)",
             strerror(errno),
             event_queue_aio->fd,
-            aio_timer.it_value.tv_sec,
+            (pri_time_t) aio_timer.it_value.tv_sec,
             aio_timer.it_value.tv_nsec);
         return false;
     }
 #endif
 
-    logger_debug(DBG_EVENTS, "Updated timer timeout to %" PRId64 ".%09lis",
-        timer_next_timeout.tv_sec, timer_next_timeout.tv_nsec);
+    logger_debug(DBG_EVENTS, "Updated timer timeout to %" PRI_TIME_T ".%09lis",
+        (pri_time_t) timer_next_timeout.tv_sec, timer_next_timeout.tv_nsec);
 
     return true;
 }
@@ -123,8 +123,8 @@ void event_process_queued(void)
             max_diff = diff;
 
         // Handle the current event
-        logger_debug(DBG_EVENTS, "Processing %s event %p (delay %" PRId64 ".%09lis)",
-            event->name, event, diff.tv_sec, diff.tv_nsec);
+        logger_debug(DBG_EVENTS, "Processing %s event %p (delay %" PRI_TIME_T ".%09lis)",
+            event->name, event, (pri_time_t) diff.tv_sec, diff.tv_nsec);
 
         new_delay = event->handler(event, &diff, event->userdata);
 
@@ -141,8 +141,8 @@ void event_process_queued(void)
     // resumes, otherwise it indicates that the daemon is overwhelmed
     // FIXME: This is not a very accurate method as it relies on timed events
     if (max_diff.tv_sec != 0) {
-        logger(LOG_WARN, "Event loop running %" PRId64 ".%09li seconds late",
-            max_diff.tv_sec, max_diff.tv_nsec);
+        logger(LOG_WARN, "Event loop running %" PRI_TIME_T ".%09li seconds late",
+            (pri_time_t) max_diff.tv_sec, max_diff.tv_nsec);
     }
 
     // Update the timer now that the event queue was processed
@@ -329,8 +329,8 @@ void event_queue_in(event_t *event, time_t delay)
             // The new trigger time is the same as the previous one, we can
             // return now as no changes will be made
             logger_debug(DBG_EVENTS,
-                "Queuing %s event %p in %" PRId64 EVENT_DELAY_UNIT " (no changes)",
-                event->name, event, delay);
+                "Queuing %s event %p in %" PRI_TIME_T EVENT_DELAY_UNIT " (no changes)",
+                event->name, event, (pri_time_t) delay);
             return;
         }
 
@@ -341,8 +341,8 @@ void event_queue_in(event_t *event, time_t delay)
 
     // Set the trigger time and queue the event
     event->trigger_at = trigger_at;
-    logger_debug(DBG_EVENTS, "Queuing %s event %p in %" PRId64 EVENT_DELAY_UNIT,
-        event->name, event, delay);
+    logger_debug(DBG_EVENTS, "Queuing %s event %p in %" PRI_TIME_T EVENT_DELAY_UNIT,
+        event->name, event, (pri_time_t) delay);
 
     // Sort the events by their trigger time (ascending)
     while (*i) {

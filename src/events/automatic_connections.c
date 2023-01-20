@@ -81,8 +81,8 @@ static time_t automatic_connections_handler(
     struct timespec delta;
 
     logger_debug(DBG_ENDPOINTS,
-        "Automatic connections (%zu at most, retry delay: %" PRId64 " seconds)",
-        remaining_tries, next_retry_delay);
+        "Automatic connections (%zu at most, retry delay: %" PRI_TIME_T " seconds)",
+        remaining_tries, (pri_time_t) next_retry_delay);
     oshd_gettime(&now);
     for (size_t i = 0; i < oshd.node_tree_count && remaining_tries > 0; ++i) {
         node_id_t *id = oshd.node_tree_ordered_hops[i];
