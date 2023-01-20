@@ -16,26 +16,24 @@ typedef struct node_id node_id_t;
 // Endpoints expire after 60 minutes
 #define ENDPOINT_EXPIRY (3600)
 
-typedef enum endpoint_type endpoint_type_t;
-typedef enum endpoint_socktype endpoint_socktype_t;
-typedef struct endpoint endpoint_t;
-typedef struct endpoint_group endpoint_group_t;
-
 // Type of the endpoint's value
-enum endpoint_type {
+typedef enum endpoint_type {
     ENDPOINT_TYPE_UNKNOWN = 0,
     ENDPOINT_TYPE_HOSTNAME,
     ENDPOINT_TYPE_IP4,
     ENDPOINT_TYPE_IP6,
     _endpoint_type_last
-};
+} endpoint_type_t;
 
 // Socket types with which the endpoint is compatible
-enum endpoint_socktype {
+typedef enum endpoint_socktype {
     ENDPOINT_SOCKTYPE_NONE  = 0,
     ENDPOINT_SOCKTYPE_TCP   = (1 << 0),
     _endpoint_socktype_last
-};
+} endpoint_socktype_t;
+
+typedef struct endpoint endpoint_t;
+typedef struct endpoint_group endpoint_group_t;
 
 #define ENDPOINT_HOSTNAME_MAXLEN (255)
 struct __attribute__((packed)) endpoint_hostname {
