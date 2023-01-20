@@ -14,7 +14,7 @@
     #include "macros_windows.h"
 
     typedef SOCKET                  sock_t;
-    #define PRI_SOCK_T              "%llu"
+    #define PRI_SOCK_T              "%" PRIuPTR
     #define invalid_sock_t          (INVALID_SOCKET)
 
     typedef DWORD                   sock_errno_t;
