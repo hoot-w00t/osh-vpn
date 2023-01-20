@@ -24,7 +24,7 @@ oshd_t oshd;
 static ssize_t poll_timeout = -1;
 
 #if PLATFORM_IS_WINDOWS
-static BOOL exit_handler(__attribute__((unused)) DWORD dwCtrlType)
+static WINBOOL WINAPI exit_handler(__attribute__((unused)) DWORD dwCtrlType)
 {
     if (oshd.run) {
         logger_debug(DBG_OSHD, "Received exit signal");
