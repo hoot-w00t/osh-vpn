@@ -40,20 +40,20 @@ Test(random_bytes, test_randomness)
     free(buf);
 }
 
+#define xoshiro_test_count 512
 Test(random_xoshiro256, test_seeding_and_generating)
 {
-    const size_t n = 512;
-    uint64_t v[n];
+    uint64_t v[xoshiro_test_count];
 
     memset(v, 0, sizeof(v));
 
     cr_assert_eq(random_xoshiro256_seed(), true);
 
-    for (size_t i = 0; i < n; ++i)
+    for (size_t i = 0; i < xoshiro_test_count; ++i)
         v[i] = random_xoshiro256();
 
-    for (size_t i = 0; i < n; ++i) {
-        for (size_t j = 0; j < n; ++j) {
+    for (size_t i = 0; i < xoshiro_test_count; ++i) {
+        for (size_t j = 0; j < xoshiro_test_count; ++j) {
             if (i == j)
                 continue;
 

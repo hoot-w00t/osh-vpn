@@ -229,7 +229,7 @@ Test(oshpacket_t, oshpacket_init)
 {
     const cipher_seqno_t e_seqno = 0xABCDEF;
     const size_t e_bytes_size = OSHPACKET_MAXSIZE;
-    uint8_t e_bytes[e_bytes_size];
+    uint8_t e_bytes[OSHPACKET_MAXSIZE];
     oshpacket_t pkt;
 
     memset(e_bytes, 0, e_bytes_size);

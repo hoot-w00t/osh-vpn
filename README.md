@@ -44,7 +44,6 @@ You can use different build types with `-DCMAKE_BUILD_TYPE=<build_type>` when ru
 | MinSizeRel     | Enables compiler optimizations for smaller file sizes                                        |
 | RelWithDebInfo | Same as Release but also enables default debug information                                   |
 | NativeRelease  | Same as Release with optimizations specific to the host CPU                                  |
-| Hardened       | Same as RelWithDebInfo but also enables stack protection (https://wiki.debian.org/Hardening) |
 
 ### Other build options
 You can change those options by running `cmake .. -D<option>=<value>`
@@ -55,6 +54,7 @@ You can change those options by running `cmake .. -D<option>=<value>`
 | `AIO_BACKEND`       | `auto`        | Choose the backend used for polling I/O events. `auto` automatically chooses the best available in the following backends: `epoll`, `poll`, `windows`. |
 | `ENABLE_SYSTEMD`    | `OFF`         | Configure systemd service files |
 | `DISABLE_EVENTS_TIMERFD` | `OFF`    | Disable the use of `timerfd` for timed events even when it is available |
+| `ENABLE_HARDENING`  | `ON`          | Enable hardening flags for release builds ([https://wiki.debian.org/Hardening](https://wiki.debian.org/Hardening)) |
 
 ## Installing
 It is possible to install Osh with `sudo make install` after compiling.

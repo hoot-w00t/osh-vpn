@@ -9,10 +9,10 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Local modules
 include(compiler_flags)
+include(linker_flags)
 
 # System modules
 include(CheckIncludeFile)
-include(CheckLinkerFlag OPTIONAL RESULT_VARIABLE CheckLinkerFlagPath)
 include(CTest)
 include(GNUInstallDirs)
 
@@ -133,12 +133,10 @@ if (AIO_BACKEND STREQUAL "auto")
 
     if (WIN32)
         set(AIO_BACKEND_CONFIGURED "windows")
-    else()
-        if (epoll_available)
-            set(AIO_BACKEND_CONFIGURED "epoll")
-        elseif (poll_available)
-            set(AIO_BACKEND_CONFIGURED "poll")
-        endif()
+    elseif (epoll_available)
+        set(AIO_BACKEND_CONFIGURED "epoll")
+    elseif (poll_available)
+        set(AIO_BACKEND_CONFIGURED "poll")
     endif()
 
     if (AIO_BACKEND_CONFIGURED STREQUAL "unknown")
@@ -266,11 +264,12 @@ endif()
 # Installation rules
 install(TARGETS oshd RUNTIME)
 
-# Compiler flags
+# Global compiler flags
 add_compiler_flag(CMAKE_C_FLAGS -pipe)
 add_compiler_flags(CMAKE_C_FLAGS -Wall -Wextra -Wshadow)
 add_compiler_flags(CMAKE_C_FLAGS -Wformat-security -Wformat-signedness)
 add_compiler_flags(CMAKE_C_FLAGS -Wcast-qual -Wpointer-arith -Wwrite-strings)
+add_compiler_flags(CMAKE_C_FLAGS -Wduplicated-branches -Wduplicated-cond)
 
 if (CYGWIN)
     add_compiler_flag_nocheck(CMAKE_C_FLAGS "-D_GNU_SOURCE")
@@ -290,21 +289,6 @@ if (timerfd_available AND NOT DISABLE_EVENTS_TIMERFD)
     add_compiler_flag_nocheck(CMAKE_C_FLAGS "-DEVENTS_USE_TIMERFD")
 endif()
 
-# Linker flags
-if (CheckLinkerFlagPath STREQUAL "NOTFOUND")
-    message(STATUS "Skipping linker flags because CheckLinkerFlag was not found")
-else()
-    check_linker_flag(C "-Wl,-z,relro" ld_relro)
-    if (ld_relro)
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,relro")
-    endif()
-
-    check_linker_flag(C "-Wl,-z,now" ld_bindnow)
-    if (ld_bindnow)
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,now")
-    endif()
-endif()
-
 # If no build type was specified we will use the default
 set(default_build_type "Debug")
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -312,18 +296,49 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE "${default_build_type}")
 endif()
 
+# Build hardening flags
+option(ENABLE_HARDENING "Enable compiler and linker hardening flags" ON)
+if (NOT HARDENING_C_FLAGS)
+    set(HARDENING_C_FLAGS "")
+endif()
+if (NOT HARDENING_LINKER_FLAGS)
+    set(HARDENING_LINKER_FLAGS "")
+endif()
+
+if (ENABLE_HARDENING)
+    add_compiler_flag_nocheck(HARDENING_C_FLAGS "-D_FORTIFY_SOURCE=2")
+    add_compiler_flags(HARDENING_C_FLAGS -fstack-protector-strong -Wstack-protector)
+
+    if (NOT MINGW)
+        add_compiler_flag(HARDENING_C_FLAGS -fstack-clash-protection)
+    endif()
+
+    check_c_compiler_flag(-fPIE cflag_fpie)
+    if (cflag_fpie)
+        add_compiler_flag_nocheck(HARDENING_C_FLAGS -fPIE)
+        add_linker_flag_nocheck(HARDENING_LINKER_FLAGS -pie)
+    endif()
+
+    add_linker_flag(HARDENING_LINKER_FLAGS "-Wl,-z,relro")
+    add_linker_flag(HARDENING_LINKER_FLAGS "-Wl,-z,now")
+    add_linker_flag(HARDENING_LINKER_FLAGS "-Wl,-z,noexecstack")
+endif()
+
 # Build type flags
-set(CMAKE_C_FLAGS_DEBUG "-O0 -g3")
-set(CMAKE_C_FLAGS_MINSIZEREL "-Os")
-set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g")
-set(CMAKE_C_FLAGS_RELEASE "-O2")
+set(CMAKE_C_FLAGS_DEBUG                     "-O0 -g3")
+set(CMAKE_EXE_LINKER_FLAGS_DEBUG            "")
 
-set(CMAKE_C_FLAGS_NATIVERELEASE "${CMAKE_C_FLAGS_RELEASE}")
-add_compiler_flags(CMAKE_C_FLAGS_NATIVERELEASE -march=native)
+set(CMAKE_C_FLAGS_RELEASE                   "-O2 ${HARDENING_C_FLAGS}")
+set(CMAKE_EXE_LINKER_FLAGS_RELEASE          "${HARDENING_LINKER_FLAGS}")
 
-set(CMAKE_C_FLAGS_HARDENED "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
-add_compiler_flag_nocheck(CMAKE_C_FLAGS_HARDENED "-D_FORTIFY_SOURCE=2")
-add_compiler_flags(CMAKE_C_FLAGS_HARDENED -fstack-protector-all)
+set(CMAKE_C_FLAGS_MINSIZEREL                "-Os ${HARDENING_C_FLAGS}")
+set(CMAKE_EXE_LINKER_FLAGS_MINSIZEREL       "${HARDENING_LINKER_FLAGS}")
+
+set(CMAKE_C_FLAGS_RELWITHDEBINFO            "${CMAKE_C_FLAGS_RELEASE} -g")
+set(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO   "${CMAKE_EXE_LINKER_FLAGS_RELEASE}")
+
+set(CMAKE_C_FLAGS_NATIVERELEASE             "-O2 -march=native ${HARDENING_C_FLAGS}")
+set(CMAKE_EXE_LINKER_FLAGS_NATIVERELEASE    "${HARDENING_LINKER_FLAGS}")
 
 # Format and display the compiler and linker flags
 string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPER)
@@ -331,6 +346,11 @@ string(STRIP "${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}" OSH_C
 string(STRIP "${CMAKE_EXE_LINKER_FLAGS} ${CMAKE_EXE_LINKER_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}" OSH_LINKER_FLAGS)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "Enable hardening: ${ENABLE_HARDENING}")
+if (ENABLE_HARDENING)
+    message(STATUS "Hardening compiler flags: ${HARDENING_C_FLAGS}")
+    message(STATUS "Hardening linker flags: ${HARDENING_LINKER_FLAGS}")
+endif()
 message(STATUS "Compiler flags: ${OSH_COMPILER_FLAGS}")
 message(STATUS "Linker flags: ${OSH_LINKER_FLAGS}")
 message(STATUS "Link libraries: ${OSH_LINK_LIBRARIES}")
