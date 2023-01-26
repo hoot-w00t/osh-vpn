@@ -145,10 +145,24 @@ static inline ssize_t sock_send(sock_t s, const void *buf, size_t len, int flags
     return send(s, buf, len, flags);
 }
 
+// sendto()
+static inline ssize_t sock_sendto(sock_t s, const void *buf, size_t len, int flags,
+    const struct sockaddr *destaddr, socklen_t addrlen)
+{
+    return sendto(s, buf, len, flags, destaddr, addrlen);
+}
+
 // recv()
 static inline ssize_t sock_recv(sock_t s, void *buf, size_t len, int flags)
 {
     return recv(s, buf, len, flags);
+}
+
+// recvfrom()
+static inline ssize_t sock_recvfrom(sock_t s, void *buf, size_t len, int flags,
+    struct sockaddr *src_addr, socklen_t *addrlen)
+{
+    return recvfrom(s, buf, len, flags, src_addr, addrlen);
 }
 
 #endif
