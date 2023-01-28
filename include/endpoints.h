@@ -25,12 +25,12 @@ typedef enum endpoint_type {
     _endpoint_type_last
 } endpoint_type_t;
 
-// Socket types with which the endpoint is compatible
-typedef enum endpoint_socktype {
-    ENDPOINT_SOCKTYPE_NONE  = 0,
-    ENDPOINT_SOCKTYPE_TCP   = (1 << 0),
-    _endpoint_socktype_last
-} endpoint_socktype_t;
+// Socket protocols with which the endpoint is compatible
+typedef enum endpoint_proto {
+    ENDPOINT_PROTO_NONE  = 0,
+    ENDPOINT_PROTO_TCP   = (1 << 0),
+    _endpoint_proto_last
+} endpoint_proto_t;
 
 typedef struct endpoint endpoint_t;
 typedef struct endpoint_group endpoint_group_t;
@@ -66,8 +66,8 @@ struct endpoint {
     // Address data
     endpoint_data_t data;
 
-    // Socket type(s) with which the endpoint can be used
-    endpoint_socktype_t socktype;
+    // Socket protocol(s) with which the endpoint can be used
+    endpoint_proto_t proto;
 
     // Presentation string of the socket address/port
     char *addrstr;
@@ -104,7 +104,7 @@ struct endpoint_group {
 const char *endpoint_type_name(const endpoint_type_t type);
 
 endpoint_t *endpoint_create(const char *value, const uint16_t port,
-    const endpoint_socktype_t socktype, const bool can_expire);
+    const endpoint_proto_t proto, const bool can_expire);
 void endpoint_free(endpoint_t *endpoint);
 endpoint_t *endpoint_dup(const endpoint_t *original);
 
@@ -134,7 +134,7 @@ bool endpoint_lookup(endpoint_t *endpoint, endpoint_group_t *group);
 bool endpoint_to_sockaddr(struct sockaddr *sa, const socklen_t sa_len,
     const endpoint_t *endpoint);
 endpoint_t *endpoint_from_sockaddr(const struct sockaddr *sa, const socklen_t sa_len,
-    const endpoint_socktype_t socktype, const bool can_expire);
+    const endpoint_proto_t proto, const bool can_expire);
 
 bool endpoint_to_packet(const endpoint_t *endpoint,
     oshpacket_endpoint_t *pkt, endpoint_data_t *data, size_t *data_size);

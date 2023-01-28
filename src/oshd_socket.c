@@ -404,7 +404,7 @@ static void server_aio_read(aio_event_t *event)
     }
 
     endpoint = endpoint_from_sockaddr((const struct sockaddr *) &sa, sa_len,
-        ENDPOINT_SOCKTYPE_TCP, true);
+        ENDPOINT_PROTO_TCP, true);
     if (!endpoint) {
         sock_close(client_sockfd);
         return;

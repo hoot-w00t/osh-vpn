@@ -170,7 +170,7 @@ void oshd_discover_local_endpoints(void)
             netarea_name(area), addrw, ifa->ifa_name);
 
         endpoint_t *endpoint = endpoint_create(addrw, oshd.server_port,
-            ENDPOINT_SOCKTYPE_TCP, true);
+            ENDPOINT_PROTO_TCP, true);
         endpoint_t *inserted = endpoint_group_insert_sorted(local_id->endpoints, endpoint);
 
         if (inserted)

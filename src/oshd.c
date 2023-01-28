@@ -100,8 +100,8 @@ bool oshd_init(void)
     }
 
     if (oshd.server_enabled) {
-        endpoint_t *ipv4_any = endpoint_create("0.0.0.0", oshd.server_port, ENDPOINT_SOCKTYPE_NONE, false);
-        endpoint_t *ipv6_any = endpoint_create("::", oshd.server_port, ENDPOINT_SOCKTYPE_NONE, false);
+        endpoint_t *ipv4_any = endpoint_create("0.0.0.0", oshd.server_port, ENDPOINT_PROTO_NONE, false);
+        endpoint_t *ipv6_any = endpoint_create("::", oshd.server_port, ENDPOINT_PROTO_NONE, false);
 
         sock_t fd4 = tcp_bind(ipv4_any, OSHD_TCP_SERVER_BACKLOG);
         sock_t fd6 = tcp_bind(ipv6_any, OSHD_TCP_SERVER_BACKLOG);

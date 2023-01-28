@@ -150,9 +150,9 @@ static endpoint_t *endpoint_alloc(void)
 
 // Initialize remaining members of the endpoint after the address was set
 static void endpoint_init2(endpoint_t *endpoint,
-    const endpoint_socktype_t socktype, const bool can_expire)
+    const endpoint_proto_t proto, const bool can_expire)
 {
-    endpoint->socktype = socktype;
+    endpoint->proto = proto;
     endpoint->can_expire = can_expire;
 
     endpoint->area = endpoint_calc_area(endpoint);
@@ -168,12 +168,12 @@ static void endpoint_init2(endpoint_t *endpoint,
 
 // Create a new endpoint from a character string
 endpoint_t *endpoint_create(const char *value, const uint16_t port,
-    const endpoint_socktype_t socktype, const bool can_expire)
+    const endpoint_proto_t proto, const bool can_expire)
 {
     endpoint_t *endpoint = endpoint_alloc();
 
     endpoint_data_from_charvalue(endpoint, value, port);
-    endpoint_init2(endpoint, socktype, can_expire);
+    endpoint_init2(endpoint, proto, can_expire);
     return endpoint;
 }
 
@@ -305,7 +305,7 @@ static endpoint_t *_endpoint_group_find(endpoint_t *start, const endpoint_t *end
 static endpoint_t *_endpoint_group_find_exact(endpoint_t *start, const endpoint_t *endpoint)
 {
     for (endpoint_t *it = start; it != NULL; it = it->next) {
-        if (endpoint_eq(it, endpoint) && it->socktype == endpoint->socktype)
+        if (endpoint_eq(it, endpoint) && it->proto == endpoint->proto)
             return it;
     }
     return NULL;
@@ -341,7 +341,7 @@ endpoint_t *endpoint_group_find_exact_after(endpoint_t *after, const endpoint_t 
     return _endpoint_group_find_exact(after->next, endpoint);
 }
 
-// Find a duplicate endpoint (taking can_expire and socktype into account)
+// Find a duplicate endpoint (taking can_expire and proto into account)
 // Returns NULL if the endpoint does not yet exist
 endpoint_t *endpoint_group_find_duplicate(endpoint_group_t *group, const endpoint_t *endpoint)
 {
@@ -349,13 +349,13 @@ endpoint_t *endpoint_group_find_duplicate(endpoint_group_t *group, const endpoin
 
     while (it) {
         // If the matching endpoint and the new one have the same can_expire
-        // value the existing one can inherit the socktype value of the new one
+        // value the existing one can inherit the protocol value of the new one
         if (it->can_expire == endpoint->can_expire)
             return it;
 
-        // If the matching endpoint has all the socket types of the new one, it
+        // If the matching endpoint has all the protocols of the new one, it
         // can be considered as a duplicate
-        if ((it->socktype & endpoint->socktype) == endpoint->socktype)
+        if ((it->proto & endpoint->proto) == endpoint->proto)
             return it;
 
         // Find the next occurrence of the endpoint
@@ -430,8 +430,8 @@ endpoint_t *endpoint_group_insert_sorted(endpoint_group_t *group,
     if (endpoint) {
         // The same endpoint already exists in the group
 
-        // Add the socket types of the new endpoint to the existing one
-        endpoint->socktype |= original->socktype;
+        // Add the socket protocols of the new endpoint to the existing one
+        endpoint->proto |= original->proto;
     } else {
         // The endpoint does not already exist in the group, create it
 
@@ -559,7 +559,7 @@ bool endpoint_lookup(endpoint_t *endpoint, endpoint_group_t *group)
     for (struct addrinfo *it = addrinfo; it != NULL; it = it->ai_next) {
         endpoint_free(lookedup);
         lookedup = endpoint_from_sockaddr(it->ai_addr, it->ai_addrlen,
-            endpoint->socktype, true);
+            endpoint->proto, true);
 
         // If this endpoint is not compatible or could not be decoded, skip it
         if (!lookedup)
@@ -632,7 +632,7 @@ bool endpoint_to_sockaddr(struct sockaddr *sa, const socklen_t sa_len,
 // Create an endpoint from a socket address
 // Returns NULL on error
 endpoint_t *endpoint_from_sockaddr(const struct sockaddr *sa, const socklen_t sa_len,
-    const endpoint_socktype_t socktype, const bool can_expire)
+    const endpoint_proto_t proto, const bool can_expire)
 {
     char addr_value[INET6_ADDRSTRLEN];
 
@@ -649,7 +649,7 @@ endpoint_t *endpoint_from_sockaddr(const struct sockaddr *sa, const socklen_t sa
             if (!inet_ntop(AF_INET, &sin->sin_addr, addr_value, sizeof(addr_value)))
                 return NULL;
 
-            return endpoint_create(addr_value, ntohs(sin->sin_port), socktype, can_expire);
+            return endpoint_create(addr_value, ntohs(sin->sin_port), proto, can_expire);
         }
 
         case AF_INET6: {
@@ -661,7 +661,7 @@ endpoint_t *endpoint_from_sockaddr(const struct sockaddr *sa, const socklen_t sa
             if (!inet_ntop(AF_INET6, &sin6->sin6_addr, addr_value, sizeof(addr_value)))
                 return NULL;
 
-            return endpoint_create(addr_value, ntohs(sin6->sin6_port), socktype, can_expire);
+            return endpoint_create(addr_value, ntohs(sin6->sin6_port), proto, can_expire);
         }
 
         default:
@@ -715,7 +715,7 @@ bool endpoint_to_packet(const endpoint_t *endpoint,
     }
 
     pkt->type = endpoint->type;
-    pkt->socktype = endpoint->socktype;
+    pkt->proto = endpoint->proto;
     memcpy(data, &endpoint->data, *data_size);
     return true;
 }
@@ -755,7 +755,7 @@ endpoint_t *endpoint_from_packet(const oshpacket_endpoint_t *pkt,
     endpoint = endpoint_alloc();
     endpoint->type = pkt->type;
     memcpy(&endpoint->data, data, data_size);
-    endpoint_init2(endpoint, pkt->socktype, true);
+    endpoint_init2(endpoint, pkt->proto, true);
     return endpoint;
 }
 

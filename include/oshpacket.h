@@ -240,7 +240,7 @@ typedef struct __attribute__((__packed__)) oshpacket_pubkey {
 
 typedef struct __attribute__((__packed__)) oshpacket_endpoint {
     uint8_t type;                       // endpoint_type_t
-    uint8_t socktype;                   // endpoint_socktype_t
+    uint8_t proto;                      // endpoint_proto_t
     char owner_name[NODE_NAME_SIZE];
 } oshpacket_endpoint_t;
 
