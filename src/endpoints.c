@@ -501,35 +501,41 @@ void endpoint_group_del(endpoint_group_t *group, endpoint_t *endpoint)
     }
 }
 
-// Delete expired endpoints from group
-// Returns true if endpoints were deleted
-bool endpoint_group_del_expired(endpoint_group_t *group, node_id_t *owner)
+// Delete expired endpoints from *group
+// Endpoints that do not expire are refreshed instead of deleted
+// All expired endpoints' flags are ORed in *expired_flags
+// *now must be initialized with oshd_gettime()
+// Returns true if at least one endpoint has expired
+bool endpoint_group_del_expired(endpoint_group_t *group,
+    endpoint_flags_t *expired_flags, const struct timespec *now)
 {
-    struct timespec now;
-    struct timespec delta;
-    bool deleted = false;
+    bool expired = false;
     endpoint_t *endpoint = group->head;
     endpoint_t *next;
+    struct timespec delta;
 
-    oshd_gettime(&now);
+    *expired_flags = ENDPOINT_FLAG_NONE;
     while (endpoint) {
         next = endpoint->next;
 
-        timespecsub(&endpoint->expire_after, &now, &delta);
+        timespecsub(&endpoint->expire_after, now, &delta);
         if (delta.tv_sec < 0) {
+            endpoint->had_expired = true;
+            expired = true;
+            *expired_flags |= endpoint->flags;
+
             if (endpoint_can_expire(endpoint)) {
                 endpoint_group_del(group, endpoint);
-                deleted = true;
             } else {
                 endpoint_refresh(group, endpoint);
-                if (oshd.shareendpoints)
-                    client_queue_endpoint(NULL, endpoint, owner, true);
             }
+        } else {
+            endpoint->had_expired = false;
         }
 
         endpoint = next;
     }
-    return deleted;
+    return expired;
 }
 
 // Lookup DNS addresses of the endpoint's value and add those after it

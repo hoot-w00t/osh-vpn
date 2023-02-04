@@ -80,7 +80,13 @@ struct endpoint {
     size_t addrstr_size;
 
     endpoint_flags_t flags;
+
+    // Timestamp after which the endpoint expires
     struct timespec expire_after;
+
+    // This variable is set by endpoint_group_del_expired() to mark expired
+    // endpoints that are not deleted
+    bool had_expired;
 
     netarea_t area;
     int priority;
@@ -140,7 +146,8 @@ void endpoint_group_insert_group(endpoint_group_t *dest,
     const endpoint_group_t *src);
 
 void endpoint_group_del(endpoint_group_t *group, endpoint_t *endpoint);
-bool endpoint_group_del_expired(endpoint_group_t *group, node_id_t *owner);
+bool endpoint_group_del_expired(endpoint_group_t *group,
+    endpoint_flags_t *expired_flags, const struct timespec *now);
 
 bool endpoint_lookup(endpoint_t *endpoint, endpoint_group_t *group);
 bool endpoint_to_sockaddr(struct sockaddr *sa, const socklen_t sa_len,
