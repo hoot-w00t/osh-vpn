@@ -80,7 +80,7 @@ struct endpoint {
     size_t addrstr_size;
 
     endpoint_flags_t flags;
-    struct timespec last_refresh;
+    struct timespec expire_after;
 
     netarea_t area;
     int priority;

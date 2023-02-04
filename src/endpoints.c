@@ -3,6 +3,7 @@
 #include "logger.h"
 #include "node.h"
 #include "oshd.h"
+#include "oshd_clock.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -231,10 +232,13 @@ static bool endpoint_eq(const endpoint_t *s1, const endpoint_t *s2)
 // Refresh an endpoint
 static void endpoint_refresh(const endpoint_group_t *group, endpoint_t *endpoint)
 {
-    // Update last_refresh timestamp
-    oshd_gettime(&endpoint->last_refresh);
-    logger_debug(DBG_ENDPOINTS, "%s: Refreshed endpoint %s",
-        group->debug_id, endpoint->addrstr);
+    const time_t expire_delay = ENDPOINT_EXPIRY;
+
+    logger_debug(DBG_ENDPOINTS, "%s: Refreshing endpoint %s (%" PRI_TIME_T "s)",
+        group->debug_id, endpoint->addrstr, expire_delay);
+
+    oshd_gettime(&endpoint->expire_after);
+    endpoint->expire_after.tv_sec += expire_delay;
 }
 
 // Returns true if the endpoint is part of the group
@@ -511,8 +515,8 @@ bool endpoint_group_del_expired(endpoint_group_t *group, node_id_t *owner)
     while (endpoint) {
         next = endpoint->next;
 
-        timespecsub(&now, &endpoint->last_refresh, &delta);
-        if (delta.tv_sec >= ENDPOINT_EXPIRY) {
+        timespecsub(&endpoint->expire_after, &now, &delta);
+        if (delta.tv_sec < 0) {
             if (endpoint_can_expire(endpoint)) {
                 endpoint_group_del(group, endpoint);
                 deleted = true;
