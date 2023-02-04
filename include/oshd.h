@@ -70,9 +70,6 @@ typedef struct oshd {
     // with other nodes on the network
     bool shareendpoints;
 
-    // true if local endpoints should be discovered
-    bool discoverendpoints;
-
     // Automatic connections
     bool automatic_connections;
     time_t automatic_connections_interval;
@@ -113,11 +110,6 @@ typedef struct oshd {
     // Manually configured local routes
     conf_route_t *conf_routes;
     size_t conf_routes_size;
-
-    // Array of network device names/IDs which should be excluded from the
-    // endpoint discovery
-    char **excluded_devices;
-    size_t excluded_devices_count;
 
     // Minimum and maximum reconnection delays (in seconds)
     time_t reconnect_delay_min;

@@ -207,7 +207,6 @@ set(OSHD_SOURCES
     src/oshd_clock.c
     src/oshd_cmd.c
     src/oshd_conf.c
-    src/oshd_discovery.c
     src/oshd_process_packet.c
     src/oshd_socket.c
     src/oshd.c

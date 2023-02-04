@@ -1,7 +1,6 @@
 #define _OSH_OSHD_C
 
 #include "oshd_cmd.h"
-#include "oshd_discovery.h"
 #include "oshd_socket.h"
 #include "oshd.h"
 
@@ -272,10 +271,6 @@ void oshd_free(void)
     free(oshd.node_tree);
     free(oshd.node_tree_ordered_hops);
 
-    for (size_t i = 0; i < oshd.excluded_devices_count; ++i)
-        free(oshd.excluded_devices[i]);
-    free(oshd.excluded_devices);
-
     event_cancel_queue();
 
     pkey_free(oshd.privkey);
@@ -293,12 +288,6 @@ void oshd_free(void)
 void oshd_loop(void)
 {
     ssize_t events;
-
-    // Discover network devices' addresses
-    if (oshd.tuntap)
-        oshd_discover_local_routes();
-    if (oshd.discoverendpoints)
-        oshd_discover_local_endpoints();
 
     // Queue the connections to our endpoints
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {

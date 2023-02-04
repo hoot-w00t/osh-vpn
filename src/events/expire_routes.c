@@ -1,5 +1,4 @@
 #include "oshd.h"
-#include "oshd_discovery.h"
 #include "events.h"
 
 // Periodically expire stale routes from the routing table
@@ -11,8 +10,7 @@ static time_t expire_routes_event_handler(
 {
     time_t next_expire;
 
-    if (netroute_del_expired(oshd.route_table, &next_expire, ROUTE_LOCAL_EXPIRY))
-        oshd_discover_local_routes();
+    netroute_del_expired(oshd.route_table, &next_expire, ROUTE_LOCAL_EXPIRY);
     return EVENT_QUEUE_IN_S(next_expire);
 }
 

@@ -214,14 +214,6 @@ static bool oshd_param_shareendpoints(__attribute__((unused)) ecp_t *ecp)
     return true;
 }
 
-// DiscoverEndpoints
-static bool oshd_param_discoverendpoints(__attribute__((unused)) ecp_t *ecp)
-{
-    oshd.discoverendpoints = true;
-    logger_debug(DBG_CONF, "Enabled DiscoverEndpoints");
-    return true;
-}
-
 // AutomaticConnections
 static bool oshd_param_automaticconnections(__attribute__((unused)) ecp_t *ecp)
 {
@@ -316,17 +308,6 @@ static bool oshd_param_device(ecp_t *ecp)
     free(oshd.tuntap_devname);
     oshd.tuntap_devname = xstrdup(ecp_value(ecp));
     logger_debug(DBG_CONF, "Set device name to %s", oshd.tuntap_devname);
-    return true;
-}
-
-// ExcludeDevice
-static bool oshd_param_excludedevice(ecp_t *ecp)
-{
-    oshd.excluded_devices = xreallocarray(oshd.excluded_devices,
-        oshd.excluded_devices_count + 1, sizeof(char *));
-    oshd.excluded_devices[oshd.excluded_devices_count] = xstrdup(ecp_value(ecp));
-    oshd.excluded_devices_count += 1;
-    logger_debug(DBG_CONF, "Excluding device '%s'", ecp_value(ecp));
     return true;
 }
 
@@ -468,13 +449,6 @@ static bool oshd_param_digraphfile(ecp_t *ecp)
     free(oshd.digraph_file);
     oshd.digraph_file = xstrdup(ecp_value(ecp));
     logger_debug(DBG_CONF, "Set DigraphFile to '%s'", oshd.digraph_file);
-    return true;
-}
-
-// Old resolver parameters
-static bool oshd_param_resolver_removed(__attribute__((unused)) ecp_t *ecp)
-{
-    logger(LOG_WARN, "Ignoring '%s': this parameter was removed", ecp_name(ecp));
     return true;
 }
 
@@ -720,6 +694,13 @@ static bool oshd_param_command(ecp_t *ecp)
     return true;
 }
 
+// Old removed parameters
+static bool oshd_param_removed(ecp_t *ecp)
+{
+    logger(LOG_WARN, "Ignoring '%s': this parameter was removed", ecp_name(ecp));
+    return true;
+}
+
 // Array of all configuration parameters and their handlers
 static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "NoServer", .type = VALUE_NONE, &oshd_param_noserver },
@@ -728,14 +709,14 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "DynamicAddr", .type = VALUE_REQUIRED, &oshd_param_dynamicaddr },
     { .name = "KeysTrust", .type = VALUE_REQUIRED, &oshd_param_keystrust },
     { .name = "ShareEndpoints", .type = VALUE_NONE, &oshd_param_shareendpoints },
-    { .name = "DiscoverEndpoints", .type = VALUE_NONE, &oshd_param_discoverendpoints },
+    { .name = "DiscoverEndpoints", .type = VALUE_OPTIONAL, &oshd_param_removed },
     { .name = "AutomaticConnections", .type = VALUE_NONE, &oshd_param_automaticconnections },
     { .name = "AutomaticConnectionsInterval", .type = VALUE_REQUIRED, &oshd_param_automaticconnectionsinterval },
     { .name = "AutomaticConnectionsPercent", .type = VALUE_REQUIRED, &oshd_param_automaticconnectionspercent },
     { .name = "Port", .type = VALUE_REQUIRED, &oshd_param_port },
     { .name = "Mode", .type = VALUE_REQUIRED, &oshd_param_mode },
     { .name = "Device", .type = VALUE_REQUIRED, &oshd_param_device },
-    { .name = "ExcludeDevice", .type = VALUE_REQUIRED, &oshd_param_excludedevice },
+    { .name = "ExcludeDevice", .type = VALUE_OPTIONAL, &oshd_param_removed },
     { .name = "DevUp", .type = VALUE_REQUIRED, &oshd_param_command },
     { .name = "DevDown", .type = VALUE_REQUIRED, &oshd_param_command },
     { .name = "Endpoint", .type = VALUE_REQUIRED, &oshd_param_endpoint },
@@ -744,10 +725,10 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "ReconnectDelayMax", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymax },
     { .name = "ConnectionsLimit", .type = VALUE_REQUIRED, &oshd_param_connectionslimit },
     { .name = "DigraphFile", .type = VALUE_REQUIRED, &oshd_param_digraphfile },
-    { .name = "Resolver", .type = VALUE_OPTIONAL, &oshd_param_resolver_removed },
-    { .name = "ResolverTLD", .type = VALUE_OPTIONAL, &oshd_param_resolver_removed },
-    { .name = "ResolverFile", .type = VALUE_OPTIONAL, &oshd_param_resolver_removed },
-    { .name = "OnResolverUpdate", .type = VALUE_OPTIONAL, &oshd_param_resolver_removed },
+    { .name = "Resolver", .type = VALUE_OPTIONAL, &oshd_param_removed },
+    { .name = "ResolverTLD", .type = VALUE_OPTIONAL, &oshd_param_removed },
+    { .name = "ResolverFile", .type = VALUE_OPTIONAL, &oshd_param_removed },
+    { .name = "OnResolverUpdate", .type = VALUE_OPTIONAL, &oshd_param_removed },
     { .name = "LogLevel", .type = VALUE_REQUIRED, &oshd_param_loglevel },
     { .name = "Include", .type = VALUE_REQUIRED, &oshd_param_include },
     { .name = "PrivateKey", .type = VALUE_REQUIRED, &oshd_param_privatekey },
