@@ -111,7 +111,7 @@ bool client_queue_endpoint_exg(client_t *c)
         foreach_endpoint_const(endpoint, group) {
             // If ShareEndpoints was not set in the configuration file,
             // endpoints that don't expire will not be shared
-            if (!endpoint->can_expire && !oshd.shareendpoints)
+            if (!endpoint_can_expire(endpoint) && !oshd.shareendpoints)
                 continue;
 
             if (!client_queue_endpoint_exg_internal(c, endpoint, owner))

@@ -363,7 +363,7 @@ static bool oshd_param_endpoint(ecp_t *ecp)
     port_no = (*port) ? ((uint16_t) atoi(port)) : OSHD_DEFAULT_PORT;
 
     // Add the endpoint to the group
-    endpoint = endpoint_create(addr, port_no, ENDPOINT_PROTO_TCP, false);
+    endpoint = endpoint_create(addr, port_no, ENDPOINT_PROTO_TCP, ENDPOINT_FLAG_NONE);
     inserted = endpoint_group_insert_sorted(group, endpoint);
 
     logger_debug(DBG_CONF, "%s endpoint %s for %s",

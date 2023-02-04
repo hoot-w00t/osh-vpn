@@ -32,6 +32,12 @@ typedef enum endpoint_proto {
     _endpoint_proto_last
 } endpoint_proto_t;
 
+// Endpoint flags
+typedef enum endpoint_flags {
+    ENDPOINT_FLAG_NONE       = 0,
+    ENDPOINT_FLAG_CAN_EXPIRE = (1 << 0)
+} endpoint_flags_t;
+
 typedef struct endpoint endpoint_t;
 typedef struct endpoint_group endpoint_group_t;
 
@@ -73,7 +79,7 @@ struct endpoint {
     char *addrstr;
     size_t addrstr_size;
 
-    bool can_expire;
+    endpoint_flags_t flags;
     struct timespec last_refresh;
 
     netarea_t area;
@@ -104,9 +110,15 @@ struct endpoint_group {
 const char *endpoint_type_name(const endpoint_type_t type);
 
 endpoint_t *endpoint_create(const char *value, const uint16_t port,
-    const endpoint_proto_t proto, const bool can_expire);
+    const endpoint_proto_t proto, const endpoint_flags_t flags);
 void endpoint_free(endpoint_t *endpoint);
 endpoint_t *endpoint_dup(const endpoint_t *original);
+
+// true if the endpoint has flag ENDPOINT_FLAG_CAN_EXPIRE
+static inline bool endpoint_can_expire(const endpoint_t *endpoint)
+{
+    return (endpoint->flags & ENDPOINT_FLAG_CAN_EXPIRE) != 0;
+}
 
 endpoint_group_t *endpoint_group_create(const char *owner_name, const char *debug_id);
 void endpoint_group_free(endpoint_group_t *group);
@@ -134,7 +146,7 @@ bool endpoint_lookup(endpoint_t *endpoint, endpoint_group_t *group);
 bool endpoint_to_sockaddr(struct sockaddr *sa, const socklen_t sa_len,
     const endpoint_t *endpoint);
 endpoint_t *endpoint_from_sockaddr(const struct sockaddr *sa, const socklen_t sa_len,
-    const endpoint_proto_t proto, const bool can_expire);
+    const endpoint_proto_t proto, const endpoint_flags_t flags);
 
 bool endpoint_to_packet(const endpoint_t *endpoint,
     oshpacket_endpoint_t *pkt, endpoint_data_t *data, size_t *data_size);
