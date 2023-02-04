@@ -13,31 +13,44 @@ static void cipher_compute_iv(cipher_t *cipher, cipher_seqno_t seqno)
     cipher->iv.s.seqno_be = cipher->base_iv.s.seqno_be ^ htobe64(seqno);
 }
 
-// Generic cipher_create function for any *evp_cipher
-static cipher_t *cipher_create(const EVP_CIPHER *evp_cipher, bool encrypts,
-    const uint8_t *key, size_t key_size, const uint8_t *iv, size_t iv_size)
+// Create a cipher
+// If encrypts is true the cipher will be initialized for encryption
+// Otherwise it will be initialized for decryption
+// Returns NULL on error
+cipher_t *cipher_create(const char *cipher_name, bool encrypts,
+    const uint8_t *key, size_t key_size,
+    const uint8_t *iv, size_t iv_size)
 {
+    const EVP_CIPHER *evp_cipher = NULL;
     cipher_t *cipher = NULL;
+
+    // Fetch the requested cipher
+    evp_cipher = EVP_get_cipherbyname(cipher_name);
+    if (!evp_cipher) {
+        logger(LOG_ERR, "%s: %s: Could not fetch cipher %s: %s",
+            __func__, "EVP_get_cipherbyname", cipher_name, osh_openssl_strerror);
+        goto error;
+    }
 
     // Make sure that the key and IV are of a valid size
     if (EVP_CIPHER_key_length(evp_cipher) != CIPHER_KEY_SIZE) {
         logger(LOG_CRIT, "%s: Invalid cipher %s size %i for %s",
-            "cipher_create", "key", CIPHER_KEY_SIZE, EVP_CIPHER_name(evp_cipher));
+            __func__, "key", CIPHER_KEY_SIZE, EVP_CIPHER_name(evp_cipher));
         goto error;
     }
     if (EVP_CIPHER_iv_length(evp_cipher) != CIPHER_IV_SIZE) {
         logger(LOG_CRIT, "%s: Invalid cipher %s size %i for %s",
-            "cipher_create", "IV", CIPHER_IV_SIZE, EVP_CIPHER_name(evp_cipher));
+            __func__, "IV", CIPHER_IV_SIZE, EVP_CIPHER_name(evp_cipher));
         goto error;
     }
     if (key_size != CIPHER_KEY_SIZE) {
         logger(LOG_ERR, "%s: Invalid %s size %zu for %s",
-            "cipher_create", "key", key_size, EVP_CIPHER_name(evp_cipher));
+            __func__, "key", key_size, EVP_CIPHER_name(evp_cipher));
         goto error;
     }
     if (iv_size != CIPHER_IV_SIZE) {
         logger(LOG_ERR, "%s: Invalid %s size %zu for %s",
-            "cipher_create", "IV", iv_size, EVP_CIPHER_name(evp_cipher));
+            __func__, "IV", iv_size, EVP_CIPHER_name(evp_cipher));
         goto error;
     }
 
@@ -54,7 +67,7 @@ static cipher_t *cipher_create(const EVP_CIPHER *evp_cipher, bool encrypts,
 
     // Allocate the cipher context
     if (!(cipher->ctx = EVP_CIPHER_CTX_new())) {
-        logger(LOG_ERR, "%s: %s: %s", "cipher_create", "EVP_CIPHER_CTX_new",
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_CIPHER_CTX_new",
             osh_openssl_strerror);
         goto error;
     }
@@ -64,13 +77,13 @@ static cipher_t *cipher_create(const EVP_CIPHER *evp_cipher, bool encrypts,
     // decrypting data
     if (encrypts) {
         if (!EVP_EncryptInit_ex(cipher->ctx, evp_cipher, NULL, key, NULL)) {
-            logger(LOG_ERR, "%s: %s: %s", "cipher_create", "EVP_EncryptInit_ex",
+            logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_EncryptInit_ex",
                 osh_openssl_strerror);
             goto error;
         }
     } else {
         if (!EVP_DecryptInit_ex(cipher->ctx, evp_cipher, NULL, key, NULL)) {
-            logger(LOG_ERR, "%s: %s: %s", "cipher_create", "EVP_DecryptInit_ex",
+            logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_DecryptInit_ex",
                 osh_openssl_strerror);
             goto error;
         }
@@ -81,18 +94,6 @@ static cipher_t *cipher_create(const EVP_CIPHER *evp_cipher, bool encrypts,
 error:
     cipher_free(cipher);
     return NULL;
-}
-
-// Create an AES-256-GCM cipher
-// If encrypts is true the cipher will be initialized for encryption
-// Otherwise it will be initialized for decryption
-// Returns NULL on error
-cipher_t *cipher_create_aes_256_gcm(bool encrypts,
-    const uint8_t *key, size_t key_size,
-    const uint8_t *iv,  size_t iv_size)
-{
-    return cipher_create(EVP_aes_256_gcm(), encrypts,
-        key, key_size, iv, iv_size);
 }
 
 // Free cipher_t
@@ -115,24 +116,24 @@ bool cipher_encrypt(cipher_t *cipher, uint8_t *out, size_t *out_size,
 
     cipher_compute_iv(cipher, seqno);
     if (EVP_EncryptInit_ex(cipher->ctx, NULL, NULL, NULL, cipher->iv.b) != 1) {
-        logger(LOG_ERR, "%s: %s: %s", "cipher_encrypt", "EVP_EncryptInit_ex",
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_EncryptInit_ex",
             osh_openssl_strerror);
         return false;
     }
     if (EVP_EncryptUpdate(cipher->ctx, out, &out_len, in, in_size) != 1) {
-        logger(LOG_ERR, "%s: %s: %s", "cipher_encrypt", "EVP_EncryptUpdate",
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_EncryptUpdate",
             osh_openssl_strerror);
         return false;
     }
     if (EVP_EncryptFinal_ex(cipher->ctx, out + out_len, &final_len) != 1) {
-        logger(LOG_ERR, "%s: %s: %s", "cipher_encrypt", "EVP_EncryptFinal_ex",
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_EncryptFinal_ex",
             osh_openssl_strerror);
         return false;
     }
     if (EVP_CIPHER_CTX_ctrl(cipher->ctx,
             EVP_CTRL_AEAD_GET_TAG, CIPHER_TAG_SIZE, tag) != 1)
     {
-        logger(LOG_ERR, "%s: %s: %s", "cipher_encrypt", "EVP_CIPHER_CTX_ctrl",
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_CIPHER_CTX_ctrl",
             osh_openssl_strerror);
         return false;
     }
@@ -151,24 +152,24 @@ bool cipher_decrypt(cipher_t *cipher, uint8_t *out, size_t *out_size,
 
     cipher_compute_iv(cipher, seqno);
     if (EVP_DecryptInit_ex(cipher->ctx, NULL, NULL, NULL, cipher->iv.b) != 1) {
-        logger(LOG_ERR, "%s: %s: %s", "cipher_decrypt", "EVP_DecryptInit_ex",
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_DecryptInit_ex",
             osh_openssl_strerror);
         return false;
     }
     if (EVP_DecryptUpdate(cipher->ctx, out, &out_len, in, in_size)  != 1) {
-        logger(LOG_ERR, "%s: %s: %s", "cipher_decrypt", "EVP_DecryptUpdate",
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_DecryptUpdate",
             osh_openssl_strerror);
         return false;
     }
     if (EVP_CIPHER_CTX_ctrl(cipher->ctx,
             EVP_CTRL_AEAD_SET_TAG, CIPHER_TAG_SIZE, tag) != 1)
     {
-        logger(LOG_ERR, "%s: %s: %s", "cipher_decrypt", "EVP_CIPHER_CTX_ctrl",
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_CIPHER_CTX_ctrl",
             osh_openssl_strerror);
         return false;
     }
     if (EVP_DecryptFinal_ex(cipher->ctx, out + out_len, &final_len)  != 1) {
-        logger(LOG_ERR, "%s: %s: %s", "cipher_decrypt", "EVP_DecryptFinal_ex",
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_DecryptFinal_ex",
             osh_openssl_strerror);
         return false;
     }

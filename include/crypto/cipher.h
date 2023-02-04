@@ -36,7 +36,7 @@ typedef struct cipher {
 
 #define _cipher_attr __attribute__((warn_unused_result))
 
-cipher_t *cipher_create_aes_256_gcm(bool encrypts,
+cipher_t *cipher_create(const char *cipher_name, bool encrypts,
     const uint8_t *key, size_t key_size,
     const uint8_t *iv, size_t iv_size);
 
