@@ -127,6 +127,41 @@ Test(netaddr_eq, test_netaddr_eq)
     cr_assert_eq(netaddr_eq(&mac_0, &mac_1), false);
 }
 
+Test(netaddr_is_zero, test_netaddr_is_zero)
+{
+    netaddr_t addr;
+
+    memset(&addr, 0xFF, sizeof(addr));
+    addr.type = MAC;
+    memset(&addr.data, 0, sizeof(addr.data));
+    cr_assert_eq(netaddr_is_zero(&addr), true);
+    for (size_t i = 0; i < sizeof(addr.data.mac); ++i) {
+        memset(&addr.data, 0, sizeof(addr.data));
+        ((uint8_t *) &addr.data.mac)[i] = 1;
+        cr_assert_eq(netaddr_is_zero(&addr), false);
+    }
+
+    memset(&addr, 0xFF, sizeof(addr));
+    addr.type = IP4;
+    memset(&addr.data, 0, sizeof(addr.data));
+    cr_assert_eq(netaddr_is_zero(&addr), true);
+    for (size_t i = 0; i < sizeof(addr.data.ip4); ++i) {
+        memset(&addr.data, 0, sizeof(addr.data));
+        ((uint8_t *) &addr.data.ip4)[i] = 1;
+        cr_assert_eq(netaddr_is_zero(&addr), false);
+    }
+
+    memset(&addr, 0xFF, sizeof(addr));
+    addr.type = IP6;
+    memset(&addr.data, 0, sizeof(addr.data));
+    cr_assert_eq(netaddr_is_zero(&addr), true);
+    for (size_t i = 0; i < sizeof(addr.data.ip6); ++i) {
+        memset(&addr.data, 0, sizeof(addr.data));
+        ((uint8_t *) &addr.data.ip6)[i] = 1;
+        cr_assert_eq(netaddr_is_zero(&addr), false);
+    }
+}
+
 Test(netaddr_is_loopback, netaddr_is_loopback_invalid)
 {
     netaddr_t addr;

@@ -10,7 +10,8 @@
 typedef enum netaddr_type {
     MAC = 0,
     IP4,
-    IP6
+    IP6,
+    _netaddr_type_last
 } netaddr_type_t;
 
 struct __attribute__((packed)) netaddr_data_mac {
