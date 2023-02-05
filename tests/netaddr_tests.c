@@ -370,3 +370,12 @@ Test(netaddr_mask, mask_ipv6)
     netaddr_mask(&tmp, &ip6, &mask2);
     cr_assert_eq(netaddr_eq(&tmp, &mask2), true);
 }
+
+Test(netaddr_mask, sizeof_uint_fast32_t)
+{
+    netaddr_t addr;
+
+    // For IPv6 masking
+    cr_assert_eq(sizeof(addr.data.ip6) % sizeof(uint_fast32_t), 0);
+    cr_assert_geq(sizeof(addr.data.ip6), sizeof(uint_fast32_t));
+}

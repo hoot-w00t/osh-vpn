@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+static const struct netaddr_data_mac netaddr_mac_any = {0};
+
 // Lookup hostname and place the resolved address in addr
 // Returns false on error (errors are not logged)
 bool netaddr_lookup(netaddr_t *addr, const char *hostname)
@@ -184,8 +186,8 @@ bool netaddr_eq(const netaddr_t *s1, const netaddr_t *s2)
 
     switch (s1->type) {
     case MAC: return !memcmp(&s1->data.mac, &s2->data.mac, sizeof(s1->data.mac));
-    case IP4: return !memcmp(&s1->data.ip4, &s2->data.ip4, sizeof(s1->data.ip4));
-    case IP6: return !memcmp(&s1->data.ip6, &s2->data.ip6, sizeof(s1->data.ip6));
+    case IP4: return s1->data.ip4.s_addr == s2->data.ip4.s_addr;
+    case IP6: return IN6_ARE_ADDR_EQUAL(&s1->data.ip6, &s2->data.ip6);
      default: return false;
     }
 }
@@ -193,12 +195,10 @@ bool netaddr_eq(const netaddr_t *s1, const netaddr_t *s2)
 // Returns true if *addr is all zero
 bool netaddr_is_zero(const netaddr_t *addr)
 {
-    const uint8_t zero[16] = {0};
-
     switch (addr->type) {
-        case MAC: return !memcmp(&addr->data.mac, zero, sizeof(addr->data.mac));
-        case IP4: return !memcmp(&addr->data.ip4, zero, sizeof(addr->data.ip4));
-        case IP6: return !memcmp(&addr->data.ip6, zero, sizeof(addr->data.ip6));
+        case MAC: return !memcmp(&addr->data.mac, &netaddr_mac_any, sizeof(addr->data.mac));
+        case IP4: return addr->data.ip4.s_addr == INADDR_ANY;
+        case IP6: return IN6_ARE_ADDR_EQUAL(&addr->data.ip6, &in6addr_any);
          default: return false;
     }
 }
@@ -267,11 +267,11 @@ void netaddr_mask(netaddr_t *dest, const netaddr_t *addr, const netaddr_t *mask)
         break;
 
     case IP6:
-        ((uint64_t *) &dest->data.ip6)[0] =   ((const uint64_t *) &addr->data.ip6)[0]
-                                            & ((const uint64_t *) &mask->data.ip6)[0];
-
-        ((uint64_t *) &dest->data.ip6)[1] =   ((const uint64_t *) &addr->data.ip6)[1]
-                                            & ((const uint64_t *) &mask->data.ip6)[1];
+        // sizeof(netaddr_data_t->ip6) must be a multiple of sizeof(uint_fast32_t)
+        for (unsigned int i = 0; i < (sizeof(dest->data.ip6) / sizeof(uint_fast32_t)); ++i) {
+            ((uint_fast32_t *) &dest->data.ip6)[i] = ((const uint_fast32_t *) &addr->data.ip6)[i]
+                                                   & ((const uint_fast32_t *) &mask->data.ip6)[i];
+        }
         break;
 
     default: break;
