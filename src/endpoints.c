@@ -644,7 +644,7 @@ bool endpoint_to_sockaddr(struct sockaddr *sa, const socklen_t sa_len,
 endpoint_t *endpoint_from_sockaddr(const struct sockaddr *sa, const socklen_t sa_len,
     const endpoint_proto_t proto, const endpoint_flags_t flags)
 {
-    char addr_value[INET6_ADDRSTRLEN];
+    endpoint_t *endpoint;
 
     if (sa_len < (socklen_t) sizeof(sa->sa_family))
         return NULL;
@@ -656,10 +656,12 @@ endpoint_t *endpoint_from_sockaddr(const struct sockaddr *sa, const socklen_t sa
             if (sa_len < (socklen_t) sizeof(*sin))
                 return NULL;
 
-            if (!inet_ntop(AF_INET, &sin->sin_addr, addr_value, sizeof(addr_value)))
-                return NULL;
-
-            return endpoint_create(addr_value, ntohs(sin->sin_port), proto, flags);
+            endpoint = endpoint_alloc();
+            endpoint->type = ENDPOINT_TYPE_IP4;
+            endpoint->data.ip4.port = sin->sin_port;
+            endpoint->data.ip4.addr = sin->sin_addr;
+            endpoint_init2(endpoint, proto, flags);
+            return endpoint;
         }
 
         case AF_INET6: {
@@ -668,10 +670,12 @@ endpoint_t *endpoint_from_sockaddr(const struct sockaddr *sa, const socklen_t sa
             if (sa_len < (socklen_t) sizeof(*sin6))
                 return NULL;
 
-            if (!inet_ntop(AF_INET6, &sin6->sin6_addr, addr_value, sizeof(addr_value)))
-                return NULL;
-
-            return endpoint_create(addr_value, ntohs(sin6->sin6_port), proto, flags);
+            endpoint = endpoint_alloc();
+            endpoint->type = ENDPOINT_TYPE_IP6;
+            endpoint->data.ip6.port = sin6->sin6_port;
+            endpoint->data.ip6.addr = sin6->sin6_addr;
+            endpoint_init2(endpoint, proto, flags);
+            return endpoint;
         }
 
         default:
