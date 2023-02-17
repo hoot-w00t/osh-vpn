@@ -1,4 +1,5 @@
-name: Build project
+name: build
+
 on:
   push:
     branches: [ '**' ]
@@ -6,13 +7,48 @@ on:
     branches: [ '**' ]
 
 jobs:
-  linux:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,    shell: 'bash'                                           }
+          - { os: windows-latest,   shell: 'msys2 {0}', msys_sys: mingw64, msys_env: x86_64 }
+          - { os: windows-latest,   shell: 'msys2 {0}', msys_sys: mingw32, msys_env: i686   }
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+
     steps:
-      - name: Install requirements
+      - name: Install requirements (linux)
+        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -yq make git gcc pkg-config libssl-dev cmake
+          sudo apt-get install -yq ninja-build git gcc pkg-config libssl-dev cmake libcriterion-dev
+
+      - name: Install requirements (windows)
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msys_sys }}
+          update: true
+          release: true
+          install: >-
+            base-devel
+            git
+            mingw-w64-${{ matrix.msys_env }}-toolchain
+            mingw-w64-${{ matrix.msys_env }}-pkgconf
+            mingw-w64-${{ matrix.msys_env }}-libwinpthread
+            mingw-w64-${{ matrix.msys_env }}-ninja
+            mingw-w64-${{ matrix.msys_env }}-cmake
+            mingw-w64-${{ matrix.msys_env }}-openssl
+            mingw-w64-${{ matrix.msys_env }}-python3
+            mingw-w64-${{ matrix.msys_env }}-meson
+            mingw-w64-${{ matrix.msys_env }}-libffi
+            mingw-w64-${{ matrix.msys_env }}-libgit2
 
       - name: Clone main repository
         uses: actions/checkout@v3
@@ -20,110 +56,62 @@ jobs:
           submodules: true
           path: osh-vpn
 
+      - name: Clone mpreisler/mingw-bundledlls repository (windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/checkout@v3
+        with:
+          repository: mpreisler/mingw-bundledlls
+          path: mingw-bundledlls
+
+      - name: Clone Snaipe/Criterion repository (windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/checkout@v3
+        with:
+          repository: Snaipe/Criterion
+          ref: v2.4.1
+          submodules: recursive
+          path: Criterion
+
+      - name: Build and install Criterion (windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd "${GITHUB_WORKSPACE}/Criterion"
+          export BUILDDIR="build-${{ matrix.msys_sys }}"
+          meson --prefix=/${{ matrix.msys_sys }} "$BUILDDIR"
+          ninja -C "$BUILDDIR"
+          ninja -C "$BUILDDIR" install
+
       - name: Build project
         run: |
-          cd "$GITHUB_WORKSPACE/osh-vpn"
-          cmake -B build -G "Unix Makefiles" -DCMAKE_C_FLAGS="-Werror" -DCMAKE_BUILD_TYPE=Hardened .
-          make -C build
+          cd "${GITHUB_WORKSPACE}/osh-vpn"
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="-Werror" -DENABLE_UNIT_TESTS=ON
+          cmake --build build
 
-      - name: Upload binary
-        uses: actions/upload-artifact@v2
+      - name: Run unit tests
+        run: |
+          ctest --output-on-failure --test-dir "${GITHUB_WORKSPACE}/osh-vpn/build"
+
+      - name: Copy linked DLLs (windows)
+        if: matrix.os == 'windows-latest'
+        continue-on-error: true
+        run: |
+          cd "${GITHUB_WORKSPACE}/osh-vpn/build"
+          export MINGW_BUNDLEDLLS_SEARCH_PATH="$PATH"
+          python3 "${GITHUB_WORKSPACE}/mingw-bundledlls/mingw-bundledlls" --copy oshd.exe
+
+      - name: Upload binaries (linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v3
         with:
           name: osh-vpn-linux
           path: |
             ${{ github.workspace }}/osh-vpn/build/oshd
 
-  cygwin:
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: C:\tools\cygwin\bin\bash.exe --login -o igncr '{0}'
-
-    steps:
-      - name: Set up Cygwin and install requirements
-        uses: egor-tensin/setup-cygwin@v3
+      - name: Upload binaries (windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v3
         with:
-          platform: x64
-          packages: make gcc-core pkgconf libssl-devel cmake python3
-
-      - name: Clone main repository
-        uses: actions/checkout@v3
-        with:
-          submodules: true
-          path: osh-vpn
-
-      - name: Clone mpreisler/mingw-bundledlls repository
-        uses: actions/checkout@v3
-        with:
-          repository: mpreisler/mingw-bundledlls
-          path: mingw-bundledlls
-
-      - name: Build project
-        run: |
-          cd "$GITHUB_WORKSPACE/osh-vpn"
-          cmake -B build -G "Unix Makefiles" -DCMAKE_C_FLAGS="-Werror" -DCMAKE_BUILD_TYPE=Hardened .
-          make -C build
-
-      - name: Copy the required DLLs
-        run: |
-          cd "$GITHUB_WORKSPACE/osh-vpn/build"
-          python3 ../../mingw-bundledlls/mingw-bundledlls --copy oshd.exe
-
-      - name: Upload binaries and DLLs artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: osh-vpn-cygwin
-          path: |
-            ${{ github.workspace }}/osh-vpn/build/*.exe
-            ${{ github.workspace }}/osh-vpn/build/*.dll
-
-  msys2:
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: msys2 {0}
-
-    steps:
-      - name: Set up MSYS2 and install requirements
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MSYS
-          update: true
-          install: >-
-            base-devel
-            gcc
-            pkgconf
-            openssl-devel
-            cmake
-            python3
-
-      - name: Clone main repository
-        uses: actions/checkout@v3
-        with:
-          submodules: true
-          path: osh-vpn
-
-      - name: Clone mpreisler/mingw-bundledlls repository
-        uses: actions/checkout@v3
-        with:
-          repository: mpreisler/mingw-bundledlls
-          path: mingw-bundledlls
-
-      - name: Build project
-        run: |
-          cd "$GITHUB_WORKSPACE/osh-vpn"
-          cmake -B build -G "Unix Makefiles" -DCMAKE_C_FLAGS="-Werror" -DCMAKE_BUILD_TYPE=Hardened .
-          make -C build
-
-      - name: Copy the required DLLs
-        run: |
-          cd "$GITHUB_WORKSPACE/osh-vpn/build"
-          python3 ../../mingw-bundledlls/mingw-bundledlls --copy oshd.exe
-
-      - name: Upload binaries and DLLs artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: osh-vpn-msys2
+          name: osh-vpn-${{ matrix.msys_sys }}
           path: |
             ${{ github.workspace }}/osh-vpn/build/*.exe
             ${{ github.workspace }}/osh-vpn/build/*.dll
