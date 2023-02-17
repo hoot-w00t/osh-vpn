@@ -235,7 +235,7 @@ static void endpoint_refresh(const endpoint_group_t *group, endpoint_t *endpoint
     const time_t expire_delay = ENDPOINT_EXPIRY;
 
     logger_debug(DBG_ENDPOINTS, "%s: Refreshing endpoint %s (%" PRI_TIME_T "s)",
-        group->debug_id, endpoint->addrstr, expire_delay);
+        group->debug_id, endpoint->addrstr, (pri_time_t) expire_delay);
 
     oshd_gettime(&endpoint->expire_after);
     endpoint->expire_after.tv_sec += expire_delay;
