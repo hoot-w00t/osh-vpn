@@ -3,40 +3,41 @@
 
 Osh is an experimental mesh VPN made as a fun and learning project.
 
-Although it has basic authentication and encryption it was not tested much and I'm no expert in those fields, so if you are looking for a reliable and safe VPN, don't use Osh.
-
 ## Building the project
 ### Dependencies
-[OpenSSL](https://www.openssl.org/) is used for cryptography and [easyconf](https://github.com/hoot-w00t/easyconf/) to handle configuration files.
-
-[easyconf](https://github.com/hoot-w00t/easyconf/) is a submodule of this repository and will be built automatically when building Osh.
+- [OpenSSL](https://www.openssl.org/)
+- [easyconf](https://github.com/hoot-w00t/easyconf/) (which is a submodule of this repository and compiled automatically)
+- [Criterion](https://github.com/Snaipe/Criterion) (**optional**, only needed if unit tests are enabled)
 
 #### Debian/Ubuntu
 ```
-sudo apt install make git gcc pkg-config libssl-dev cmake
+apt install make git gcc pkg-config libssl-dev cmake
 ```
 
 #### Arch Linux
 ```
-sudo pacman -S --needed make git gcc pkgconf openssl cmake
+pacman -S --needed make git gcc pkgconf openssl cmake
 ```
 
-#### Cygwin
+#### Mingw64 (with MSYS2)
 ```
-make git gcc-core pkgconf libssl-devel cmake
+pacman -S --needed base-devel git mingw-w64-x86_64-toolchain mingw-w64-x86_64-toolchain-libwinpthread mingw-w64-x86_64-pkgconf mingw-w64-x86_64-make mingw-w64-x86_64-cmake mingw-w64-x86_64-openssl
 ```
 
 ### Compiling
 Clone the repository and navigate to it, then run
 ```
 git submodule update --init
-mkdir build && cd build
-cmake ..
-make
+cmake -B build
+cmake --build build
 ```
+The binary will be located inside the `build` directory.
+
+The `cmake -B build` command can be invoked again to change build parameters.
+Build options can be set by adding `-D<option>=<value>` to the `cmake` command.
 
 ### Build types
-You can use different build types with `-DCMAKE_BUILD_TYPE=<build_type>` when running CMake
+Build types can be changed with `-DCMAKE_BUILD_TYPE=<build_type>`
 | Build type     | Description                                                                                  |
 |----------------|----------------------------------------------------------------------------------------------|
 | Debug          | Disables compiler optimizations and enables more debug information (default)                 |
@@ -46,19 +47,17 @@ You can use different build types with `-DCMAKE_BUILD_TYPE=<build_type>` when ru
 | NativeRelease  | Same as Release with optimizations specific to the host CPU                                  |
 
 ### Other build options
-You can change those options by running `cmake .. -D<option>=<value>`
-
 | Option              | Default value | Description |
 |---------------------|---------------|-------------|
-| `ENABLE_UNIT_TESTS` | `OFF`         | Build unit tests, they can be run with `ctest --output-on-failure` or directly with `./oshd_tests`. These unit tests are made using [Criterion](https://github.com/Snaipe/Criterion) |
-| `AIO_BACKEND`       | `auto`        | Choose the backend used for polling I/O events. `auto` automatically chooses the best available in the following backends: `epoll`, `poll`, `windows`. |
+| `ENABLE_UNIT_TESTS` | `OFF`         | Build unit tests, they can be run with `ctest --output-on-failure` or directly with `./oshd_tests`. |
+| `AIO_BACKEND`       | `auto`        | Choose the backend used for polling I/O events. `auto` automatically chooses the best available from the following backends: `epoll`, `poll`, `windows`. |
 | `ENABLE_SYSTEMD`    | `OFF`         | Configure systemd service files |
 | `DISABLE_EVENTS_TIMERFD` | `OFF`    | Disable the use of `timerfd` for timed events even when it is available |
 | `ENABLE_HARDENING`  | `ON`          | Enable hardening flags for release builds ([https://wiki.debian.org/Hardening](https://wiki.debian.org/Hardening)) |
 
 ## Installing
-It is possible to install Osh with `sudo make install` after compiling.
+It is possible to install Osh with `cmake --install <builddir>` after compiling.
 
-You can change the installation prefix to install files to another location by configuring the project with `-DCMAKE_INSTALL_PREFIX=<path>` (defaults to `/usr/local` on Unix and `C:\Program Files` on Windows).
+The installation prefix can be changed to install files to another location by setting `-DCMAKE_INSTALL_PREFIX=<path>` (defaults to `/usr/local` on Unix and `C:\Program Files` on Windows).
 
-After installing you should find an `install_manifest.txt` in your build directory, which contains a list of all the files that were installed to your system.
+After installing there will be an `install_manifest.txt` in your build directory, which lists all the files that were installed.
