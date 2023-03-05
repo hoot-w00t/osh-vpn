@@ -6,6 +6,56 @@
 #include <string.h>
 #include <errno.h>
 
+#define ETH_DEST_OFFSET         (0)
+#define ETH_SRC_OFFSET          (6)
+#define ETH_HDR_SIZE            (14)
+
+#define IP4_DEST_OFFSET         (16)
+#define IP4_SRC_OFFSET          (12)
+#define IP4_HDR_SIZE            (20)
+
+#define IP6_DEST_OFFSET         (24)
+#define IP6_SRC_OFFSET          (8)
+#define IP6_HDR_SIZE            (40)
+
+#define IP_HDR_VERSION(ip_pkt)  ((((const uint8_t *) ip_pkt)[0] & 0xF0) >> 4)
+
+// Parse TAP packet header to *hdr
+static bool tap_to_packethdr(tuntap_packethdr_t *hdr, const void *packet, size_t packet_size)
+{
+    if (packet_size < ETH_HDR_SIZE)
+        return false;
+
+    return netaddr_dton(&hdr->dest, MAC, ((const uint8_t *) packet) + ETH_DEST_OFFSET)
+        && netaddr_dton(&hdr->src,  MAC, ((const uint8_t *) packet) + ETH_SRC_OFFSET);
+}
+
+// Parse TUN packet header to *hdr
+static bool tun_to_packethdr(tuntap_packethdr_t *hdr, const void *packet, size_t packet_size)
+{
+    if (packet_size == 0)
+        return false;
+
+    switch (IP_HDR_VERSION(packet)) {
+        case 4: // IPv4 packet
+            if (packet_size < IP4_HDR_SIZE)
+                return false;
+
+            return netaddr_dton(&hdr->src,  IP4, ((const uint8_t *) packet) + IP4_SRC_OFFSET)
+                && netaddr_dton(&hdr->dest, IP4, ((const uint8_t *) packet) + IP4_DEST_OFFSET);
+
+        case 6: // IPv6 packet
+            if (packet_size < IP6_HDR_SIZE)
+                return false;
+
+            return netaddr_dton(&hdr->src,  IP6, ((const uint8_t *) packet) + IP6_SRC_OFFSET)
+                && netaddr_dton(&hdr->dest, IP6, ((const uint8_t *) packet) + IP6_DEST_OFFSET);
+
+        default: // Invalid or unknown packet
+            return false;
+    }
+}
+
 #if !(PLATFORM_IS_WINDOWS)
 #include <fcntl.h>
 
@@ -64,6 +114,10 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
         logger(LOG_ERR, "Failed to open %s device", TUNTAP_IS_TAP_STR(tap));
         return NULL;
     }
+
+    tuntap->parse_packethdr = tuntap->is_tap
+                            ? tap_to_packethdr
+                            : tun_to_packethdr;
 
     if (tuntap->drv.is_tap == tuntap->is_tap) {
         logger(LOG_INFO, "Opened %s device: %s",

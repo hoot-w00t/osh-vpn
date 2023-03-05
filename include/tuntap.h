@@ -3,6 +3,7 @@
 
 #include "macros.h"
 #include "aio.h"
+#include "netaddr.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -18,6 +19,7 @@
 
 #define TUNTAP_IS_TAP_STR(is_tap) ((is_tap) ? "TAP" : "TUN")
 
+typedef struct tuntap_packethdr tuntap_packethdr_t;
 typedef union tuntap_data tuntap_data_t;
 typedef struct tuntap tuntap_t;
 
@@ -25,6 +27,14 @@ typedef void (*tuntap_func_close_t)(tuntap_t *tuntap);
 typedef bool (*tuntap_func_read_t)(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size);
 typedef bool (*tuntap_func_write_t)(tuntap_t *tuntap, const void *packet, size_t packet_size);
 typedef void (*tuntap_func_init_aio_event_t)(tuntap_t *tuntap, aio_event_t *event);
+
+typedef bool (*tuntap_func_parse_packethdr_t)(tuntap_packethdr_t *hdr, const void *packet, size_t packet_size);
+
+// TUN/TAP packet header information
+struct tuntap_packethdr {
+    netaddr_t src;      // Source address
+    netaddr_t dest;     // Destination address
+};
 
 union tuntap_data {
     void *ptr;
@@ -50,6 +60,9 @@ struct tuntap {
 
     // Any data needed by the TUN/TAP driver
     tuntap_data_t data;
+
+    // Function to parse network packets of tuntap_read()/tuntap_write()
+    tuntap_func_parse_packethdr_t parse_packethdr;
 
     // Device name
     char *dev_name;
@@ -99,6 +112,11 @@ void tuntap_close(tuntap_t *tuntap);
 // overwritten
 #define tuntap_init_aio_event(tuntap, event) \
     (tuntap)->drv.init_aio_event(tuntap, event)
+
+// Parse TUN/TAP packet header
+// (parses Ethernet header in TAP mode, IPv4/IPv6 header in TUN mode)
+#define tuntap_parse_packethdr(tuntap, hdr, packet, packet_size) \
+    (tuntap)->parse_packethdr(hdr, packet, packet_size)
 
 // Close TUN/TAP device pointed by tuntap, sets it to NULL after
 static inline void tuntap_close_at(tuntap_t **tuntap)

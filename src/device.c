@@ -1,7 +1,6 @@
 #include "oshd.h"
 #include "oshd_cmd.h"
 #include "device_mode.h"
-#include "netpacket.h"
 #include "random.h"
 #include "logger.h"
 #include "macros.h"
@@ -41,7 +40,7 @@ static void device_aio_read(aio_event_t *event)
     node_id_t *me = node_id_find_local();
     device_aio_data_t *data = (device_aio_data_t *) event->userdata;
     size_t pkt_size;
-    netpacket_t pkt_hdr;
+    tuntap_packethdr_t pkt_hdr;
     const netroute_t *route;
 
     // Only process packets from the TUN/TAP device if the daemon is running
@@ -56,7 +55,7 @@ static void device_aio_read(aio_event_t *event)
         return;
 
     // Decode the packet's header
-    if (!netpacket_from_data(&pkt_hdr, data->buf, oshd.tuntap->is_tap)) {
+    if (!tuntap_parse_packethdr(oshd.tuntap, &pkt_hdr, data->buf, pkt_size)) {
         logger(LOG_CRIT, "%s: Failed to parse network packet",
             oshd.tuntap->dev_name);
         return;

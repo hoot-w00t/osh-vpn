@@ -201,7 +201,6 @@ set(OSHD_SOURCES
     src/murmurhash.c
     src/netaddr.c
     src/netbuffer.c
-    src/netpacket.c
     src/netroute.c
     src/node.c
     src/oshd_clock.c
