@@ -438,6 +438,14 @@ static void _tuntap_init_aio_event(tuntap_t *tuntap, aio_event_t *event)
 
 tuntap_t *tuntap_open_tap_windows(const char *devname, bool tap)
 {
+    const struct tuntap_drv tuntap_drv = {
+        .is_tap = tap,
+        .close = _tuntap_close,
+        .read = _tuntap_read,
+        .write = _tuntap_write,
+        .init_aio_event = _tuntap_init_aio_event,
+    };
+
     // We cannot create a TAP device on the fly, it must already exist so we
     // need to have its name to find and open it
     if (!devname || strlen(devname) == 0) {
@@ -542,14 +550,16 @@ tuntap_t *tuntap_open_tap_windows(const char *devname, bool tap)
     // If no adapter was opened then we either couldn't find or open the
     // requested adapter
     if (adapter_handle == INVALID_HANDLE_VALUE) {
-        logger(LOG_CRIT, "No adapter found for TUN/TAP device %s", devname);
+        logger(LOG_CRIT, "No adapter found for TUN/TAP device %s", adapter_name);
         return NULL;
     }
+    logger_debug(DBG_TUNTAP, "Opened adapter: %s (handle: %p)",
+        adapter_subpath, adapter_handle);
 
     // Create the TUN/TAP device
     // The tap-windows6 driver only supports TAP (layer 2) mode, so in order to
     // work with a TUN network Osh will translate between both layers
-    tuntap_t *tuntap = tuntap_empty(tap, _tuntap_close, _tuntap_read, _tuntap_write, _tuntap_init_aio_event);
+    tuntap_t *tuntap = tuntap_empty(&tuntap_drv, tap);
     tt_data_win_t *data;
 
     // Copy the adapter's name and ID
@@ -598,12 +608,6 @@ tuntap_t *tuntap_open_tap_windows(const char *devname, bool tap)
     // Initiate reading from the device
     if (!initiate_overlapped_read(tuntap))
         goto err_tuntap;
-
-    logger(LOG_INFO, "Opened %s device: %s (%s, handle: %p)",
-        tuntap->is_tap ? "TAP" : "TUN",
-        tuntap->dev_name,
-        tuntap->dev_id,
-        data->device_handle);
 
     return tuntap;
 

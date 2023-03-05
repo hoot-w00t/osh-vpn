@@ -29,21 +29,16 @@ bool tuntap_nonblock(int fd)
 #endif
 
 // Allocate an empty tuntap_t
-tuntap_t *tuntap_empty(
-    bool is_tap,
-    tuntap_func_close_t func_close,
-    tuntap_func_read_t func_read,
-    tuntap_func_write_t func_write,
-    tuntap_func_init_aio_event_t func_init_aio_event)
+// Initializes the driver information from *drv (all of the function pointers
+// must be valid)
+// is_tap is the requested/emulated layer used by tuntap_read()/tuntap_write()
+tuntap_t *tuntap_empty(const struct tuntap_drv *drv, const bool is_tap)
 {
     tuntap_t *tuntap = xzalloc(sizeof(tuntap_t));
 
+    tuntap->drv = *drv;
     tuntap->is_tap = is_tap;
 
-    tuntap->close = func_close;
-    tuntap->read = func_read;
-    tuntap->write = func_write;
-    tuntap->init_aio_event = func_init_aio_event;
     return tuntap;
 }
 
@@ -61,10 +56,38 @@ void tuntap_set_devid(tuntap_t *tuntap, const char *devid)
     tuntap->dev_id = xstrdup(devid);
 }
 
+tuntap_t *tuntap_open(const char *devname, bool tap)
+{
+    tuntap_t *tuntap = _tuntap_open(devname, tap);
+
+    if (!tuntap) {
+        logger(LOG_ERR, "Failed to open %s device", TUNTAP_IS_TAP_STR(tap));
+        return NULL;
+    }
+
+    if (tuntap->drv.is_tap == tuntap->is_tap) {
+        logger(LOG_INFO, "Opened %s device: %s",
+            TUNTAP_IS_TAP_STR(tuntap->drv.is_tap),
+            tuntap->dev_name);
+    } else {
+        logger(LOG_ERR, "Opened %s device: %s (but expected %s)",
+            TUNTAP_IS_TAP_STR(tuntap->drv.is_tap),
+            tuntap->dev_name,
+            TUNTAP_IS_TAP_STR(tuntap->is_tap));
+        tuntap_close_at(&tuntap);
+    }
+
+    return tuntap;
+}
+
 void tuntap_close(tuntap_t *tuntap)
 {
+    logger(LOG_INFO, "Closing %s device: %s",
+        TUNTAP_IS_TAP_STR(tuntap->drv.is_tap),
+        tuntap->dev_name);
+
     // Close and free the driver
-    tuntap->close(tuntap);
+    tuntap->drv.close(tuntap);
 
     // Free common resources and the tuntap_t pointer
     free(tuntap->dev_name);

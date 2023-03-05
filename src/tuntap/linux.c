@@ -54,8 +54,16 @@ static void _tuntap_close(tuntap_t *tuntap)
     close(tuntap->data.fd);
 }
 
-tuntap_t *tuntap_open(const char *devname, bool tap)
+tuntap_t *_tuntap_open(const char *devname, bool tap)
 {
+    const struct tuntap_drv tuntap_drv = {
+        .is_tap = tap,
+        .close = _tuntap_close,
+        .read = _tuntap_read,
+        .write = _tuntap_write,
+        .init_aio_event = _tuntap_init_aio_event,
+    };
+
     tuntap_t *tuntap;
     struct ifreq ifr;
     int fd;
@@ -64,13 +72,16 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
         logger(LOG_CRIT, "Failed to open %s: %s", tuntap_filepath, strerror(errno));
         return NULL;
     }
+    logger_debug(DBG_TUNTAP, "Opened %s (fd=%d)", tuntap_filepath, fd);
 
     memset(&ifr, 0, sizeof(ifr));
-    ifr.ifr_flags = tap ? (IFF_TAP | IFF_NO_PI)
-                        : (IFF_TUN | IFF_NO_PI);
+    ifr.ifr_flags = tuntap_drv.is_tap ? (IFF_TAP | IFF_NO_PI)
+                                      : (IFF_TUN | IFF_NO_PI);
 
-    if (devname)
+    if (devname) {
         strncpy(ifr.ifr_name, devname, IFNAMSIZ - 1);
+        logger_debug(DBG_TUNTAP, "Requesting interface name: %s", ifr.ifr_name);
+    }
 
     if (ioctl(fd, TUNSETIFF, (void *) &ifr) < 0) {
         logger(LOG_CRIT, "ioctl(%d, %s): %s: %s", fd, "TUNSETIFF", devname, strerror(errno));
@@ -83,15 +94,9 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
         return NULL;
     }
 
-    tuntap = tuntap_empty(tap, _tuntap_close, _tuntap_read, _tuntap_write, _tuntap_init_aio_event);
+    tuntap = tuntap_empty(&tuntap_drv, tap);
     tuntap_set_devname(tuntap, ifr.ifr_name);
-
     tuntap->data.fd = fd;
-
-    logger(LOG_INFO, "Opened %s device: %s (fd: %d)",
-        tuntap->is_tap ? "TAP" : "TUN",
-        tuntap->dev_name,
-        tuntap->data.fd);
 
     return tuntap;
 }

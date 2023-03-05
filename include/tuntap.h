@@ -16,6 +16,8 @@
 #error "TUNTAP_BUFSIZE must be a positive value"
 #endif
 
+#define TUNTAP_IS_TAP_STR(is_tap) ((is_tap) ? "TAP" : "TUN")
+
 typedef union tuntap_data tuntap_data_t;
 typedef struct tuntap tuntap_t;
 
@@ -31,15 +33,23 @@ union tuntap_data {
     uint64_t u64;
 };
 
-struct tuntap {
-    // true if the device is running in layer 2
+struct tuntap_drv {
+    // true if the virtual network interface is running in layer 2
     bool is_tap;
 
-    // TUN/TAP API function pointers
+    // API function pointers of the TUN/TAP driver
     tuntap_func_close_t close;
     tuntap_func_read_t read;
     tuntap_func_write_t write;
     tuntap_func_init_aio_event_t init_aio_event;
+};
+
+struct tuntap {
+    // TUN/TAP driver information and API function pointers
+    struct tuntap_drv drv;
+
+    // Any data needed by the TUN/TAP driver
+    tuntap_data_t data;
 
     // Device name
     char *dev_name;
@@ -47,8 +57,9 @@ struct tuntap {
     // Device ID (can be NULL, depends on the platform)
     char *dev_id;
 
-    // Any data needed by the TUN/TAP driver
-    tuntap_data_t data;
+    // true if the TUN/TAP device is running in layer 2
+    // This reflects the layer of tuntap_read()/tuntap_write() packets
+    bool is_tap;
 };
 
 // Open TUN/TAP device
@@ -58,6 +69,12 @@ struct tuntap {
 // layer 3 (TUN)
 // Returns NULL on error
 tuntap_t *tuntap_open(const char *devname, bool tap);
+
+// Platform-specific function called by tuntap_open() to actually open a TUN/TAP
+// device
+// If multiple drivers are available this function chooses which one to open
+// Returns NULL on any error
+tuntap_t *_tuntap_open(const char *devname, bool tap);
 
 // Close TUN/TAP device and free all resources
 // The pointer will also be freed, it should not be used after calling this
@@ -69,19 +86,19 @@ void tuntap_close(tuntap_t *tuntap);
 // If *pkt_size is 0 there are no packets ready to be read
 // Returns false on error
 #define tuntap_read(tuntap, buf, buf_size, pkt_size) \
-    (tuntap)->read(tuntap, buf, buf_size, pkt_size)
+    (tuntap)->drv.read(tuntap, buf, buf_size, pkt_size)
 
 // Write a packet to the TUN/TAP device
 // Returns false on error
 #define tuntap_write(tuntap, packet, packet_size) \
-    (tuntap)->write(tuntap, packet, packet_size)
+    (tuntap)->drv.write(tuntap, packet, packet_size)
 
 // Initialize an AIO event for the TUN/TAP device
 // This function should only modify the file descriptor/handle, other members
 // (poll events, userdata and callbacks) must not be modified as they can be
 // overwritten
 #define tuntap_init_aio_event(tuntap, event) \
-    (tuntap)->init_aio_event(tuntap, event)
+    (tuntap)->drv.init_aio_event(tuntap, event)
 
 // Close TUN/TAP device pointed by tuntap, sets it to NULL after
 static inline void tuntap_close_at(tuntap_t **tuntap)
@@ -94,12 +111,7 @@ static inline void tuntap_close_at(tuntap_t **tuntap)
 // Defined in src/tuntap/common.c
 bool tuntap_nonblock(int fd);
 
-tuntap_t *tuntap_empty(
-    bool is_tap,
-    tuntap_func_close_t func_close,
-    tuntap_func_read_t func_read,
-    tuntap_func_write_t func_write,
-    tuntap_func_init_aio_event_t func_init_aio_event);
+tuntap_t *tuntap_empty(const struct tuntap_drv *drv, const bool is_tap);
 
 void tuntap_set_devname(tuntap_t *tuntap, const char *devname);
 void tuntap_set_devid(tuntap_t *tuntap, const char *devid);
