@@ -2,32 +2,22 @@
 #include "logger.h"
 #include "xalloc.h"
 #include "tuntap.h"
+#include "netdefs/ether.h"
+#include "netdefs/ip.h"
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 
-#define ETH_DEST_OFFSET         (0)
-#define ETH_SRC_OFFSET          (6)
-#define ETH_HDR_SIZE            (14)
-
-#define IP4_DEST_OFFSET         (16)
-#define IP4_SRC_OFFSET          (12)
-#define IP4_HDR_SIZE            (20)
-
-#define IP6_DEST_OFFSET         (24)
-#define IP6_SRC_OFFSET          (8)
-#define IP6_HDR_SIZE            (40)
-
-#define IP_HDR_VERSION(ip_pkt)  ((((const uint8_t *) ip_pkt)[0] & 0xF0) >> 4)
-
 // Parse TAP packet header to *hdr
 static bool tap_to_packethdr(tuntap_packethdr_t *hdr, const void *packet, size_t packet_size)
 {
-    if (packet_size < ETH_HDR_SIZE)
+    const struct eth_hdr *eth_hdr = (const struct eth_hdr *) packet;
+
+    if (packet_size < sizeof(*eth_hdr))
         return false;
 
-    return netaddr_dton(&hdr->dest, MAC, ((const uint8_t *) packet) + ETH_DEST_OFFSET)
-        && netaddr_dton(&hdr->src,  MAC, ((const uint8_t *) packet) + ETH_SRC_OFFSET);
+    return netaddr_dton(&hdr->dest, MAC, eth_hdr->dest.addr)
+        && netaddr_dton(&hdr->src,  MAC, eth_hdr->src.addr);
 }
 
 // Parse TUN packet header to *hdr
@@ -37,19 +27,25 @@ static bool tun_to_packethdr(tuntap_packethdr_t *hdr, const void *packet, size_t
         return false;
 
     switch (IP_HDR_VERSION(packet)) {
-        case 4: // IPv4 packet
-            if (packet_size < IP4_HDR_SIZE)
+        case 4: { // IPv4 packet
+            const struct ipv4_hdr *ipv4_hdr = (const struct ipv4_hdr *) packet;
+
+            if (packet_size < sizeof(*ipv4_hdr))
                 return false;
 
-            return netaddr_dton(&hdr->src,  IP4, ((const uint8_t *) packet) + IP4_SRC_OFFSET)
-                && netaddr_dton(&hdr->dest, IP4, ((const uint8_t *) packet) + IP4_DEST_OFFSET);
+            return netaddr_dton(&hdr->src,  IP4, &ipv4_hdr->saddr)
+                && netaddr_dton(&hdr->dest, IP4, &ipv4_hdr->daddr);
+        }
 
-        case 6: // IPv6 packet
-            if (packet_size < IP6_HDR_SIZE)
+        case 6: { // IPv6 packet
+            const struct ipv6_hdr *ipv6_hdr = (const struct ipv6_hdr *) packet;
+
+            if (packet_size < sizeof(*ipv6_hdr))
                 return false;
 
-            return netaddr_dton(&hdr->src,  IP6, ((const uint8_t *) packet) + IP6_SRC_OFFSET)
-                && netaddr_dton(&hdr->dest, IP6, ((const uint8_t *) packet) + IP6_DEST_OFFSET);
+            return netaddr_dton(&hdr->src,  IP6, &ipv6_hdr->src_addr)
+                && netaddr_dton(&hdr->dest, IP6, &ipv6_hdr->dst_addr);
+        }
 
         default: // Invalid or unknown packet
             return false;
