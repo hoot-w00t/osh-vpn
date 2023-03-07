@@ -27,14 +27,12 @@ static netarea_t endpoint_calc_area(const endpoint_t *endpoint)
 
     switch (endpoint->type) {
         case ENDPOINT_TYPE_IP4:
-            return netaddr_dton(&addr, IP4, &endpoint->data.ip4.addr)
-                    ? netaddr_area(&addr)
-                    : NETAREA_UNK;
+            netaddr_dton_ip4(&addr, endpoint->data.ip4.addr);
+            return netaddr_area(&addr);
 
         case ENDPOINT_TYPE_IP6:
-            return netaddr_dton(&addr, IP6, &endpoint->data.ip6.addr)
-                    ? netaddr_area(&addr)
-                    : NETAREA_UNK;
+            netaddr_dton_ip6(&addr, endpoint->data.ip6.addr);
+            return netaddr_area(&addr);
 
         default:
             return NETAREA_UNK;

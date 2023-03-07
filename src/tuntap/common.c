@@ -16,8 +16,9 @@ static bool tap_to_packethdr(tuntap_packethdr_t *hdr, const void *packet, size_t
     if (packet_size < sizeof(*eth_hdr))
         return false;
 
-    return netaddr_dton(&hdr->dest, MAC, eth_hdr->dest.addr)
-        && netaddr_dton(&hdr->src,  MAC, eth_hdr->src.addr);
+    netaddr_dton_mac(&hdr->dest, eth_hdr->dest);
+    netaddr_dton_mac(&hdr->src,  eth_hdr->src);
+    return true;
 }
 
 // Parse TUN packet header to *hdr
@@ -33,8 +34,9 @@ static bool tun_to_packethdr(tuntap_packethdr_t *hdr, const void *packet, size_t
             if (packet_size < sizeof(*ipv4_hdr))
                 return false;
 
-            return netaddr_dton(&hdr->src,  IP4, &ipv4_hdr->saddr)
-                && netaddr_dton(&hdr->dest, IP4, &ipv4_hdr->daddr);
+            netaddr_dton_ip4_u32(&hdr->src,  ipv4_hdr->saddr);
+            netaddr_dton_ip4_u32(&hdr->dest, ipv4_hdr->daddr);
+            return true;
         }
 
         case 6: { // IPv6 packet
@@ -43,8 +45,9 @@ static bool tun_to_packethdr(tuntap_packethdr_t *hdr, const void *packet, size_t
             if (packet_size < sizeof(*ipv6_hdr))
                 return false;
 
-            return netaddr_dton(&hdr->src,  IP6, &ipv6_hdr->src_addr)
-                && netaddr_dton(&hdr->dest, IP6, &ipv6_hdr->dst_addr);
+            netaddr_dton_ip6(&hdr->src,  ipv6_hdr->src_addr);
+            netaddr_dton_ip6(&hdr->dest, ipv6_hdr->dst_addr);
+            return true;
         }
 
         default: // Invalid or unknown packet

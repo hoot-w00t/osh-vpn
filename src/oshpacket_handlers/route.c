@@ -21,7 +21,12 @@ bool oshpacket_handler_route(
     memset(node_name, 0, sizeof(node_name));
     for (size_t i = 0; i < entries; ++i) {
         // Extract and verify the network address
-        if (!netaddr_dton(&addr, payload[i].type, &payload[i].addr)) {
+
+        // We have to copy the address data because the pointer to the payload
+        // data may be invalid
+        const netaddr_data_t addr_data = payload[i].addr;
+
+        if (!netaddr_dton(&addr, payload[i].type, &addr_data)) {
             logger(LOG_ERR, "%s: %s: Add route: Invalid address type",
                 c->addrw, c->id->name);
             return false;

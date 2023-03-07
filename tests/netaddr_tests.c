@@ -24,14 +24,46 @@ Test(netaddr_data_t, netaddr_data_union_pointers)
 
 Test(netaddr_dton, test_netaddr_dton)
 {
-    const uint8_t macaddr[6] = {0x1, 0x2, 0x3, 0x4, 0x5, 0x6};
+    const struct eth_addr macaddr = { .addr = {0x1, 0x2, 0x3, 0x4, 0x5, 0x6}};
     const struct in_addr sin = { .s_addr = htonl(INADDR_LOOPBACK) };
     const struct in6_addr sin6 = in6addr_loopback;
-    netaddr_t nmac, nip4, nip6;
+    netaddr_data_t data;
+    netaddr_t n;
 
-    cr_assert_neq(netaddr_dton(&nmac, MAC, macaddr), false);
-    cr_assert_neq(netaddr_dton(&nip4, IP4, &sin), false);
-    cr_assert_neq(netaddr_dton(&nip6, IP6, &sin6), false);
+    data.mac = macaddr;
+    cr_assert_eq(netaddr_dton(&n, MAC, &data), true);
+    cr_assert_eq(n.type, MAC);
+    cr_assert_eq(memcmp(&macaddr, &n.data.mac, sizeof(macaddr)), 0);
+
+    data.ip4 = sin;
+    cr_assert_eq(netaddr_dton(&n, IP4, &data), true);
+    cr_assert_eq(n.type, IP4);
+    cr_assert_eq(memcmp(&sin, &n.data.ip4, sizeof(sin)), 0);
+
+    data.ip6 = sin6;
+    cr_assert_eq(netaddr_dton(&n, IP6, &data), true);
+    cr_assert_eq(n.type, IP6);
+    cr_assert_eq(memcmp(&sin6, &n.data.ip6, sizeof(sin6)), 0);
+}
+
+Test(netaddr_dton, test_netaddr_dton_inline)
+{
+    const struct eth_addr macaddr = { .addr = {0x1, 0x2, 0x3, 0x4, 0x5, 0x6}};
+    const struct in_addr sin = { .s_addr = htonl(INADDR_LOOPBACK) };
+    const struct in6_addr sin6 = in6addr_loopback;
+    netaddr_t n;
+
+    netaddr_dton_mac(&n, macaddr);
+    cr_assert_eq(n.type, MAC);
+    cr_assert_eq(memcmp(&macaddr, &n.data.mac, sizeof(macaddr)), 0);
+
+    netaddr_dton_ip4(&n, sin);
+    cr_assert_eq(n.type, IP4);
+    cr_assert_eq(memcmp(&sin, &n.data.ip4, sizeof(sin)), 0);
+
+    netaddr_dton_ip6(&n, sin6);
+    cr_assert_eq(n.type, IP6);
+    cr_assert_eq(memcmp(&sin6, &n.data.ip6, sizeof(sin6)), 0);
 }
 
 Test(netaddr_pton, test_netaddr_pton)

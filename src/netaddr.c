@@ -17,13 +17,13 @@ bool netaddr_lookup(netaddr_t *addr, const char *hostname)
 
     switch (addrinfo->ai_family) {
         case AF_INET:
-            success = netaddr_dton(addr, IP4,
-                &((struct sockaddr_in *) addrinfo->ai_addr)->sin_addr);
+            netaddr_dton_ip4(addr, ((struct sockaddr_in *) addrinfo->ai_addr)->sin_addr);
+            success = true;
             break;
 
         case AF_INET6:
-            success = netaddr_dton(addr, IP6,
-                &((struct sockaddr_in6 *) addrinfo->ai_addr)->sin6_addr);
+            netaddr_dton_ip6(addr, ((struct sockaddr_in6 *) addrinfo->ai_addr)->sin6_addr);
+            success = true;
             break;
 
         default:
@@ -117,28 +117,15 @@ bool netaddr_pton(netaddr_t *dest, const char *data)
 }
 
 // Convert network address data to netaddr_t and put it into *dest
-// Depending on type, data should point to:
-//     MAC: struct eth_addr
-//     IP4: struct in_addr
-//     IP6: struct in6_addr
-bool netaddr_dton(netaddr_t *dest, netaddr_type_t type, const void *data)
+// The address data will be retrieved from the correct field within *data
+// Returns true on success, false if type is invalid
+bool netaddr_dton(netaddr_t *dest, netaddr_type_t type, const netaddr_data_t *data)
 {
-    dest->type = type;
     switch (type) {
-        case MAC:
-            dest->data.mac = *((const struct eth_addr *) data);
-            return true;
-
-        case IP4:
-            dest->data.ip4 = *((const struct in_addr *) data);
-            return true;
-
-        case IP6:
-            dest->data.ip6 = *((const struct in6_addr *) data);
-            return true;
-
-        default:
-            return false;
+        case MAC: netaddr_dton_mac(dest, data->mac); return true;
+        case IP4: netaddr_dton_ip4(dest, data->ip4); return true;
+        case IP6: netaddr_dton_ip6(dest, data->ip6); return true;
+        default:  return false;
     }
 }
 
