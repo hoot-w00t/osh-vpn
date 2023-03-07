@@ -34,28 +34,37 @@ bool netaddr_lookup(netaddr_t *addr, const char *hostname)
     return success;
 }
 
+// Convert Ethernet address to text
+bool netaddr_ntop_mac(char *dest, size_t maxlen, const struct eth_addr *addr)
+{
+    int c;
+
+    c = snprintf(dest, maxlen, "%02x:%02x:%02x:%02x:%02x:%02x",
+            addr->addr[0], addr->addr[1], addr->addr[2],
+            addr->addr[3], addr->addr[4], addr->addr[5]);
+    return c > 0 && (unsigned) c < maxlen;
+}
+
+// Convert IPv4 address to text
+bool netaddr_ntop_ip4(char *dest, size_t maxlen, const struct in_addr *addr)
+{
+    return inet_ntop(AF_INET, addr, dest, maxlen) != NULL;
+}
+
+// Convert IPv6 address to text
+bool netaddr_ntop_ip6(char *dest, size_t maxlen, const struct in6_addr *addr)
+{
+    return inet_ntop(AF_INET6, addr, dest, maxlen) != NULL;
+}
+
 // Convert netaddr_t data to a text address in *dest
 bool netaddr_ntop(char *dest, size_t maxlen, const netaddr_t *addr)
 {
     switch (addr->type) {
-        case MAC:
-            snprintf(dest, maxlen, "%02x:%02x:%02x:%02x:%02x:%02x",
-                addr->data.mac.addr[0],
-                addr->data.mac.addr[1],
-                addr->data.mac.addr[2],
-                addr->data.mac.addr[3],
-                addr->data.mac.addr[4],
-                addr->data.mac.addr[5]);
-            return true;
-
-        case IP4:
-            return inet_ntop(AF_INET, &addr->data.ip4, dest, maxlen) != NULL;
-
-        case IP6:
-            return inet_ntop(AF_INET6, &addr->data.ip6, dest, maxlen) != NULL;
-
-        default:
-            return false;
+        case MAC: return netaddr_ntop_mac(dest, maxlen, &addr->data.mac);
+        case IP4: return netaddr_ntop_ip4(dest, maxlen, &addr->data.ip4);
+        case IP6: return netaddr_ntop_ip6(dest, maxlen, &addr->data.ip6);
+        default:  return false;
     }
 }
 
