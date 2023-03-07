@@ -82,7 +82,7 @@ Test(netaddr_pton, test_netaddr_pton)
 Test(netaddr_ntop, test_netaddr_ntop)
 {
     netaddr_t addr;
-    char addrw[INET6_ADDRSTRLEN];
+    char addrw[NETADDR_ADDRSTRLEN];
     static const char *addresses[] = {
         "01:02:03:04:05:06",
         "192.168.1.1",

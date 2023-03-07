@@ -219,7 +219,7 @@ static netroute_mask_t *netroute_add_mask(netroute_table_t *table,
     *it = rmask;
 
     if (logger_is_debugged(DBG_NETROUTE)) {
-        char addrw[INET6_ADDRSTRLEN];
+        char addrw[NETADDR_ADDRSTRLEN];
 
         netaddr_ntop(addrw, sizeof(addrw), &rmask->mask);
         logger_debug(DBG_NETROUTE, "Added mask %s/%u to %p",
@@ -249,7 +249,7 @@ static bool netroute_del_mask(netroute_table_t *table, netroute_mask_t *rmask)
             *it = (*it)->next;
 
             if (logger_is_debugged(DBG_NETROUTE)) {
-                char addrw[INET6_ADDRSTRLEN];
+                char addrw[NETADDR_ADDRSTRLEN];
 
                 netaddr_ntop(addrw, sizeof(addrw), &rmask->mask);
                 logger_debug(DBG_NETROUTE, "Deleted mask %s/%u from %p",
@@ -322,7 +322,7 @@ const netroute_t *netroute_add(netroute_table_t *table,
         if (   route->owner != owner
             && (route->owner->local_node || owner->local_node))
         {
-            char addrw[INET6_ADDRSTRLEN];
+            char addrw[NETADDR_ADDRSTRLEN];
 
             netaddr_ntop(addrw, sizeof(addrw), &route->addr);
             logger(LOG_WARN,
@@ -344,7 +344,7 @@ const netroute_t *netroute_add(netroute_table_t *table,
     }
 
     if (logger_is_debugged(DBG_NETROUTE)) {
-        char addrw[INET6_ADDRSTRLEN];
+        char addrw[NETADDR_ADDRSTRLEN];
 
         netaddr_ntop(addrw, sizeof(addrw), &route->addr);
         logger_debug(DBG_NETROUTE, "Added %s/%u owned by %s (%s expire) to %p",
@@ -412,7 +412,7 @@ static bool netroute_del(netroute_table_t *table, netroute_t *route)
             }
 
             if (logger_is_debugged(DBG_NETROUTE)) {
-                char addrw[INET6_ADDRSTRLEN];
+                char addrw[NETADDR_ADDRSTRLEN];
 
                 netaddr_ntop(addrw, sizeof(addrw), &route->addr);
                 logger_debug(DBG_NETROUTE, "Deleted %s/%u owned by %s from %p",
@@ -533,7 +533,7 @@ bool netroute_del_expired(netroute_table_t *table, time_t *next_expire,
 // Dump all routes to outfile
 void netroute_dump_to(netroute_table_t *table, FILE *outfile)
 {
-    char addrw[INET6_ADDRSTRLEN];
+    char addrw[NETADDR_ADDRSTRLEN];
 
     foreach_netroute_const(route, table, i) {
         netaddr_ntop(addrw, sizeof(addrw), &route->addr);

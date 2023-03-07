@@ -13,7 +13,7 @@ bool oshpacket_handler_route(
     const oshpacket_route_t *payload = (const oshpacket_route_t *) pkt->payload;
     const size_t entries = pkt->payload_size / sizeof(oshpacket_route_t);
     char node_name[NODE_NAME_SIZE + 1];
-    char addr_str[INET6_ADDRSTRLEN];
+    char addr_str[NETADDR_ADDRSTRLEN];
     netaddr_t addr;
     node_id_t *id;
     const netroute_t *route;

@@ -384,7 +384,7 @@ client_t *node_id_next_hop(node_id_t *id)
 // Digraph dump to *out
 static void node_tree_dump_digraph_to(FILE *out)
 {
-    char addr[INET6_ADDRSTRLEN];
+    char addr[NETADDR_ADDRSTRLEN];
 
     fprintf(out, "digraph osh_node_tree {\n");
 

@@ -87,8 +87,8 @@ static void device_aio_read(aio_event_t *event)
     }
 
     if (logger_is_debugged(DBG_TUNTAP_TRAFFIC)) {
-        char pkt_src[INET6_ADDRSTRLEN];
-        char pkt_dest[INET6_ADDRSTRLEN];
+        char pkt_src[NETADDR_ADDRSTRLEN];
+        char pkt_dest[NETADDR_ADDRSTRLEN];
 
         netaddr_ntop(pkt_src, sizeof(pkt_src), &pkt_hdr.src);
         netaddr_ntop(pkt_dest, sizeof(pkt_dest), &pkt_hdr.dest);

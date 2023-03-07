@@ -31,7 +31,7 @@ typedef struct dynamic_addr {
     netaddr_prefixlen_t prefixlen;       // Prefix length of its network
     netaddr_prefixlen_t route_prefixlen; // Prefix length of the single address
                                          // used for the routing table
-    char addr_str[INET6_ADDRSTRLEN];     // Formatted string of the IP address
+    char addr_str[NETADDR_ADDRSTRLEN];   // Formatted string of the IP address
     char prefixlen_str[8];               // Formatted string of the prefix length
 
     bool handling_conflict; // set to true while a conflict is in the process

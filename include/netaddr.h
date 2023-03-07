@@ -51,6 +51,9 @@ static inline bool netaddr_type_is_valid(const netaddr_type_t type)
 #define NETADDR_IP4_NET(addr, mask, net) \
     (((addr)->data.ip4.s_addr & htonl(mask)) == htonl(net))
 
+// Buffer size big enough to hold any text address from netaddr_ntop()
+#define NETADDR_ADDRSTRLEN 64
+
 bool netaddr_lookup(netaddr_t *addr, const char *hostname);
 bool netaddr_ntop_mac(char *dest, size_t maxlen, const struct eth_addr *addr);
 bool netaddr_ntop_ip4(char *dest, size_t maxlen, const struct in_addr *addr);
