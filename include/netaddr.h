@@ -58,7 +58,7 @@ bool netaddr_ntop2(char *dest, size_t maxlen, const netaddr_t *addr,
 bool netaddr_pton(netaddr_t *dest, const char *data);
 bool netaddr_dton(netaddr_t *dest, netaddr_type_t type, const netaddr_data_t *data);
 void netaddr_cpy(netaddr_t *dest, const netaddr_t *src);
-void netaddr_cpy_data(void *dest, const netaddr_t *src);
+void netaddr_cpy_data(netaddr_data_t *dest, const netaddr_t *src);
 netaddr_t *netaddr_dup(const netaddr_t *src);
 bool netaddr_eq(const netaddr_t *s1, const netaddr_t *s2);
 

@@ -220,6 +220,7 @@ bool client_queue_route_exg(client_t *c)
 {
     const size_t total_count = oshd.route_table->total_owned_routes;
     oshpacket_route_t *pkt;
+    netaddr_data_t addr_data;
     size_t i;
     bool success;
 
@@ -248,7 +249,8 @@ bool client_queue_route_exg(client_t *c)
         memcpy(pkt[i].owner_name, route->owner->name, NODE_NAME_SIZE);
         pkt[i].type = route->addr.type;
         pkt[i].prefixlen = route->prefixlen;
-        netaddr_cpy_data(&pkt[i].addr, &route->addr);
+        netaddr_cpy_data(&addr_data, &route->addr);
+        pkt[i].addr = addr_data;
         pkt[i].can_expire = route->can_expire;
         ++i;
     }

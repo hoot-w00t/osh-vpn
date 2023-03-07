@@ -764,12 +764,15 @@ bool client_queue_devmode(client_t *c)
 {
     if (oshd.device_mode == MODE_DYNAMIC) {
         oshpacket_devmode_dynamic_t packet;
+        netaddr_data_t prefix_data;
 
         packet.devmode_pkt.devmode = oshd.device_mode;
         memcpy(packet.network_name, oshd.network_name, NODE_NAME_SIZE);
-        netaddr_cpy_data(&packet.prefix6, &oshd.dynamic_prefix6);
+        netaddr_cpy_data(&prefix_data, &oshd.dynamic_prefix6);
+        packet.prefix6 = prefix_data;
         packet.prefixlen6 = oshd.dynamic_prefixlen6;
-        netaddr_cpy_data(&packet.prefix4, &oshd.dynamic_prefix4);
+        netaddr_cpy_data(&prefix_data, &oshd.dynamic_prefix4);
+        packet.prefix4 = prefix_data;
         packet.prefixlen4 = oshd.dynamic_prefixlen4;
 
         return client_queue_packet_direct(c, OSHPKT_DEVMODE, &packet, sizeof(packet));
@@ -888,13 +891,15 @@ bool client_queue_route_add_local(client_t *exclude, const netaddr_t *addrs,
 
     size_t buf_size = sizeof(oshpacket_route_t) * count;
     oshpacket_route_t *buf = xalloc(buf_size);
+    netaddr_data_t addr_data;
 
     // Format the addresses's type and data into buf
     for (size_t i = 0; i < count; ++i) {
         memcpy(buf[i].owner_name, oshd.name, NODE_NAME_SIZE);
         buf[i].type = addrs[i].type;
         buf[i].prefixlen = netaddr_max_prefixlen(addrs[i].type);
-        netaddr_cpy_data(&buf[i].addr, &addrs[i]);
+        netaddr_cpy_data(&addr_data, &addrs[i]);
+        buf[i].addr = addr_data;
         buf[i].can_expire = can_expire;
     }
 
