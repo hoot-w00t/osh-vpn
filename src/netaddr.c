@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static const struct netaddr_data_mac netaddr_mac_any = {0};
+static const struct eth_addr netaddr_mac_any = {0};
 
 // Lookup hostname and place the resolved address in addr
 // Returns false on error (errors are not logged)
@@ -118,7 +118,7 @@ bool netaddr_pton(netaddr_t *dest, const char *data)
 
 // Convert network address data to netaddr_t and put it into *dest
 // Depending on type, data should point to:
-//     MAC: struct netaddr_data_mac
+//     MAC: struct eth_addr
 //     IP4: struct in_addr
 //     IP6: struct in6_addr
 bool netaddr_dton(netaddr_t *dest, netaddr_type_t type, const void *data)
@@ -126,7 +126,7 @@ bool netaddr_dton(netaddr_t *dest, netaddr_type_t type, const void *data)
     dest->type = type;
     switch (type) {
         case MAC:
-            dest->data.mac = *((const struct netaddr_data_mac *) data);
+            dest->data.mac = *((const struct eth_addr *) data);
             return true;
 
         case IP4:

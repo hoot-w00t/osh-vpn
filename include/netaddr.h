@@ -3,6 +3,7 @@
 
 #include "sock.h"
 #include "netarea.h"
+#include "netdefs/ether.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -14,15 +15,11 @@ typedef enum netaddr_type {
     _netaddr_type_last
 } netaddr_type_t;
 
-struct __attribute__((packed)) netaddr_data_mac {
-    uint8_t addr[6];
-};
-
 typedef union netaddr_data {
     uint8_t b[16];
     struct in_addr ip4;
     struct in6_addr ip6;
-    struct netaddr_data_mac mac;
+    struct eth_addr mac;
 } netaddr_data_t;
 
 typedef struct netaddr {
