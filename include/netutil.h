@@ -5,6 +5,9 @@
 #include "netdefs/ip.h"
 #include "netdefs/icmp.h"
 #include "netdefs/arp.h"
+
+#include "netutil/arp.h"
+#include "netutil/icmp_nd.h"
 #include "netutil/icmp.h"
 
 #endif
