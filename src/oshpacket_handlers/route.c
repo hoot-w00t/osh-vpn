@@ -39,6 +39,16 @@ bool oshpacket_handler_route(
             return false;
         }
 
+        // Ignore null routes
+        if (   netaddr_is_zero(&addr)
+            && payload[i].prefixlen == netaddr_max_prefixlen(addr.type))
+        {
+            netaddr_ntop(addr_str, sizeof(addr_str), &addr);
+            logger_debug(DBG_ROUTING, "%s: %s: Add route: Skipping null route %s/%u",
+                c->addrw, c->id->name, addr_str, payload[i].prefixlen);
+            continue;
+        }
+
         // Extract and verify the node's name
         memcpy(node_name, payload[i].owner_name, NODE_NAME_SIZE);
         if (!node_valid_name(node_name)) {
