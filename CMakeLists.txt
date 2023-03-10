@@ -177,6 +177,7 @@ set(OSHD_SOURCES
     src/events/handshake_timeout.c
     src/events/keepalive.c
     src/netutil/arp.c
+    src/netutil/icmp_nd.c
     src/netutil/icmp.c
     src/oshpacket_handlers/data.c
     src/oshpacket_handlers/devmode.c
