@@ -25,4 +25,29 @@ void icmp6_nd_opt_init(icmp6_nd_opt_t *opt, const void *ip_pkt, size_t ip_pkt_si
     size_t size_without_options);
 bool icmp6_nd_opt_next(icmp6_nd_opt_t *opt);
 
+// ICMPv6 Neighbor Discovery packet structures
+#define _icmp6_common_ns                    \
+    struct ipv6_hdr iphdr;                  \
+    struct nd_neighbor_solicit ns;
+
+#define _icmp6_common_na                    \
+    struct ipv6_hdr iphdr;                  \
+    struct nd_neighbor_advert na;
+
+// ICMPv6 NS without options
+struct __attribute__((packed)) icmp6_nd_ns {
+    _icmp6_common_ns
+};
+
+// ICMPv6 NA without options
+struct __attribute__((packed)) icmp6_nd_na {
+    _icmp6_common_na
+};
+
+// ICMPv6 NA with target link-layer address option
+struct __attribute__((packed)) icmp6_nd_na_tla {
+    _icmp6_common_na
+    struct nd_opt_target_linkaddr opt_tla;
+};
+
 #endif
