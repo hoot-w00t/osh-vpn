@@ -57,9 +57,12 @@ struct __attribute__((packed)) nd_opt_hdr {
     // option data
 };
 
-// Get nd_opt_hdr->length value from length in bytes
+// Convert raw_length (in bytes) to nd_opt_hdr->length value
 // (must be a multiple of 8)
-#define ND_OPT_LENGTH(raw_length) ((raw_length) / 8)
+#define ND_OPT_LENGTH(raw_length)           ((raw_length) / 8)
+
+// Convert nd_opt_hdr->length value to a length in bytes
+#define ND_OPT_LENGTH_TO_BYTES(nd_length)   ((nd_length) * 8)
 
 // ND option source link-layer address
 struct __attribute__((packed)) nd_opt_source_linkaddr {
