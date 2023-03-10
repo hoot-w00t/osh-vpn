@@ -1,4 +1,5 @@
 #include "netutil/icmp_nd.h"
+#include "netutil/icmp.h"
 #include "logger.h"
 
 // Initialize *opt to iterate over ND options in IPv6 packet
@@ -64,4 +65,79 @@ bool icmp6_nd_opt_next(icmp6_nd_opt_t *opt)
     opt->opt_offset += opt->opt_size;
 
     return true;
+}
+
+// Initialize IPv6 header
+static void ipv6_init_hdr(
+    struct ipv6_hdr *hdr,
+    const uint32_t traffic_class,
+    const uint32_t flow_label,
+    const uint16_t payload_length,
+    const uint8_t next_header,
+    const uint8_t hop_limit,
+    const struct in6_addr *src_addr,
+    const struct in6_addr *dst_addr)
+{
+    const uint32_t h_version = 6u << 28;
+    const uint32_t h_traffic_class = (traffic_class & 0xFF) << 24;
+    const uint32_t h_flow_label = (flow_label & 0xFFFFFF);
+
+    hdr->flow_label = htonl(h_version | h_traffic_class | h_flow_label);
+    hdr->payload_length = htons(payload_length);
+    hdr->next_header = next_header;
+    hdr->hop_limit = hop_limit;
+    hdr->src_addr = *src_addr;
+    hdr->dst_addr = *dst_addr;
+}
+
+// Initialize IPv6 pseudo-header from IPv6 header
+static void ipv6_init_pseudo(struct ipv6_pseudo *pseudo, const struct ipv6_hdr *hdr)
+{
+    pseudo->dst = hdr->dst_addr;
+    pseudo->src = hdr->src_addr;
+    pseudo->length = hdr->payload_length;
+    memset(pseudo->zero, 0, sizeof(pseudo->zero));
+    pseudo->next_header = hdr->next_header;
+}
+
+// Make ICMPv6 NA from NS (solicited)
+void icmp6_make_nd_na_tla(struct icmp6_nd_na_tla *reply,
+    const struct icmp6_nd_ns *req, const struct eth_addr *reply_linkaddr)
+{
+    const uint32_t fl = ntohl(req->iphdr.flow_label);
+    struct ipv6_pseudo pseudo_hdr;
+    struct in6_addr src_addr;
+    struct in6_addr dst_addr;
+
+    // IPv6 header
+    src_addr = req->ns.target_address;
+    dst_addr = req->iphdr.src_addr;
+    ipv6_init_hdr(&reply->iphdr,
+        ipv6_hdr_traffic_class(fl),
+        ipv6_hdr_flow_label(fl),
+        sizeof(*reply) - sizeof(struct ipv6_hdr),
+        IPPROTO_ICMPV6,
+        255,
+        &src_addr,
+        &dst_addr);
+
+    // ICMPv6 header
+    reply->na.hdr.type = ND_NEIGHBOR_ADVERT;
+    reply->na.hdr.code = 0;
+    reply->na.hdr.checksum = 0;
+    reply->na.hdr.reserved = htonl(0x40000000u); // Solicited
+
+    // ICMPv6 NA
+    reply->na.target_address = req->ns.target_address;
+
+    // Target link-layer address
+    reply->opt_tla.hdr.type = ND_OPT_TARGET_LINKADDR;
+    reply->opt_tla.hdr.length = ND_OPT_LENGTH(sizeof(reply->opt_tla));
+    reply->opt_tla.addr = *reply_linkaddr;
+
+    // Compute the checksum
+    ipv6_init_pseudo(&pseudo_hdr, &reply->iphdr);
+    reply->na.hdr.checksum = icmp6_checksum(&pseudo_hdr,
+        ((const uint8_t *) reply) + sizeof(struct ipv6_hdr),
+        sizeof(*reply) - sizeof(struct ipv6_hdr));
 }

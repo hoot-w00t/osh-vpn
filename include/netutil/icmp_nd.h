@@ -50,4 +50,7 @@ struct __attribute__((packed)) icmp6_nd_na_tla {
     struct nd_opt_target_linkaddr opt_tla;
 };
 
+void icmp6_make_nd_na_tla(struct icmp6_nd_na_tla *reply,
+    const struct icmp6_nd_ns *req, const struct eth_addr *reply_linkaddr);
+
 #endif

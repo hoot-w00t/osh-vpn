@@ -44,4 +44,10 @@ struct __attribute__((packed)) ipv6_pseudo {
     uint8_t         next_header;
 };
 
+// Get the traffic class from ipv6_hdr->flow_label (host byte order)
+#define ipv6_hdr_traffic_class(fl) (((fl) >> 24) & 0xFF)
+
+// Get the flow label from ipv6_hdr->flow_label (host byte order)
+#define ipv6_hdr_flow_label(fl) ((fl) & 0xFFFFFF)
+
 #endif
