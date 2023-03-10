@@ -38,8 +38,11 @@
 #define ICMP6_PARAM_PROB_OPTION         2 // unrecognized ipv6 option encountered
 
 // ICMPv6 option types
-#define ICMP6_OPT_SOURCE_LINKADDR       1
-#define ICMP6_OPT_TARGET_LINKADDR       2
+#define ND_OPT_SOURCE_LINKADDR          1   // RFC 4861
+#define ND_OPT_TARGET_LINKADDR          2
+
+#define ND_OPT_TIMESTAMP                13  // RFC 3971
+#define ND_OPT_NONCE                    14
 
 // ICMPv6 header
 struct __attribute__((packed)) icmp6_hdr {
@@ -74,6 +77,22 @@ struct __attribute__((packed)) nd_opt_source_linkaddr {
 struct __attribute__((packed)) nd_opt_target_linkaddr {
     struct nd_opt_hdr hdr;
     struct eth_addr addr;
+};
+
+// ND option timestamp
+struct __attribute__((packed)) nd_opt_timestamp {
+    struct nd_opt_hdr hdr;
+    uint16_t reserved1;
+    uint32_t reserved2;
+    uint64_t timestamp;
+};
+
+// ND option nonce
+// Note: The nonce in this structure is the minimum required size but any size
+//       is valid as long as the final option size is a multiple of 8
+struct __attribute__((packed)) nd_opt_nonce {
+    struct nd_opt_hdr hdr;
+    uint8_t nonce[6];
 };
 
 // ND Neighbor Solicitation
