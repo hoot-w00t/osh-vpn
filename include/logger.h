@@ -17,6 +17,7 @@ typedef enum debug_what {
     DBG_OSHD = 0,
     DBG_TUNTAP,
     DBG_TUNTAP_TRAFFIC,
+    DBG_TUNTAP_EMU,
     DBG_ROUTING,
     DBG_NETBUFFER,
     DBG_NODETREE,

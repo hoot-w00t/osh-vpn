@@ -23,6 +23,9 @@ typedef struct tuntap_packethdr tuntap_packethdr_t;
 typedef union tuntap_data tuntap_data_t;
 typedef struct tuntap tuntap_t;
 
+typedef void (*tuntap_emu_func_init_t)(tuntap_t *tuntap);
+typedef void (*tuntap_emu_func_deinit_t)(tuntap_t *tuntap);
+
 typedef void (*tuntap_func_close_t)(tuntap_t *tuntap);
 typedef bool (*tuntap_func_read_t)(tuntap_t *tuntap, void *buf, size_t buf_size, size_t *pkt_size);
 typedef bool (*tuntap_func_write_t)(tuntap_t *tuntap, const void *packet, size_t packet_size);
@@ -54,12 +57,32 @@ struct tuntap_drv {
     tuntap_func_init_aio_event_t init_aio_event;
 };
 
+struct tuntap_emu {
+    // true if emulation is enabled
+    bool enabled;
+
+    // Emulation-specific function pointers
+    tuntap_emu_func_init_t init;
+    tuntap_emu_func_deinit_t deinit;
+
+    // Any data needed by the emulation layer
+    tuntap_data_t data;
+};
+
 struct tuntap {
     // TUN/TAP driver information and API function pointers
     struct tuntap_drv drv;
 
     // Any data needed by the TUN/TAP driver
     tuntap_data_t data;
+
+    // TUN/TAP emulation information
+    struct tuntap_emu emu;
+
+    // API function pointers used by tuntap_read()/tuntap_write(), set up by
+    // tuntap_open()
+    tuntap_func_read_t read;
+    tuntap_func_write_t write;
 
     // Function to parse network packets of tuntap_read()/tuntap_write()
     tuntap_func_parse_packethdr_t parse_packethdr;
@@ -99,12 +122,12 @@ void tuntap_close(tuntap_t *tuntap);
 // If *pkt_size is 0 there are no packets ready to be read
 // Returns false on error
 #define tuntap_read(tuntap, buf, buf_size, pkt_size) \
-    (tuntap)->drv.read(tuntap, buf, buf_size, pkt_size)
+    (tuntap)->read(tuntap, buf, buf_size, pkt_size)
 
 // Write a packet to the TUN/TAP device
 // Returns false on error
 #define tuntap_write(tuntap, packet, packet_size) \
-    (tuntap)->drv.write(tuntap, packet, packet_size)
+    (tuntap)->write(tuntap, packet, packet_size)
 
 // Initialize an AIO event for the TUN/TAP device
 // This function should only modify the file descriptor/handle, other members
@@ -134,7 +157,22 @@ tuntap_t *tuntap_empty(const struct tuntap_drv *drv, const bool is_tap);
 void tuntap_set_devname(tuntap_t *tuntap, const char *devname);
 void tuntap_set_devid(tuntap_t *tuntap, const char *devid);
 
-#define tuntap_is_tap(tuntap) ((tuntap)->is_tap)
-#define tuntap_is_tun(tuntap) (!tuntap_is_tap(tuntap))
+#define tuntap_driver_is_tap(tuntap)    ((tuntap)->drv.is_tap)
+#define tuntap_driver_is_tun(tuntap)    (!tuntap_driver_is_tap(tuntap))
+#define tuntap_is_tap(tuntap)           ((tuntap)->is_tap)
+#define tuntap_is_tun(tuntap)           (!tuntap_is_tap(tuntap))
+
+#ifndef TUNTAP_DISABLE_EMULATION
+    // Emulation layers
+    // API functions which must only be used by emulation layers
+    #define tuntap_driver_read(tuntap, buf, buf_size, pkt_size) \
+        (tuntap)->drv.read(tuntap, buf, buf_size, pkt_size)
+    #define tuntap_driver_write(tuntap, packet, packet_size) \
+        (tuntap)->drv.write(tuntap, packet, packet_size)
+
+    // Defined in src/tuntap/tun_emu.c
+    void tuntap_emu_tun_init(tuntap_t *tuntap);
+    void tuntap_emu_tun_deinit(tuntap_t *tuntap);
+#endif
 
 #endif

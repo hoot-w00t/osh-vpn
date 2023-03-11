@@ -114,7 +114,15 @@ if (ENABLE_SYSTEMD)
 endif()
 
 # TUN/TAP sources
+option(TUNTAP_DISABLE_EMULATION "Disable TUN/TAP emulation layers" OFF)
+
 set(OSH_TUNTAP_SOURCES src/tuntap/common.c)
+set(OSH_TUNTAP_EMU_SOURCES src/tuntap/tun_emu.c)
+
+if (NOT TUNTAP_DISABLE_EMULATION)
+    set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} ${OSH_TUNTAP_EMU_SOURCES})
+endif()
+
 if (CYGWIN OR MSYS OR WIN32)
     set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} src/tuntap/windows.c "src/tuntap/tap-windows.c")
 else()
@@ -287,6 +295,10 @@ option(DISABLE_EVENTS_TIMERFD "Don't use timerfd for timed events even if it is 
 check_include_file("sys/timerfd.h" timerfd_available)
 if (timerfd_available AND NOT DISABLE_EVENTS_TIMERFD)
     add_compiler_flag_nocheck(CMAKE_C_FLAGS "-DEVENTS_USE_TIMERFD")
+endif()
+
+if (TUNTAP_DISABLE_EMULATION)
+    add_compiler_flag_nocheck(CMAKE_C_FLAGS -DTUNTAP_DISABLE_EMULATION)
 endif()
 
 # If no build type was specified we will use the default

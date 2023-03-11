@@ -77,6 +77,19 @@ bool tuntap_nonblock(int fd)
 }
 #endif
 
+#ifndef TUNTAP_DISABLE_EMULATION
+// Initialize tuntap_t->emu and function pointers
+static void tuntap_emu_setup(
+    tuntap_t *tuntap,
+    tuntap_emu_func_init_t init,
+    tuntap_emu_func_deinit_t deinit)
+{
+    tuntap->emu.enabled = true;
+    tuntap->emu.init = init;
+    tuntap->emu.deinit = deinit;
+}
+#endif
+
 // Allocate an empty tuntap_t
 // Initializes the driver information from *drv (all of the function pointers
 // must be valid)
@@ -87,6 +100,14 @@ tuntap_t *tuntap_empty(const struct tuntap_drv *drv, const bool is_tap)
 
     tuntap->drv = *drv;
     tuntap->is_tap = is_tap;
+
+#ifndef TUNTAP_DISABLE_EMULATION
+    // If the opened driver doesn't work on the requested layer, emulate it
+    if (tuntap_is_tun(tuntap) && tuntap_driver_is_tap(tuntap)) {
+        // TUN emulation
+        tuntap_emu_setup(tuntap, tuntap_emu_tun_init, tuntap_emu_tun_deinit);
+    }
+#endif
 
     return tuntap;
 }
@@ -114,6 +135,17 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
         return NULL;
     }
 
+    // Setup read/write function pointers
+    // If emulation is enabled the init function sets up its own read/write functions
+    // If it is disabled we can use the driver's read/write functions directly
+    if (tuntap->emu.enabled) {
+        tuntap->emu.init(tuntap);
+    } else {
+        tuntap->read = tuntap->drv.read;
+        tuntap->write = tuntap->drv.write;
+    }
+
+    // Setup parse_packethdr function pointer
     tuntap->parse_packethdr = tuntap->is_tap
                             ? tap_to_packethdr
                             : tun_to_packethdr;
@@ -123,11 +155,20 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
             TUNTAP_IS_TAP_STR(tuntap->drv.is_tap),
             tuntap->dev_name);
     } else {
-        logger(LOG_ERR, "Opened %s device: %s (but expected %s)",
+        // If the driver is not running on the requested layer and emulation is
+        // disabled the virtual network won't work
+        if (!tuntap->emu.enabled) {
+            logger(LOG_ERR, "Opened %s device but %s emulation is not supported",
+                TUNTAP_IS_TAP_STR(tuntap->drv.is_tap),
+                TUNTAP_IS_TAP_STR(tuntap->is_tap));
+            tuntap_close(tuntap);
+            return NULL;
+        }
+
+        logger(LOG_ERR, "Opened %s device: %s (with %s emulation)",
             TUNTAP_IS_TAP_STR(tuntap->drv.is_tap),
             tuntap->dev_name,
             TUNTAP_IS_TAP_STR(tuntap->is_tap));
-        tuntap_close_at(&tuntap);
     }
 
     return tuntap;
@@ -138,6 +179,10 @@ void tuntap_close(tuntap_t *tuntap)
     logger(LOG_INFO, "Closing %s device: %s",
         TUNTAP_IS_TAP_STR(tuntap->drv.is_tap),
         tuntap->dev_name);
+
+    // Stop and free the emulation layer
+    if (tuntap->emu.enabled)
+        tuntap->emu.deinit(tuntap);
 
     // Close and free the driver
     tuntap->drv.close(tuntap);

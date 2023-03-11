@@ -8,6 +8,7 @@ static const char *debug_names[debug_what_size] = {
     "oshd",
     "tuntap",
     "tuntap_traffic",
+    "tuntap_emu",
     "routing",
     "netbuffer",
     "nodetree",
