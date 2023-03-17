@@ -338,7 +338,7 @@ static bool oshd_param_endpoint(ecp_t *ecp)
     uint16_t port_no;
     endpoint_group_t *group;
     endpoint_t *endpoint;
-    const endpoint_t *inserted;
+    bool inserted;
 
     if (!oshd_conf_require_selected_node(ecp))
         return false;
@@ -363,8 +363,8 @@ static bool oshd_param_endpoint(ecp_t *ecp)
     port_no = (*port) ? ((uint16_t) atoi(port)) : OSHD_DEFAULT_PORT;
 
     // Add the endpoint to the group
-    endpoint = endpoint_create(addr, port_no, ENDPOINT_PROTO_TCP, ENDPOINT_FLAG_NONE);
-    inserted = endpoint_group_insert_sorted(group, endpoint);
+    endpoint = endpoint_create(addr, port_no, ENDPOINT_PROTO_TCP, ENDPOINT_FLAG_EXPIRY_LOCAL);
+    inserted = endpoint_group_insert_sorted(group, endpoint, NULL);
 
     logger_debug(DBG_CONF, "%s endpoint %s for %s",
         inserted ? "Added" : "Ignored",

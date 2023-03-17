@@ -11,8 +11,6 @@ bool oshpacket_handler_endpoint(
     const endpoint_data_t *data = (const endpoint_data_t *) (payload + 1);
     size_t data_size;
     char owner_name[NODE_NAME_SIZE + 1];
-    endpoint_t *endpoint;
-    node_id_t *owner;
 
     // Verify that we at least have a full header
     if (pkt->payload_size <= sizeof(*payload)) {
@@ -33,23 +31,35 @@ bool oshpacket_handler_endpoint(
         return false;
     }
 
+    endpoint_t *endpoint;
+    node_id_t *owner;
+    const char *action;
+
     // Try to create an endpoint from the packet's data
     endpoint = endpoint_from_packet(payload, data, data_size);
     if (!endpoint) {
-        // This is not an error, other nodes may know endpoint types which we
-        // don't
+        // This is not an error, other nodes may know endpoint types that we don't
         logger_debug(DBG_ENDPOINTS,
             "%s: %s: Ignoring unknown or invalid endpoint type %u of %zu bytes",
             c->addrw, c->id->name, payload->type, data_size);
         return true;
     }
 
-    // Find the owner node and add the endpoint
+    // Find the owner node
     owner = node_id_add(owner_name);
-    logger_debug(DBG_ENDPOINTS, "%s: %s: Adding endpoint %s to %s",
-        c->addrw, c->id->name, endpoint->addrstr, owner->name);
 
-    endpoint_group_insert_sorted(owner->endpoints, endpoint);
+    // Add endpoints to their owner's known endpoints except ephemeral endpoints
+    if (endpoint->flags & ENDPOINT_FLAG_EPHEMERAL) {
+        action = "Ignored ephemeral";
+    } else {
+        action = endpoint_group_insert_sorted(owner->endpoints, endpoint, NULL)
+               ? "Added"
+               : "Updated";
+    }
+
+    logger_debug(DBG_ENDPOINTS, "%s: %s: %s endpoint %s owned by %s",
+        c->addrw, c->id->name, action, endpoint->addrstr, owner->name);
+
     endpoint_free(endpoint);
     return true;
 }

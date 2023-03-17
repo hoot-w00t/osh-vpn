@@ -42,20 +42,32 @@ static netarea_t endpoint_calc_area(const endpoint_t *endpoint)
 // Return the endpoint's priority value
 static int endpoint_calc_priority(const endpoint_t *endpoint)
 {
+    int priority;
+
     if (!endpoint_can_expire(endpoint))
         return -1;
 
+    priority = 0;
+
+    if (endpoint->flags & ENDPOINT_FLAG_EPHEMERAL)
+        priority += _netarea_last + 1;
+
     switch (endpoint->type) {
         case ENDPOINT_TYPE_HOSTNAME:
-            return _netarea_last;
+            priority += _netarea_last;
+            break;
 
         case ENDPOINT_TYPE_IP4:
         case ENDPOINT_TYPE_IP6:
-            return endpoint->area;
+            priority += endpoint->area;
+            break;
 
         default:
-            return _netarea_last + 1;
+            priority += _netarea_last + 1;
+            break;
     }
+
+    return priority;
 }
 
 // Initialize endpoint type and socket address from character value and port
@@ -230,10 +242,28 @@ static bool endpoint_eq(const endpoint_t *s1, const endpoint_t *s2)
 // Refresh an endpoint
 static void endpoint_refresh(const endpoint_group_t *group, endpoint_t *endpoint)
 {
-    const time_t expire_delay = ENDPOINT_EXPIRY;
+    time_t expire_delay;
 
-    logger_debug(DBG_ENDPOINTS, "%s: Refreshing endpoint %s (%" PRI_TIME_T "s)",
-        group->debug_id, endpoint->addrstr, (pri_time_t) expire_delay);
+    // Local endpoints always have the same expiration delay
+    //
+    // Ephemeral endpoints expire faster when they are not local because they
+    // are considered unreachable (when relevant, they are used right away)
+    // Local ephemeral endpoints use the local expiration delay because they
+    // shouldn't need to be re-announced often
+    //
+    // Other endpoints use the default remote expiration delay which is bigger
+    // than the local delay to allow refreshing valid endpoints before they
+    // expire on remote nodes
+    if (endpoint->flags & ENDPOINT_FLAG_EXPIRY_LOCAL)
+        expire_delay = ENDPOINT_EXPIRY_LOCAL;
+    else if (endpoint->flags & ENDPOINT_FLAG_EPHEMERAL)
+        expire_delay = ENDPOINT_EXPIRY_EPHEMERAL;
+    else
+        expire_delay = ENDPOINT_EXPIRY_REMOTE;
+
+    logger_debug(DBG_ENDPOINTS, "%s: Refreshing endpoint %s (%" PRI_TIME_T "s, %s)",
+        group->debug_id, endpoint->addrstr, (pri_time_t) expire_delay,
+        endpoint_can_expire(endpoint) ? "can expire" : "never expires");
 
     oshd_gettime(&endpoint->expire_after);
     endpoint->expire_after.tv_sec += expire_delay;
@@ -420,14 +450,14 @@ endpoint_t *endpoint_group_insert_after(endpoint_t *after, endpoint_group_t *gro
 // Insert an endpoint to the group sorted by priority
 // If a matching endpoint is already in the group it will only be refreshed and
 // nothing else will be changed
-// Returns the endpoint pointer if it was added, returns NULL if it was already
-// in the group
-endpoint_t *endpoint_group_insert_sorted(endpoint_group_t *group,
-    const endpoint_t *original)
+// Returns true if the endpoint was added, false if it already existed
+// If inserted_endpoint is not NULL, set it to the group endpoint
+bool endpoint_group_insert_sorted(endpoint_group_t *group,
+    const endpoint_t *original, const endpoint_t **inserted_endpoint)
 {
     endpoint_t *endpoint = endpoint_group_find_duplicate(group, original);
-    endpoint_t *added = NULL;
     endpoint_t **it;
+    bool added = false;
 
     if (endpoint) {
         // The same endpoint already exists in the group
@@ -439,7 +469,7 @@ endpoint_t *endpoint_group_insert_sorted(endpoint_group_t *group,
 
         it = &group->head;
         endpoint = endpoint_dup(original);
-        added = endpoint;
+        added = true;
 
         while (*it) {
             // Sort by ascending priority value
@@ -459,6 +489,8 @@ endpoint_t *endpoint_group_insert_sorted(endpoint_group_t *group,
     }
 
     endpoint_refresh(group, endpoint);
+    if (inserted_endpoint)
+        *inserted_endpoint = endpoint;
     return added;
 }
 
@@ -471,7 +503,7 @@ void endpoint_group_insert_group(endpoint_group_t *dest,
         return;
 
     foreach_endpoint_const(endpoint, src) {
-        endpoint_group_insert_sorted(dest, endpoint);
+        endpoint_group_insert_sorted(dest, endpoint, NULL);
     }
 }
 
@@ -503,8 +535,10 @@ void endpoint_group_del(endpoint_group_t *group, endpoint_t *endpoint)
 // Endpoints that do not expire are refreshed instead of deleted
 // All expired endpoints' flags are ORed in *expired_flags
 // *now must be initialized with oshd_gettime()
+// *next_expire is set to the remaining time before endpoints expire if that
+// delay is smaller than *next_expire
 // Returns true if at least one endpoint has expired
-bool endpoint_group_del_expired(endpoint_group_t *group,
+bool endpoint_group_del_expired(endpoint_group_t *group, time_t *next_expire,
     endpoint_flags_t *expired_flags, const struct timespec *now)
 {
     bool expired = false;
@@ -529,6 +563,8 @@ bool endpoint_group_del_expired(endpoint_group_t *group,
             }
         } else {
             endpoint->had_expired = false;
+            if (delta.tv_sec < *next_expire)
+                *next_expire = delta.tv_sec + 1;
         }
 
         endpoint = next;
@@ -694,7 +730,6 @@ static bool endpoint_valid_hostname_char(const char c)
     return false;
 }
 
-
 // Returns true if the hostname only contains valid characters
 static bool endpoint_valid_hostname(const char *hostname, const size_t len)
 {
@@ -703,6 +738,20 @@ static bool endpoint_valid_hostname(const char *hostname, const size_t len)
             return false;
     }
     return true;
+}
+
+// Get endpoint flags from oshpacket_endpoint_t public flags (host byte order)
+static endpoint_flags_t get_flags_from_packet(const uint16_t public_flags)
+{
+    // Endpoints received from other nodes always expire and cannot have a local
+    // expiry delay
+    return (((endpoint_flags_t) public_flags) << 16) | ENDPOINT_FLAG_CAN_EXPIRE;
+}
+
+// Get public flags for oshpacket_endpoint_t (host byte order)
+static uint16_t get_public_flags(const endpoint_flags_t flags)
+{
+    return (uint16_t) ((flags >> 16) & 0xFFFFu);
 }
 
 // Create endpoint packet from an existing endpoint (except owner_name)
@@ -728,6 +777,7 @@ bool endpoint_to_packet(const endpoint_t *endpoint,
 
     pkt->type = endpoint->type;
     pkt->proto = endpoint->proto;
+    pkt->flags = htons(get_public_flags(endpoint->flags));
     memcpy(data, &endpoint->data, *data_size);
     return true;
 }
@@ -767,7 +817,7 @@ endpoint_t *endpoint_from_packet(const oshpacket_endpoint_t *pkt,
     endpoint = endpoint_alloc();
     endpoint->type = pkt->type;
     memcpy(&endpoint->data, data, data_size);
-    endpoint_init2(endpoint, pkt->proto, ENDPOINT_FLAG_CAN_EXPIRE);
+    endpoint_init2(endpoint, pkt->proto, get_flags_from_packet(ntohs(pkt->flags)));
     return endpoint;
 }
 

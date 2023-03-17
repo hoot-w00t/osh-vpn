@@ -13,8 +13,13 @@
 // (node.h/client.h includes endpoints.h)
 typedef struct node_id node_id_t;
 
-// Endpoints expire after 60 minutes
-#define ENDPOINT_EXPIRY (3600)
+// Endpoint expiration delays
+#define ENDPOINT_EXPIRY_REMOTE      (3600) // 60m
+#define ENDPOINT_EXPIRY_LOCAL       (1800) // 30m
+#define ENDPOINT_EXPIRY_EPHEMERAL   (60)   // 1m
+
+// Shortest delay
+#define ENDPOINT_EXPIRY_SHORTEST    ENDPOINT_EXPIRY_EPHEMERAL
 
 // Type of the endpoint's value
 typedef enum endpoint_type {
@@ -33,9 +38,20 @@ typedef enum endpoint_proto {
 } endpoint_proto_t;
 
 // Endpoint flags
+// These flags are stored on at least a 32-bit integer
+// The 16 first bits are private and only used internally
+// The 16 last bits are public and can be exchanged with other nodes
 typedef enum endpoint_flags {
-    ENDPOINT_FLAG_NONE       = 0,
-    ENDPOINT_FLAG_CAN_EXPIRE = (1 << 0)
+    ENDPOINT_FLAG_NONE          = 0u,           // No flags
+
+    // Private flags (internal)
+    ENDPOINT_FLAG_CAN_EXPIRE    = (1u << 0),    // If set, the endpoint can be deleted when it expires
+    ENDPOINT_FLAG_EXPIRY_LOCAL  = (1u << 1),    // If set, the endpoint's expiration delay is smaller
+
+    // Public flags
+    ENDPOINT_FLAG_EPHEMERAL     = (1u << 16),   // If set, the endpoint is very likely unreachable
+                                                // It will have a lower priority, faster expiration and may be ignored by other nodes
+                                                // It should be used when exchanging endpoints with specific nodes (like external network addresses)
 } endpoint_flags_t;
 
 typedef struct endpoint endpoint_t;
@@ -140,13 +156,13 @@ endpoint_t *endpoint_group_insert_back(endpoint_group_t *group,
     const endpoint_t *endpoint);
 endpoint_t *endpoint_group_insert_after(endpoint_t *after, endpoint_group_t *group,
     const endpoint_t *endpoint);
-endpoint_t *endpoint_group_insert_sorted(endpoint_group_t *group,
-    const endpoint_t *original);
+bool endpoint_group_insert_sorted(endpoint_group_t *group,
+    const endpoint_t *original, const endpoint_t **inserted_endpoint);
 void endpoint_group_insert_group(endpoint_group_t *dest,
     const endpoint_group_t *src);
 
 void endpoint_group_del(endpoint_group_t *group, endpoint_t *endpoint);
-bool endpoint_group_del_expired(endpoint_group_t *group,
+bool endpoint_group_del_expired(endpoint_group_t *group, time_t *next_expire,
     endpoint_flags_t *expired_flags, const struct timespec *now);
 
 bool endpoint_lookup(endpoint_t *endpoint, endpoint_group_t *group);

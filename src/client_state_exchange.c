@@ -114,6 +114,10 @@ bool client_queue_endpoint_exg(client_t *c)
             if (!endpoint_can_expire(endpoint) && !oshd.shareendpoints)
                 continue;
 
+            // Don't exchange ephemeral endpoints
+            if (endpoint->flags & ENDPOINT_FLAG_EPHEMERAL)
+                continue;
+
             if (!client_queue_endpoint_exg_internal(c, endpoint, owner))
                 return false;
         }
