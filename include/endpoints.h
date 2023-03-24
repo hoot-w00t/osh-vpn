@@ -54,6 +54,9 @@ typedef enum endpoint_flags {
                                                 // It should be used when exchanging endpoints with specific nodes (like external network addresses)
 } endpoint_flags_t;
 
+#define ENDPOINT_FLAG_PRIVATE_MASK  (0x0000FFFFu)
+#define ENDPOINT_FLAG_PUBLIC_MASK   (0xFFFF0000u)
+
 typedef struct endpoint endpoint_t;
 typedef struct endpoint_group endpoint_group_t;
 

@@ -478,6 +478,15 @@ bool endpoint_group_insert_sorted(endpoint_group_t *group,
 
         // Add the socket protocols of the new endpoint to the existing one
         endpoint->proto |= original->proto;
+
+        // Preserve the endpoint's private flags but use the new endpoint's
+        // public flags
+        const endpoint_flags_t correct_flags = (endpoint->flags & ENDPOINT_FLAG_PRIVATE_MASK)
+                                             | (original->flags & ENDPOINT_FLAG_PUBLIC_MASK);
+
+        if (endpoint->flags != correct_flags)
+            endpoint_set_flags(NULL, endpoint, correct_flags);
+
     } else {
         // The endpoint does not already exist in the group, create it
 
