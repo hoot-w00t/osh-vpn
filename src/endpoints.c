@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+static void endpoint_refresh(const endpoint_group_t *group, endpoint_t *endpoint);
+
 // Return the endpoint type name
 const char *endpoint_type_name(const endpoint_type_t type)
 {
@@ -209,6 +211,20 @@ endpoint_t *endpoint_dup(const endpoint_t *original)
     // Initialize members that cannot be shared
     endpoint_init2(endpoint, original->proto, original->flags);
     return endpoint;
+}
+
+// Modify endpoint flags
+// If the endpoint is part of a group it can be passed to also refresh the endpoint
+// If group is NULL the endpoint is not refreshed
+//
+// These flags must not be modified directly because internals of the endpoint
+// are initialized based on some flags and need to be updated if they change
+void endpoint_set_flags(endpoint_group_t *group, endpoint_t *endpoint,
+    const endpoint_flags_t flags)
+{
+    endpoint_init2(endpoint, endpoint->proto, flags);
+    if (group)
+        endpoint_refresh(group, endpoint);
 }
 
 // Returns true if both endpoints have the same socket addresses (same types,

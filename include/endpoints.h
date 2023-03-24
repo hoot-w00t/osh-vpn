@@ -135,6 +135,8 @@ endpoint_t *endpoint_create(const char *value, const uint16_t port,
     const endpoint_proto_t proto, const endpoint_flags_t flags);
 void endpoint_free(endpoint_t *endpoint);
 endpoint_t *endpoint_dup(const endpoint_t *original);
+void endpoint_set_flags(endpoint_group_t *group, endpoint_t *endpoint,
+    const endpoint_flags_t flags);
 
 // true if the endpoint has flag ENDPOINT_FLAG_CAN_EXPIRE
 static inline bool endpoint_can_expire(const endpoint_t *endpoint)
