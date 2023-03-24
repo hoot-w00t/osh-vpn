@@ -162,7 +162,7 @@ endpoint_t *endpoint_group_insert_back(endpoint_group_t *group,
 endpoint_t *endpoint_group_insert_after(endpoint_t *after, endpoint_group_t *group,
     const endpoint_t *endpoint);
 bool endpoint_group_insert_sorted(endpoint_group_t *group,
-    const endpoint_t *original, const endpoint_t **inserted_endpoint);
+    const endpoint_t *original, endpoint_t **inserted_endpoint);
 void endpoint_group_insert_group(endpoint_group_t *dest,
     const endpoint_group_t *src);
 

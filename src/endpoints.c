@@ -467,7 +467,7 @@ endpoint_t *endpoint_group_insert_after(endpoint_t *after, endpoint_group_t *gro
 // Returns true if the endpoint was added, false if it already existed
 // If inserted_endpoint is not NULL, set it to the group endpoint
 bool endpoint_group_insert_sorted(endpoint_group_t *group,
-    const endpoint_t *original, const endpoint_t **inserted_endpoint)
+    const endpoint_t *original, endpoint_t **inserted_endpoint)
 {
     endpoint_t *endpoint = endpoint_group_find_duplicate(group, original);
     endpoint_t **it;
