@@ -202,14 +202,12 @@ endpoint_t *endpoint_dup(const endpoint_t *original)
 {
     endpoint_t *endpoint = endpoint_alloc();
 
-    // Copy the original endpoint's values
-    memcpy(endpoint, original, sizeof(*endpoint));
+    // Copy the original endpoint address
+    endpoint->type = original->type;
+    memcpy(&endpoint->data, &original->data, sizeof(endpoint->data));
 
-    // Reset or reallocate members which cannot be shared
-    endpoint->addrstr = xstrdup(original->addrstr);
-    endpoint->addrstr_size = strlen(endpoint->addrstr) + 1;
-    endpoint->next = NULL;
-
+    // Initialize members that cannot be shared
+    endpoint_init2(endpoint, original->proto, original->flags);
     return endpoint;
 }
 
