@@ -165,7 +165,7 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
             return NULL;
         }
 
-        logger(LOG_ERR, "Opened %s device: %s (with %s emulation)",
+        logger(LOG_INFO, "Opened %s device: %s (with %s emulation)",
             TUNTAP_IS_TAP_STR(tuntap->drv.is_tap),
             tuntap->dev_name,
             TUNTAP_IS_TAP_STR(tuntap->is_tap));
