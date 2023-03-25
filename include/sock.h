@@ -109,6 +109,12 @@ static inline int sock_setsockopt(sock_t s, int level, int optname,
     return setsockopt(s, level, optname, optval, optlen);
 }
 
+// getsockname()
+static inline int sock_getsockname(sock_t s, struct sockaddr *addr, socklen_t *addrlen)
+{
+    return getsockname(s, addr, addrlen);
+}
+
 // bind()
 static inline int sock_bind(sock_t s, const struct sockaddr *addr, socklen_t addrlen)
 {

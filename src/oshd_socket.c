@@ -241,7 +241,7 @@ static void client_aio_write(aio_event_t *event)
 static bool oshd_connect_async(client_t *c)
 {
     // We try to connect the socket
-    if (sock_connect(c->sockfd, (struct sockaddr *) &c->sa, sizeof(c->sa)) < 0) {
+    if (sock_connect(c->sockfd, (const struct sockaddr *) &c->remote_sa, sizeof(c->remote_sa)) < 0) {
         const sock_errno_t err = sock_errno;
 
         // If error is EISCONN the connection is already established, so we can
@@ -261,7 +261,7 @@ static bool oshd_connect_async(client_t *c)
 
     // We did not have an error, so the socket has finished connecting
     logger(LOG_INFO, "Established connection with %s", c->addrw);
-    c->connected = true;
+    client_set_connected(c, true);
     c->aio_event->cb_write = client_aio_write;
 
     // We are the initiator, so we initiate the authentication
@@ -360,8 +360,7 @@ bool oshd_client_connect(node_id_t *nid, endpoint_t *endpoint)
 
     // The socket was created successfully, initialize the client, configure it
     // and start trying to connect to it
-    // client's socket information
-    c = client_init(sockfd, true, endpoint, &sa);
+    c = client_init(sockfd, true, &sa, endpoint->proto);
     client_reconnect_to(c, nid);
     oshd_setsockopts(sockfd);
     oshd_client_add(c);
@@ -393,7 +392,6 @@ static void server_aio_read(aio_event_t *event)
     struct sockaddr_storage sa;
     socklen_t sa_len = sizeof(sa);
     sock_t client_sockfd;
-    endpoint_t *endpoint;
 
     // Accept the incoming socket
     client_sockfd = sock_accept(event->fd, (struct sockaddr *) &sa, &sa_len);
@@ -403,24 +401,14 @@ static void server_aio_read(aio_event_t *event)
         return;
     }
 
-    endpoint = endpoint_from_sockaddr((const struct sockaddr *) &sa, sa_len,
-        ENDPOINT_PROTO_TCP, ENDPOINT_FLAG_CAN_EXPIRE);
-    if (!endpoint) {
-        sock_close(client_sockfd);
-        return;
-    }
-
     // Set all the socket options
     oshd_setsockopts(client_sockfd);
 
     // Initialize the client with the newly created socket
-    c = client_init(client_sockfd, false, endpoint, &sa);
-    c->connected = true;
+    c = client_init(client_sockfd, false, &sa, ENDPOINT_PROTO_TCP);
+    client_set_connected(c, true);
     oshd_client_add(c);
     logger(LOG_INFO, "Accepted connection from %s", c->addrw);
-
-    // Free temporary endpoint
-    endpoint_free(endpoint);
 }
 
 // Delete callback for TCP servers

@@ -85,10 +85,17 @@ struct client_io {
 };
 
 struct client {
-    sock_t sockfd;               // Network socket
-    struct sockaddr_storage sa;  // Socket address
-    endpoint_t *sa_endpoint;     // Socket endpoint
-    char *addrw;                 // Endpoint "address:port" string
+    sock_t sockfd;                      // Network socket
+    endpoint_proto_t sa_proto;          // Socket protocol
+    struct sockaddr_storage remote_sa;  // Remote socket address
+    endpoint_t *remote_endpoint;        // Remote socket endpoint (can be NULL)
+    struct sockaddr_storage local_sa;   // Local socket address (can be invalid, with address family set to AF_UNSPEC)
+    endpoint_t *local_endpoint;         // Local socket endpoint (can be NULL)
+
+    endpoint_t *external_endpoint;      // This socket's external endpoint (can be NULL)
+    endpoint_t *internal_endpoint;      // Local socket endpoint of the remote node (can be NULL)
+
+    char *addrw;                        // Remote socket "address:port" string
 
     struct client_io io;         // send/recv data buffers
     aio_event_t *aio_event;      // Client's async I/O event
@@ -165,13 +172,18 @@ struct client {
 
 void client_graceful_disconnect(client_t *c);
 
-void client_change_endpoint(client_t *c, const endpoint_t *endpoint,
-    const struct sockaddr_storage *sa);
+void client_update_endpoint(client_t *c);
+void client_change_endpoint(client_t *c, const struct sockaddr_storage *sa,
+    const endpoint_proto_t proto);
+void client_share_endpoints(client_t *c);
+void client_set_external_endpoint(client_t *c, const endpoint_t *endpoint);
+void client_set_internal_endpoint(client_t *c, const endpoint_t *endpoint);
 
 void client_destroy(client_t *c);
-client_t *client_init(sock_t sockfd, bool initiator, const endpoint_t *endpoint,
-    const struct sockaddr_storage *sa);
+client_t *client_init(sock_t sockfd, bool initiator,
+    const struct sockaddr_storage *sa, const endpoint_proto_t proto);
 
+void client_set_connected(client_t *c, bool connected);
 void client_set_keepalive(client_t *c, time_t interval, time_t timeout);
 
 void client_reconnect_to(client_t *c, node_id_t *nid);
@@ -214,6 +226,8 @@ bool client_queue_pong(client_t *c);
 bool client_queue_pubkey_broadcast(client_t *exclude, node_id_t *id);
 bool client_queue_endpoint(client_t *dest, const endpoint_t *endpoint,
     const node_id_t *owner, const bool broadcast);
+bool client_queue_endpoint_disc(client_t *dest, const endpoint_t *endpoint,
+    const node_id_t *owner);
 bool client_queue_edge_broadcast(client_t *exclude, oshpacket_type_t type,
     const char *src, const char *dest);
 bool client_queue_route_add_local(client_t *exclude, const netaddr_t *addrs,

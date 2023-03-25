@@ -19,12 +19,47 @@ void client_graceful_disconnect(client_t *c)
     aio_disable_poll_events(c->aio_event, AIO_READ);
 }
 
+// Find a matching endpoint in the group and delete it if it is ephemeral
+// Does nothing if *endpoint is NULL
+static void cleanup_ephemeral_endpoint(endpoint_group_t *group, const endpoint_t *endpoint)
+{
+    endpoint_t *result;
+
+    if (!endpoint)
+        return;
+
+    result = endpoint_group_find(group, endpoint);
+    if (result && (result->flags & ENDPOINT_FLAG_EPHEMERAL))
+        endpoint_group_del(group, result);
+}
+
+// Cleanup ephemeral endpoint from the authenticated node's known endpoints
+static void cleanup_ephemeral_remote_endpoint(client_t *c, const endpoint_t *endpoint)
+{
+    if (c->authenticated)
+        cleanup_ephemeral_endpoint(c->id->endpoints, endpoint);
+}
+
+// Cleanup ephemeral endpoint from our own known endpoints
+static void cleanup_ephemeral_local_endpoint(const endpoint_t *endpoint)
+{
+    node_id_t *me = node_id_find_local();
+
+    cleanup_ephemeral_endpoint(me->endpoints, endpoint);
+}
+
 // Disconnect client and removes the node from the node tree
 static void client_disconnect(client_t *c)
 {
     // If the client is authenticated we have to remove our connection to it
     // from the node tree
     if (c->authenticated) {
+        // Cleanup discovered ephemeral endpoints
+        cleanup_ephemeral_remote_endpoint(c, c->remote_endpoint);
+        cleanup_ephemeral_local_endpoint(c->local_endpoint);
+        cleanup_ephemeral_local_endpoint(c->external_endpoint);
+        cleanup_ephemeral_remote_endpoint(c, c->internal_endpoint);
+
         // Remove the direct connection from this node
         if (node_id_unlink_client(c->id, c)) {
             node_id_t *me = node_id_find_local();
@@ -92,25 +127,211 @@ static void client_reset_ciphers(client_t *c)
     c->recv_cipher_next = NULL;
 }
 
-// Set the client's endpoint, socket address and format addrw for logging
-static void client_set_endpoint(client_t *c, const endpoint_t *endpoint,
-    const struct sockaddr_storage *sa)
+// Generate a pseudo-random addrw
+// The returned buffer is dynamically allocated and must be freed
+static char *client_generate_unknown_addrw(void)
 {
-    endpoint_free(c->sa_endpoint);
-    free(c->addrw);
+    char addrw[32];
 
-    memcpy(&c->sa, sa, sizeof(c->sa));
-    c->sa_endpoint = endpoint_dup(endpoint);
-    c->addrw = xstrdup(c->sa_endpoint->addrstr);
+    snprintf(addrw, sizeof(addrw), "[unknown-%" PRIX64 "]",
+        random_xoshiro256() % 0x10000);
+    return xstrdup(addrw);
 }
 
-// Change the client's existing endpoint and socket address and log it
-void client_change_endpoint(client_t *c, const endpoint_t *endpoint,
-    const struct sockaddr_storage *sa)
+// Update the client's local socket address
+// c->remote_sa must be initialized and valid for connectionless sockets
+static void client_update_local_sockaddr(client_t *c)
 {
-    logger(LOG_INFO, "%s: Endpoint changed to %s", c->sa_endpoint->addrstr,
-        endpoint->addrstr);
-    client_set_endpoint(c, endpoint, sa);
+    socklen_t len = sizeof(c->local_sa);
+
+    memset(&c->local_sa, 0, sizeof(c->local_sa));
+
+    // If the client is not connected yet the local address is still unknown
+    // We have to handle it here because sock_getsockname() can succeed but
+    // return an invalid address
+    if (!c->connected) {
+        c->local_sa.ss_family = AF_UNSPEC;
+        return;
+    }
+
+    if (sock_getsockname(c->sockfd, (struct sockaddr *) &c->local_sa, &len) != 0) {
+        logger(LOG_ERR, "%s: %s: %s", __func__, "sock_getsockname", sock_strerror(sock_errno));
+        c->local_sa.ss_family = AF_UNSPEC;
+    }
+}
+
+// Set the client's remote socket address, endpoint and format addrw for logging
+// Also sets the client's local socket address (if possible)
+// If *sa is NULL the remote socket address stays the same (along with its
+// endpoint and *addrw)
+static void client_set_endpoint(client_t *c, const struct sockaddr_storage *sa,
+    const endpoint_proto_t proto)
+{
+    const endpoint_flags_t common_flags = ENDPOINT_FLAG_CAN_EXPIRE | ENDPOINT_FLAG_EXPIRY_LOCAL;
+    endpoint_flags_t remote_flags = common_flags | ENDPOINT_FLAG_EXTERNAL;
+    endpoint_flags_t local_flags = common_flags | ENDPOINT_FLAG_INTERNAL;
+
+    // We assume that the remote endpoint is ephemeral, the remote node will
+    // rectify this if needed
+    // Our local endpoint is ephemeral if the socket does not accept incoming
+    // connections (if we are the initiator)
+    remote_flags |= ENDPOINT_FLAG_EPHEMERAL;
+    if (c->initiator)
+        local_flags |= ENDPOINT_FLAG_EPHEMERAL;
+
+    // Update remote and local socket addresses
+    c->sa_proto = proto;
+    if (sa != NULL && sa != &c->remote_sa) // Don't pass NULL or overlapping pointer to memcpy()
+        memcpy(&c->remote_sa, sa, sizeof(c->remote_sa));
+    client_update_local_sockaddr(c);
+
+    // Try to create remote endpoint and create addrw (if it changed)
+    if (sa != NULL) {
+        cleanup_ephemeral_remote_endpoint(c, c->remote_endpoint);
+        endpoint_free(c->remote_endpoint);
+        free(c->addrw);
+
+        c->remote_endpoint = endpoint_from_sockaddr((const struct sockaddr *) &c->remote_sa,
+            sizeof(c->remote_sa), proto, remote_flags);
+        if (c->remote_endpoint) {
+            c->addrw = xstrdup(c->remote_endpoint->addrstr);
+        } else {
+            // This should never happen
+            logger(LOG_CRIT, "%s: %s: %s", __func__, "endpoint_from_sockaddr",
+                "Failed to create remote endpoint");
+            c->addrw = client_generate_unknown_addrw();
+        }
+    }
+
+    // Try to create local endpoint
+    cleanup_ephemeral_local_endpoint(c->local_endpoint);
+    endpoint_free(c->local_endpoint);
+
+    if (c->local_sa.ss_family == AF_UNSPEC) {
+        c->local_endpoint = NULL;
+    } else {
+        c->local_endpoint = endpoint_from_sockaddr((const struct sockaddr *) &c->local_sa,
+            sizeof(c->local_sa), proto, local_flags);
+        if (!c->local_endpoint) {
+            logger(LOG_CRIT, "%s: %s: %s", __func__, "endpoint_from_sockaddr",
+                "Failed to create local endpoint");
+        }
+    }
+
+    // Announce the socket endpoints
+    client_share_endpoints(c);
+}
+
+// Set the client endpoint to the same socket address to update the local socket
+// address/endpoint (needed when a creating a client before the socket is connected)
+void client_update_endpoint(client_t *c)
+{
+    client_set_endpoint(c, NULL, c->sa_proto);
+}
+
+// Change the client's existing remote socket address/endpoint and log it
+void client_change_endpoint(client_t *c, const struct sockaddr_storage *sa,
+    const endpoint_proto_t proto)
+{
+    char *previous_addrw = xstrdup(c->addrw);
+
+    client_set_endpoint(c, sa, proto);
+    logger(LOG_INFO, "%s: Endpoint changed to %s", previous_addrw, c->addrw);
+    free(previous_addrw);
+}
+
+// Add discovered endpoint and announce it
+static void client_share_endpoint(client_t *c, node_id_t *owner,
+    const endpoint_t *endpoint)
+{
+    endpoint_t *inserted;
+
+    if (!endpoint)
+        return;
+
+    endpoint_group_insert_sorted(owner->endpoints, endpoint, &inserted);
+    if (c->authenticated)
+        client_queue_endpoint_disc(c, endpoint, owner);
+
+    // Ephemeral endpoints are not announced to all nodes because they are most
+    // likely unreachable or irrelevant
+    if (!(inserted->flags & ENDPOINT_FLAG_EPHEMERAL) && oshd.shareendpoints)
+        client_queue_endpoint(NULL, inserted, owner, true);
+}
+
+// Add the client's socket endpoints to their owners' known endpoints
+// This also announces the endpoints to other nodes if ShareEndpoints is enabled
+void client_share_endpoints(client_t *c)
+{
+    node_id_t *me = node_id_find_local();
+
+    client_share_endpoint(c, me, c->local_endpoint);
+    if (c->authenticated)
+        client_share_endpoint(c, c->id, c->remote_endpoint);
+}
+
+// Set the client's external endpoint
+void client_set_external_endpoint(client_t *c, const endpoint_t *endpoint)
+{
+    if (!c->authenticated)
+        return;
+
+    cleanup_ephemeral_local_endpoint(c->external_endpoint);
+    endpoint_free(c->external_endpoint);
+    c->external_endpoint = endpoint_dup(endpoint);
+
+    logger_debug(DBG_ENDPOINTS, "%s: %s: Set %s endpoint to %s",
+        c->addrw, c->id->name, "external", c->external_endpoint->addrstr);
+
+    if (c->local_endpoint) {
+        // If our external endpoint is not the same type as the local endpoint
+        // there is an address family translation
+        // External/remote endpoints are probably not reachable for other nodes
+        if (c->local_endpoint->type != c->external_endpoint->type) {
+            logger_debug(DBG_ENDPOINTS, "%s: %s: AFT %s <-> %s",
+                c->addrw, c->id->name,
+                endpoint_type_name(c->local_endpoint->type),
+                endpoint_type_name(c->external_endpoint->type));
+            return;
+        }
+
+        // The external endpoint is tied to our local endpoint, so it should
+        // have the same ephemeral flag
+        // We rectify it if it's not the case
+        const endpoint_flags_t correct_flags = (c->external_endpoint->flags & ~(ENDPOINT_FLAG_EPHEMERAL))
+                                             | (c->local_endpoint->flags & ENDPOINT_FLAG_EPHEMERAL);
+
+        if (c->external_endpoint->flags != correct_flags) {
+            node_id_t *me = node_id_find_local();
+            endpoint_t *inserted;
+
+            logger_debug(DBG_ENDPOINTS,
+                "%s: %s: Rectifying external endpoint %s (is %sephemeral)",
+                c->addrw,
+                c->id->name,
+                c->external_endpoint->addrstr,
+                (correct_flags & ENDPOINT_FLAG_EPHEMERAL) ? "" : "not ");
+
+            endpoint_set_flags(NULL, c->external_endpoint, correct_flags);
+            endpoint_group_insert_sorted(me->endpoints, c->external_endpoint, &inserted);
+            if (oshd.shareendpoints)
+                client_queue_endpoint(NULL, inserted, me, true);
+        }
+    }
+}
+
+// Set the client's internal endpoint
+void client_set_internal_endpoint(client_t *c, const endpoint_t *endpoint)
+{
+    if (!c->authenticated)
+        return;
+
+    cleanup_ephemeral_remote_endpoint(c, c->internal_endpoint);
+    endpoint_free(c->internal_endpoint);
+    c->internal_endpoint = endpoint_dup(endpoint);
+
+    logger_debug(DBG_ENDPOINTS, "%s: %s: Set %s endpoint to %s",
+        c->addrw, c->id->name, "internal", c->internal_endpoint->addrstr);
 }
 
 // Disconnect and free a client
@@ -129,14 +350,17 @@ void client_destroy(client_t *c)
     netbuffer_free(c->io.sendq);
     client_reset_ciphers(c);
 
-    endpoint_free(c->sa_endpoint);
+    endpoint_free(c->remote_endpoint);
+    endpoint_free(c->local_endpoint);
+    endpoint_free(c->external_endpoint);
+    endpoint_free(c->internal_endpoint);
     free(c->addrw);
     free(c);
 }
 
 // Create and initialize a new client
-client_t *client_init(sock_t sockfd, bool initiator, const endpoint_t *endpoint,
-    const struct sockaddr_storage *sa)
+client_t *client_init(sock_t sockfd, bool initiator,
+    const struct sockaddr_storage *sa, const endpoint_proto_t proto)
 {
     client_t *c = xzalloc(sizeof(client_t));
 
@@ -144,7 +368,7 @@ client_t *client_init(sock_t sockfd, bool initiator, const endpoint_t *endpoint,
     c->initiator = initiator;
 
     // Set the client's socket address, endpoint and format addrw
-    client_set_endpoint(c, endpoint, sa);
+    client_set_endpoint(c, sa, proto);
 
     // Initialize network buffers
     c->io.recvbuf = xalloc(CLIENT_RECVBUF_SIZE);
@@ -160,6 +384,14 @@ client_t *client_init(sock_t sockfd, bool initiator, const endpoint_t *endpoint,
     event_queue_keepalive(c, EVENT_QUEUE_NOW);
 
     return c;
+}
+
+// Set the client's connected state
+void client_set_connected(client_t *c, bool connected)
+{
+    c->connected = connected;
+    if (connected)
+        client_update_endpoint(c);
 }
 
 // Set client connection timeout and keepalive interval
@@ -836,8 +1068,8 @@ bool client_queue_pubkey_broadcast(client_t *exclude, node_id_t *id)
 
 // Queue an endpoint
 // If broadcast is true, *dest is a client to exclude from the broadcast
-bool client_queue_endpoint(client_t *dest, const endpoint_t *endpoint,
-    const node_id_t *owner, const bool broadcast)
+static bool _client_queue_endpoint(client_t *dest, const endpoint_t *endpoint,
+    const node_id_t *owner, const bool broadcast, const oshpacket_type_t pkt_type)
 {
     uint8_t buf[sizeof(oshpacket_endpoint_t) + sizeof(endpoint_data_t)];
     oshpacket_endpoint_t *pkt = (oshpacket_endpoint_t *) buf;
@@ -855,11 +1087,24 @@ bool client_queue_endpoint(client_t *dest, const endpoint_t *endpoint,
     memcpy(pkt->owner_name, owner->name, NODE_NAME_SIZE);
     total_size = sizeof(*pkt) + data_size;
 
-    return broadcast ? client_queue_packet_broadcast(dest, OSHPKT_ENDPOINT, buf, total_size)
-                     : client_queue_packet_direct(dest, OSHPKT_ENDPOINT, buf, total_size);
+    return broadcast ? client_queue_packet_broadcast(dest, pkt_type, buf, total_size)
+                     : client_queue_packet_direct(dest, pkt_type, buf, total_size);
 }
 
+// Queue an endpoint
+// If broadcast is true, *dest is a client to exclude from the broadcast
+bool client_queue_endpoint(client_t *dest, const endpoint_t *endpoint,
+    const node_id_t *owner, const bool broadcast)
+{
+    return _client_queue_endpoint(dest, endpoint, owner, broadcast, OSHPKT_ENDPOINT);
+}
 
+// Queue a discovered endpoint to share it
+bool client_queue_endpoint_disc(client_t *dest, const endpoint_t *endpoint,
+    const node_id_t *owner)
+{
+    return _client_queue_endpoint(dest, endpoint, owner, false, OSHPKT_ENDPOINT_DISC);
+}
 
 // Broadcast EDGE_ADD or EDGE_DEL request
 bool client_queue_edge_broadcast(client_t *exclude, oshpacket_type_t type,

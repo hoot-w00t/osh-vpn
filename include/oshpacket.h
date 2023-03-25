@@ -67,6 +67,7 @@ typedef enum oshpacket_type {
     OSHPKT_DATA,
     OSHPKT_PUBKEY,
     OSHPKT_ENDPOINT,
+    OSHPKT_ENDPOINT_DISC,
     OSHPKT_EDGE_ADD,
     OSHPKT_EDGE_DEL,
     OSHPKT_ROUTE_ADD,

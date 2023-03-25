@@ -2,10 +2,8 @@
 #include "logger.h"
 #include <string.h>
 
-bool oshpacket_handler_endpoint(
-    client_t *c,
-    __attribute__((unused)) node_id_t *src,
-    oshpacket_t *pkt)
+bool oshpacket_handler_endpoint(client_t *c,
+    __attribute__((unused)) node_id_t *src, oshpacket_t *pkt)
 {
     const oshpacket_endpoint_t *payload = (const oshpacket_endpoint_t *) pkt->payload;
     const endpoint_data_t *data = (const endpoint_data_t *) (payload + 1);
@@ -48,7 +46,11 @@ bool oshpacket_handler_endpoint(
     // Find the owner node
     owner = node_id_add(owner_name);
 
-    // Add endpoints to their owner's known endpoints except ephemeral endpoints
+    // Ephemeral endpoints are considered unreachable and expire very fast,
+    // we will only use them to discover external network addresses but we won't
+    // add them to the known endpoints directly
+    //
+    // All other endpoints are added to their owner's known endpoints
     if (endpoint->flags & ENDPOINT_FLAG_EPHEMERAL) {
         action = "Ignored ephemeral";
     } else {
@@ -59,6 +61,16 @@ bool oshpacket_handler_endpoint(
 
     logger_debug(DBG_ENDPOINTS, "%s: %s: %s endpoint %s owned by %s",
         c->addrw, c->id->name, action, endpoint->addrstr, owner->name);
+
+    // ENDPOINT_DISC packets are used to exchange remote/local endpoints related
+    // to the current connection
+    if (pkt->hdr->type == OSHPKT_ENDPOINT_DISC) {
+        if ((endpoint->flags & ENDPOINT_FLAG_EXTERNAL) && owner->local_node) {
+            client_set_external_endpoint(c, endpoint);
+        } else if ((endpoint->flags & ENDPOINT_FLAG_INTERNAL) && owner == c->id) {
+            client_set_internal_endpoint(c, endpoint);
+        }
+    }
 
     endpoint_free(endpoint);
     return true;

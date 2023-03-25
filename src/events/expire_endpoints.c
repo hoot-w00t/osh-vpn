@@ -6,7 +6,7 @@
 // Also refreshes/re-announces local endpoints
 
 static void announce_expired_endpoints(node_id_t *owner, endpoint_group_t *group,
-    __attribute__((unused)) const endpoint_flags_t *expired_flags)
+    const endpoint_flags_t *expired_flags)
 {
     // Re-announce endpoints that don't expire
     // These will expire but be refreshed instead of deleted, we announce them
@@ -14,6 +14,13 @@ static void announce_expired_endpoints(node_id_t *owner, endpoint_group_t *group
     foreach_endpoint_const(endpoint, group) {
         if (endpoint->had_expired && !endpoint_can_expire(endpoint) && oshd.shareendpoints)
             client_queue_endpoint(NULL, endpoint, owner, true);
+    }
+
+    // Re-announce endpoints we discovered if any has expired
+    if (   ((*expired_flags) & (ENDPOINT_FLAG_EXPIRY_LOCAL | ENDPOINT_FLAG_CAN_EXPIRE))
+        && node_id_linked_client(owner))
+    {
+        client_share_endpoints(node_id_linked_client(owner));
     }
 }
 

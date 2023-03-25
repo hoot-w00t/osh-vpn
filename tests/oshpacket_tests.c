@@ -78,7 +78,8 @@ static inline bool type_can_be_forwarded(const oshpacket_type_t type)
              || type == OSHPKT_GOODBYE
              || type == OSHPKT_PING
              || type == OSHPKT_PONG
-             || type == OSHPKT_DEVMODE);
+             || type == OSHPKT_DEVMODE
+             || type == OSHPKT_ENDPOINT_DISC);
 }
 
 static inline bool type_can_be_sent_unencrypted(const oshpacket_type_t type)

@@ -33,6 +33,9 @@ static void finish_authentication(client_t *c)
     // We are no longer actively trying to connect to these endpoints
     endpoint_group_set_is_connecting(c->id->endpoints, false);
 
+    // Announce the client's endpoints
+    client_share_endpoints(c);
+
     logger(LOG_INFO, "%s: %s: Authenticated successfully", c->addrw, c->id->name);
 }
 

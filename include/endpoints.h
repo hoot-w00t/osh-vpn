@@ -52,6 +52,9 @@ typedef enum endpoint_flags {
     ENDPOINT_FLAG_EPHEMERAL     = (1u << 16),   // If set, the endpoint is very likely unreachable
                                                 // It will have a lower priority, faster expiration and may be ignored by other nodes
                                                 // It should be used when exchanging endpoints with specific nodes (like external network addresses)
+
+    ENDPOINT_FLAG_EXTERNAL      = (1u << 17),   // If set, it is the owner's external socket address (on a direct connection)
+    ENDPOINT_FLAG_INTERNAL      = (1u << 18),   // If set, it is the owner's internal socket address (on a direct connection)
 } endpoint_flags_t;
 
 #define ENDPOINT_FLAG_PRIVATE_MASK  (0x0000FFFFu)

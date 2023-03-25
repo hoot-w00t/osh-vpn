@@ -145,6 +145,17 @@ static const oshpacket_def_t oshpacket_table[OSHPACKET_TYPE_COUNT] = {
         .payload_size = 0
     },
     {
+        .type = OSHPKT_ENDPOINT_DISC,
+        .name = "ENDPOINT_DISC",
+        .handler_unauth = unauth_handler_reject,
+        .handler = oshpacket_handler_endpoint,
+        .can_be_forwarded = false,
+        .can_be_sent_unencrypted = false,
+        .is_reliable = true,
+        .payload_size_type = OSHPACKET_PAYLOAD_SIZE_VARIABLE,
+        .payload_size = 0
+    },
+    {
         .type = OSHPKT_EDGE_ADD,
         .name = "EDGE_ADD",
         .handler_unauth = unauth_handler_reject,
