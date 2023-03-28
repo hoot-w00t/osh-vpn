@@ -21,7 +21,7 @@ static inline uint32_t murmur3_32_final_mix(uint32_t hash)
     hash *= 0x85ebca6b;
     hash ^= (hash >> 13);
     hash *= 0xc2b2ae35;
-    hash *= (hash >> 16);
+    hash ^= (hash >> 16);
     return hash;
 }
 
