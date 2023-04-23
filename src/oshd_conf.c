@@ -5,6 +5,7 @@
 #include "random.h"
 #include "xalloc.h"
 #include "logger.h"
+#include "macros_assert.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -743,14 +744,10 @@ static const oshd_conf_param_t oshd_conf_params[] = {
 // Initialize oshd_t global
 void oshd_init_conf(void)
 {
-    // Seed the PRNG
+    // Seed PRNG and initialize sockets
     srand(time(NULL));
-    if (!random_xoshiro256_seed())
-        abort();
-
-    // Initialize sockets
-    if (sock_init() != 0)
-        abort();
+    assert(random_xoshiro256_seed() == true);
+    assert(sock_init() == 0);
 
     // Everything should be at zero, including pointers and counts
     memset(&oshd, 0, sizeof(oshd_t));

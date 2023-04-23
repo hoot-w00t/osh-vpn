@@ -4,6 +4,7 @@
 #include "events.h"
 #include "random.h"
 #include "xalloc.h"
+#include "macros_assert.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -539,12 +540,7 @@ static void packet_init_hdr(oshpacket_t *pkt, const oshpacket_hdr_t *src_hdr)
 static void packet_init_payload(oshpacket_t *pkt, const void *payload,
     const size_t payload_size)
 {
-    // Redundant check, this should never happen
-    if (pkt->payload_size != payload_size) {
-        logger(LOG_CRIT, "%s: %s", __func__, "Packet payload sizes don't match");
-        abort();
-    }
-
+    assert(pkt->payload_size == payload_size); // redundant check
     memcpy(pkt->payload, payload, payload_size);
 }
 

@@ -1,6 +1,7 @@
 #ifndef _OSH_NETDEFS_IP_H
 #define _OSH_NETDEFS_IP_H
 
+#include "macros_assert.h"
 #include "sock.h"
 #include <stdint.h>
 
@@ -24,6 +25,7 @@ struct __attribute__((packed)) ipv4_hdr {
     uint32_t    saddr;
     uint32_t    daddr;
 };
+STATIC_ASSERT_NOMSG(sizeof(struct ipv4_hdr) == 20);
 
 // IPv6 header
 struct __attribute__((packed)) ipv6_hdr {
@@ -34,6 +36,7 @@ struct __attribute__((packed)) ipv6_hdr {
     struct in6_addr src_addr;
     struct in6_addr dst_addr;
 };
+STATIC_ASSERT_NOMSG(sizeof(struct ipv6_hdr) == 40);
 
 // IPv6 pseudo-header (for ICMP6 checksum)
 struct __attribute__((packed)) ipv6_pseudo {
@@ -43,6 +46,7 @@ struct __attribute__((packed)) ipv6_pseudo {
     uint8_t         zero[3];
     uint8_t         next_header;
 };
+STATIC_ASSERT_NOMSG(sizeof(struct ipv6_pseudo) == 40);
 
 // Get the traffic class from ipv6_hdr->flow_label (host byte order)
 #define ipv6_hdr_traffic_class(fl) (((fl) >> 24) & 0xFF)

@@ -10,6 +10,7 @@
 // Compute iv from the base_iv and sequence number
 static void cipher_compute_iv(cipher_t *cipher, cipher_seqno_t seqno)
 {
+    STATIC_ASSERT_NOMSG(sizeof(cipher->base_iv.s) == CIPHER_IV_SIZE);
     cipher->iv.s.seqno_be = cipher->base_iv.s.seqno_be ^ htobe64(seqno);
 }
 
@@ -54,14 +55,11 @@ cipher_t *cipher_create(const char *cipher_name, bool encrypts,
         goto error;
     }
 
-    // Make sure that the cipher_iv_t structure is of the right size
-    OPENSSL_assert(sizeof(cipher_iv_t)  == CIPHER_IV_SIZE);
-    OPENSSL_assert(sizeof(cipher->iv.b) == CIPHER_IV_SIZE);
-    OPENSSL_assert(sizeof(cipher->iv.s) == CIPHER_IV_SIZE);
-
     // Allocate and initialize the cipher
     cipher = xalloc(sizeof(cipher_t));
     cipher->encrypts = encrypts;
+
+    STATIC_ASSERT_NOMSG(sizeof(cipher->iv.b) == CIPHER_IV_SIZE);
     memcpy(cipher->base_iv.b, iv, CIPHER_IV_SIZE);
     memcpy(cipher->iv.b, cipher->base_iv.b, CIPHER_IV_SIZE);
 

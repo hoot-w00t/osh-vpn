@@ -340,12 +340,7 @@ static client_t *node_id_find_next_hop(node_id_t *dest_node)
         for (ssize_t j = 0; j < queue[i]->edges_count; ++j) {
             // If the edge was not visited yet, append it to the queue
             if (!queue[i]->edges[j]->visited) {
-                // Safety check, this should never happen but
-                if (queue_count >= queue_maxcount) {
-                    logger(LOG_CRIT, "%s: queue_count >= queue_maxcount", __func__);
-                    abort();
-                }
-
+                assert(queue_count < queue_maxcount);
                 queue[queue_count] = queue[i]->edges[j];
                 queue_count += 1;
                 queue[i]->edges[j]->visited = true;
@@ -540,11 +535,7 @@ static size_t node_tree_calc_hops_count(void)
         for (ssize_t j = 0; j < queue[i]->edges_count; ++j) {
             // If the edge was not visited yet, append it to the queue
             if (!queue[i]->edges[j]->visited) {
-                // Safety check, this should never happen but
-                if (queue_count >= queue_maxcount) {
-                    logger(LOG_CRIT, "%s: queue_count >= queue_maxcount", __func__);
-                    abort();
-                }
+                assert(queue_count < queue_maxcount);
                 queue[queue_count] = queue[i]->edges[j];
                 queue_count += 1;
                 queue[i]->edges[j]->visited = true;

@@ -240,10 +240,8 @@ void oshpacket_init(oshpacket_t *pkt, void *packet, size_t packet_size,
 {
     const size_t min_size = sizeof(oshpacket_hdr_t) + CIPHER_TAG_SIZE;
 
-    if (packet_size < min_size) {
-        logger(LOG_CRIT, "%s: %s", __func__, "packet_size is too small");
-        abort();
-    }
+    // *packet must be big enough or some pointers will be invalid
+    assert(packet_size >= min_size);
 
     pkt->seqno = seqno;
     pkt->packet = packet;

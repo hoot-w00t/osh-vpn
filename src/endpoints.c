@@ -4,6 +4,7 @@
 #include "node.h"
 #include "oshd.h"
 #include "oshd_clock.h"
+#include "macros_assert.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -451,13 +452,9 @@ endpoint_t *endpoint_group_insert_back(endpoint_group_t *group,
 endpoint_t *endpoint_group_insert_after(endpoint_t *after, endpoint_group_t *group,
     const endpoint_t *endpoint)
 {
-    // This should never happen
-    if (!is_endpoint_ptr_in_group(after, group)) {
-        logger(LOG_CRIT, "%s:%i: %s: endpoint pointer is not part of the given group",
-            __FILE__, __LINE__, __func__);
-        abort();
-    }
-
+    // The endpoint after which we insert a new endpoint must be part of the
+    // given group, otherwise it will mess up the group
+    assert(is_endpoint_ptr_in_group(after, group) == true);
     return endpoint_group_insert_at(&after->next, group, endpoint);
 }
 

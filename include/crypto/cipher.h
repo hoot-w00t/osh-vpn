@@ -1,6 +1,7 @@
 #ifndef _OSH_CRYPTO_CIPHER_H
 #define _OSH_CRYPTO_CIPHER_H
 
+#include "macros_assert.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <openssl/evp.h>
@@ -18,6 +19,7 @@ typedef union cipher_iv {
         cipher_seqno_t seqno_be;
     } s;
 } cipher_iv_t;
+STATIC_ASSERT_NOMSG(sizeof(cipher_iv_t) == CIPHER_IV_SIZE);
 
 typedef struct cipher {
     // Cipher context for encryption/decryption

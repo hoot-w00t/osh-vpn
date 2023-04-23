@@ -1,4 +1,5 @@
 #include "macros.h"
+#include "macros_assert.h"
 #include "logger.h"
 #include "xalloc.h"
 #include "tuntap.h"
@@ -135,6 +136,11 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
         return NULL;
     }
 
+    assert(tuntap->drv.close != NULL);
+    assert(tuntap->drv.read != NULL);
+    assert(tuntap->drv.write != NULL);
+    assert(tuntap->drv.init_aio_event != NULL);
+
     // Setup read/write function pointers
     // If emulation is enabled the init function sets up its own read/write functions
     // If it is disabled we can use the driver's read/write functions directly
@@ -149,6 +155,10 @@ tuntap_t *tuntap_open(const char *devname, bool tap)
     tuntap->parse_packethdr = tuntap->is_tap
                             ? tap_to_packethdr
                             : tun_to_packethdr;
+
+    assert(tuntap->read != NULL);
+    assert(tuntap->write != NULL);
+    assert(tuntap->parse_packethdr != NULL);
 
     if (tuntap->drv.is_tap == tuntap->is_tap) {
         logger(LOG_INFO, "Opened %s device: %s",

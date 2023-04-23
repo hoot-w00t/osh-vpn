@@ -57,7 +57,10 @@ struct __attribute__((packed)) arp_hdr {
             && pkt->hdr.proto       == htons(PROTO_TYPE)                        \
             && pkt->hdr.hw_len      == HW_LEN                                   \
             && pkt->hdr.proto_len   == PROTO_LEN;                               \
-    }
+    }                                                                           \
+                                                                                \
+    STATIC_ASSERT_NOMSG(sizeof(struct arp_ ## HW_NAME ## _ ## PROTO_NAME)       \
+        == sizeof(struct arp_hdr) + (HW_LEN*2) + (PROTO_LEN*2));
 
 _ARP_DEFINE_PACKET(ARP_HW_ETHER, ARP_HW_ETHER_LEN, ether, ARP_PROTO_IP, ARP_PROTO_IP_LEN, ip)
 

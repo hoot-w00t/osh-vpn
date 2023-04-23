@@ -52,6 +52,7 @@ struct __attribute__((packed)) icmp6_hdr {
 
     uint32_t reserved;
 };
+STATIC_ASSERT_NOMSG(sizeof(struct icmp6_hdr) == 8);
 
 // Neighbor Discovery option header
 struct __attribute__((packed)) nd_opt_hdr {

@@ -1,6 +1,7 @@
 #include "oshd.h"
 #include "xalloc.h"
 #include "logger.h"
+#include "macros_assert.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -14,12 +15,8 @@ static bool queue_exg_fragmented(client_t *c, oshpacket_type_t type,
     const oshpacket_def_t *def = oshpacket_lookup(type);
 
     // The packet type must be valid and support fragmentation
-    // If this triggers there is an error in the code
-    if (!def || def->payload_size_type != OSHPACKET_PAYLOAD_SIZE_FRAGMENTED) {
-        logger(LOG_CRIT, "%s:%i:%s: invalid packet type 0x%02X",
-            __FILE__, __LINE__, __func__, type);
-        abort();
-    }
+    assert(def != NULL);
+    assert(def->payload_size_type == OSHPACKET_PAYLOAD_SIZE_FRAGMENTED);
 
     // Calculate the total number of payloads and how many we can send at once
     const size_t total_payload_count = payload_size / def->payload_size;
@@ -198,12 +195,8 @@ bool client_queue_edge_exg(client_t *c)
     for (size_t i = oshd.node_tree_count; i > 0; --i) {
         const node_id_t *src_node = oshd.node_tree_ordered_hops[i - 1];
 
-        // This should never happen
-        if (src_node->hops_count < min_hops) {
-            logger(LOG_CRIT, "%s:%i: %s: invalid hops count ordering",
-                __FILE__, __LINE__, __func__);
-            abort();
-        }
+        // Make sure that nodes are correctly sorted
+        assert(src_node->hops_count >= min_hops);
 
         if (src_node->hops_count > min_hops)
             min_hops = src_node->hops_count;
@@ -242,13 +235,9 @@ bool client_queue_route_exg(client_t *c)
         if (!route->owner)
             continue;
 
-        // This should never happen, if it does there is either an error in this
-        // loop or in the routing table's counter
-        if (i >= total_count) {
-            logger(LOG_CRIT, "%s:%i:%s: buffer overflowing",
-                __FILE__, __LINE__, __func__);
-            abort();
-        }
+        // If this fails there is either an error in this loop or in the routing
+        // table's counter
+        assert(i < total_count);
 
         memcpy(pkt[i].owner_name, route->owner->name, NODE_NAME_SIZE);
         pkt[i].type = route->addr.type;
@@ -259,13 +248,8 @@ bool client_queue_route_exg(client_t *c)
         ++i;
     }
 
-    // This should never happen, the number of copied routes should always match
-    // the total_count
-    if (i != total_count) {
-        logger(LOG_CRIT, "%s:%i:%s: copied %zu routes but expected %zu",
-            __FILE__, __LINE__, __func__, i, total_count);
-        abort();
-    }
+    // The number of copied routes should always match the total_count
+    assert(i == total_count);
 
     success = queue_exg_fragmented(c, OSHPKT_ROUTE_ADD, pkt, total_count * sizeof(*pkt));
     free(pkt);
