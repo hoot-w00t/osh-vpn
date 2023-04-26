@@ -207,6 +207,8 @@ set(OSHD_SOURCES
     src/device.c
     src/endpoints.c
     src/events.c
+    src/hashtable_murmur3_32.c
+    src/hashtable.c
     src/logger.c
     src/murmurhash.c
     src/netaddr.c
@@ -238,6 +240,7 @@ set(OSHD_TESTS_SOURCES
     ${OSHD_SOURCES}
     tests/base64_tests.c
     tests/device_mode_tests.c
+    tests/hashtable_tests.c
     tests/macros_bitfield_tests.c
     tests/netaddr_tests.c
     tests/netbuffer_tests.c
