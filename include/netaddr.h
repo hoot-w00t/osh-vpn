@@ -4,6 +4,7 @@
 #include "sock.h"
 #include "netarea.h"
 #include "netdefs/ether.h"
+#include "macros_assert.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -15,10 +16,18 @@ typedef enum netaddr_type {
     _netaddr_type_last
 } netaddr_type_t;
 
+// netaddr_ip6_uint_fast_t must be a multiple of struct in6_addr
+typedef uint_fast32_t netaddr_ip6_uint_fast_t;
+STATIC_ASSERT_NOMSG(sizeof(struct in6_addr) >= sizeof(netaddr_ip6_uint_fast_t));
+STATIC_ASSERT_NOMSG((sizeof(struct in6_addr) % sizeof(netaddr_ip6_uint_fast_t)) == 0);
+STATIC_ASSERT_NOMSG((sizeof(struct in6_addr) / sizeof(netaddr_ip6_uint_fast_t)) != 0);
+#define NETADDR_IP6_UINT_FAST_COUNT (sizeof(struct in6_addr) / sizeof(netaddr_ip6_uint_fast_t))
+
 typedef union netaddr_data {
     uint8_t b[16];
     struct in_addr ip4;
     struct in6_addr ip6;
+    netaddr_ip6_uint_fast_t ip6_ufast[NETADDR_IP6_UINT_FAST_COUNT];
     struct eth_addr mac;
 } netaddr_data_t;
 

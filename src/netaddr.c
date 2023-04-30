@@ -263,11 +263,8 @@ void netaddr_mask(netaddr_t *dest, const netaddr_t *addr, const netaddr_t *mask)
         break;
 
     case IP6:
-        // sizeof(netaddr_data_t->ip6) must be a multiple of sizeof(uint_fast32_t)
-        for (unsigned int i = 0; i < (sizeof(dest->data.ip6) / sizeof(uint_fast32_t)); ++i) {
-            ((uint_fast32_t *) &dest->data.ip6)[i] = ((const uint_fast32_t *) &addr->data.ip6)[i]
-                                                   & ((const uint_fast32_t *) &mask->data.ip6)[i];
-        }
+        for (unsigned int i = 0; i < NETADDR_IP6_UINT_FAST_COUNT; ++i)
+            dest->data.ip6_ufast[i] = addr->data.ip6_ufast[i] & mask->data.ip6_ufast[i];
         break;
 
     default: break;

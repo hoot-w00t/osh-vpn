@@ -10,6 +10,7 @@ Test(netaddr_data_t, netaddr_data_sizes)
     cr_assert_eq(sizeof(d.mac), 6);
     cr_assert_eq(sizeof(d.ip4), 4);
     cr_assert_eq(sizeof(d.ip6), 16);
+    cr_assert_eq(sizeof(d.ip6), sizeof(d.ip6_ufast));
 }
 
 Test(netaddr_data_t, netaddr_data_union_pointers)
@@ -19,6 +20,7 @@ Test(netaddr_data_t, netaddr_data_union_pointers)
     cr_assert_eq(&d, d.b);
     cr_assert_eq(&d, &d.ip4);
     cr_assert_eq(&d, &d.ip6);
+    cr_assert_eq(&d, &d.ip6_ufast);
     cr_assert_eq(&d, &d.mac);
 }
 
@@ -401,13 +403,4 @@ Test(netaddr_mask, mask_ipv6)
     cr_assert_eq(netaddr_eq(&tmp, &mask1), true);
     netaddr_mask(&tmp, &ip6, &mask2);
     cr_assert_eq(netaddr_eq(&tmp, &mask2), true);
-}
-
-Test(netaddr_mask, sizeof_uint_fast32_t)
-{
-    netaddr_t addr;
-
-    // For IPv6 masking
-    cr_assert_eq(sizeof(addr.data.ip6) % sizeof(uint_fast32_t), 0);
-    cr_assert_geq(sizeof(addr.data.ip6), sizeof(uint_fast32_t));
 }
