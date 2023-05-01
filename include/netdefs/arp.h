@@ -7,7 +7,7 @@
 
 // ARP hardware type and length
 #define ARP_HW_ETHER        1
-#define ARP_HW_ETHER_LEN    ETH_ALEN
+#define ARP_HW_ETHER_LEN    sizeof(struct eth_addr)
 
 // ARP protocol type and length
 #define ARP_PROTO_IP        ETH_P_IP
@@ -32,20 +32,19 @@ struct __attribute__((packed)) arp_hdr {
 };
 
 // Define ARP packet with given hardware/protocol types
-// Packet structure:
-//   struct arp_HW_PROTO
+// Structure name: struct arp_HW_PROTO
 //
 // Function that checks if a packet has the correct hardware/protocol types and
 // valid lengths (packet fields must be in network byte order):
 //   static inline bool arp_is_HW_PROTO(...)
-#define _ARP_DEFINE_PACKET(HW_TYPE, HW_LEN, HW_NAME,                            \
-                           PROTO_TYPE, PROTO_LEN, PROTO_NAME)                   \
+#define _ARP_DEFINE_PACKET(HW_TYPE, HW_STRUCT, HW_NAME,                         \
+                           PROTO_TYPE, PROTO_STRUCT, PROTO_NAME)                \
     struct __attribute__((packed)) arp_ ## HW_NAME ## _ ## PROTO_NAME {         \
         struct arp_hdr hdr;                                                     \
-        uint8_t s_hwaddr[HW_LEN];                                               \
-        uint8_t s_protoaddr[PROTO_LEN];                                         \
-        uint8_t t_hwaddr[HW_LEN];                                               \
-        uint8_t t_protoaddr[PROTO_LEN];                                         \
+        HW_STRUCT s_hwaddr;                                                     \
+        PROTO_STRUCT s_protoaddr;                                               \
+        HW_STRUCT t_hwaddr;                                                     \
+        PROTO_STRUCT t_protoaddr;                                               \
     };                                                                          \
                                                                                 \
     static inline bool arp_is_ ## HW_NAME ## _ ## PROTO_NAME (                  \
@@ -55,13 +54,13 @@ struct __attribute__((packed)) arp_hdr {
         return pkt_size             == sizeof(*pkt)                             \
             && pkt->hdr.hw          == htons(HW_TYPE)                           \
             && pkt->hdr.proto       == htons(PROTO_TYPE)                        \
-            && pkt->hdr.hw_len      == HW_LEN                                   \
-            && pkt->hdr.proto_len   == PROTO_LEN;                               \
+            && pkt->hdr.hw_len      == sizeof(HW_STRUCT)                        \
+            && pkt->hdr.proto_len   == sizeof(PROTO_STRUCT);                    \
     }                                                                           \
                                                                                 \
     STATIC_ASSERT_NOMSG(sizeof(struct arp_ ## HW_NAME ## _ ## PROTO_NAME)       \
-        == sizeof(struct arp_hdr) + (HW_LEN*2) + (PROTO_LEN*2));
+        == sizeof(struct arp_hdr) + (sizeof(HW_STRUCT)*2) + (sizeof(PROTO_STRUCT)*2));
 
-_ARP_DEFINE_PACKET(ARP_HW_ETHER, ARP_HW_ETHER_LEN, ether, ARP_PROTO_IP, ARP_PROTO_IP_LEN, ip)
+_ARP_DEFINE_PACKET(ARP_HW_ETHER, struct eth_addr, ether, ARP_PROTO_IP, struct in_addr, ip)
 
 #endif

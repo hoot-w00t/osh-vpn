@@ -24,10 +24,10 @@ void arp_ether_ip_make_request(struct arp_ether_ip *req,
 {
     memset(req, 0, sizeof(*req));
     arp_ether_ip_init_hdr(&req->hdr, ARP_OP_REQUEST);
-    if (s_hwaddr) memcpy(req->s_hwaddr,    s_hwaddr, sizeof(*s_hwaddr));
-    if (s_ipaddr) memcpy(req->s_protoaddr, s_ipaddr, sizeof(*s_ipaddr));
-    if (t_hwaddr) memcpy(req->t_hwaddr,    t_hwaddr, sizeof(*t_hwaddr));
-    if (t_ipaddr) memcpy(req->t_protoaddr, t_ipaddr, sizeof(*t_ipaddr));
+    if (s_hwaddr) req->s_hwaddr    = *s_hwaddr;
+    if (s_ipaddr) req->s_protoaddr = *s_ipaddr;
+    if (t_hwaddr) req->t_hwaddr    = *t_hwaddr;
+    if (t_ipaddr) req->t_protoaddr = *t_ipaddr;
 }
 
 // Make ARP reply from a request
@@ -37,8 +37,8 @@ void arp_ether_ip_make_reply(struct arp_ether_ip *reply,
     const struct arp_ether_ip *req, const struct eth_addr *reply_hwaddr)
 {
     arp_ether_ip_init_hdr(&reply->hdr, ARP_OP_REPLY);
-    memcpy(reply->s_hwaddr,    reply_hwaddr->addr, sizeof(reply->s_hwaddr));
-    memcpy(reply->s_protoaddr, req->t_protoaddr,   sizeof(reply->s_protoaddr));
-    memcpy(reply->t_hwaddr,    req->s_hwaddr,      sizeof(reply->t_hwaddr));
-    memcpy(reply->t_protoaddr, req->s_protoaddr,   sizeof(reply->t_protoaddr));
+    reply->s_hwaddr    = *reply_hwaddr;
+    reply->s_protoaddr =  req->t_protoaddr;
+    reply->t_hwaddr    =  req->s_hwaddr;
+    reply->t_protoaddr =  req->s_protoaddr;
 }

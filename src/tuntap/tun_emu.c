@@ -159,9 +159,9 @@ static void handle_arp(tuntap_t *tuntap, const void *packet, size_t packet_size)
     char sender_ip_str[NETADDR_ADDRSTRLEN];
     char target_ip_str[NETADDR_ADDRSTRLEN];
 
-    netaddr_dton_mac(&sender_hw, *((const struct eth_addr *) arp->s_hwaddr));
-    netaddr_dton_ip4(&sender_ip, *((const struct in_addr *)  arp->s_protoaddr));
-    target_ip = *((const struct in_addr *)  arp->t_protoaddr);
+    netaddr_dton_mac(&sender_hw, arp->s_hwaddr);
+    netaddr_dton_ip4(&sender_ip, arp->s_protoaddr);
+    target_ip = arp->t_protoaddr;
     netaddr_ntop(sender_hw_str, sizeof(sender_hw_str), &sender_hw);
     netaddr_ntop(sender_ip_str, sizeof(sender_ip_str), &sender_ip);
     netaddr_ntop_ip4(target_ip_str, sizeof(target_ip_str), &target_ip);
