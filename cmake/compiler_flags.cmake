@@ -19,6 +19,8 @@ endfunction()
 function(add_compiler_flag destvar flag)
     string(REPLACE "-" "_" checkvar "cflag${flag}")
     string(REPLACE "=" "_" checkvar "${checkvar}")
+    string(REPLACE "," "_" checkvar "${checkvar}")
+    string(REPLACE " " "_" checkvar "${checkvar}")
     string(TOLOWER "${checkvar}" checkvar)
 
     check_c_compiler_flag("${flag}" ${checkvar})
