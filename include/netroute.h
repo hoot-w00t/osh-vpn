@@ -3,7 +3,7 @@
 
 #include "oshd_clock.h"
 #include "node.h"
-#include "murmurhash.h"
+#include "hashtable.h"
 #include <stddef.h>
 
 // Local routes expire sooner than remote routes so that Osh can advertise them
@@ -22,7 +22,6 @@ typedef uint32_t netroute_hash_t;
 struct netroute {
     // Network address
     netaddr_t addr;
-    netroute_hash_t addr_hash;
     netaddr_t mask;
     netaddr_prefixlen_t prefixlen;
 
@@ -32,9 +31,6 @@ struct netroute {
     // Time after which this route will expire (if it should)
     bool can_expire;
     struct timespec expire_after;
-
-    // Next item in the linked list
-    netroute_t *next;
 };
 
 struct netroute_mask {
@@ -50,11 +46,8 @@ struct netroute_mask {
 };
 
 struct netroute_table {
-    // Array of all routes
-    netroute_t **heads;
-
-    // Size of the array
-    size_t heads_count;
+    // Hash table of all routes
+    hashtable_t *ht;
 
     // Total number of routes in the table
     size_t total_routes;
@@ -68,7 +61,7 @@ struct netroute_table {
     netroute_mask_t *masks_ip6;
 };
 
-netroute_table_t *netroute_table_create(size_t hash_table_size);
+netroute_table_t *netroute_table_create(void);
 void netroute_table_free(netroute_table_t *table);
 void netroute_table_clear(netroute_table_t *table);
 
@@ -89,38 +82,9 @@ bool netroute_del_expired(netroute_table_t *table, time_t *next_expire,
 void netroute_dump_to(netroute_table_t *table, FILE *outfile);
 void netroute_dump(netroute_table_t *table);
 
-// Iterate through all netroutes in a linked list
-#define foreach_netroute_head(route, head) \
-    for (netroute_t *route = (head); route; route = route->next)
-#define foreach_netroute_head_const(route, head) \
-    for (const netroute_t *route = (head); route; route = route->next)
-
-// Iterate through all netroutes in a netroute_table
-#define foreach_netroute(route, table, iter)                   \
-    for (size_t iter = 0; iter < (table)->heads_count; ++iter) \
-        foreach_netroute_head(route, (table)->heads[iter])
-#define foreach_netroute_const(route, table, iter)                   \
-    for (size_t iter = 0; iter < (table)->heads_count; ++iter) \
-        foreach_netroute_head_const(route, (table)->heads[iter])
-
 // Iterate through all netroute masks in a linked list
 #define foreach_netroute_mask_head(rmask, head) \
     for (netroute_mask_t *rmask = (head); rmask; rmask = rmask->next)
-
-// Returns the route table hash of addr
-static inline netroute_hash_t netroute_hash(
-    const netroute_table_t *table, const netaddr_t *addr)
-{
-    const size_t s = 0;
-    const size_t m = table->heads_count;
-
-    switch (addr->type) {
-    case MAC: return murmur3_32(&addr->data.mac, sizeof(addr->data.mac), s) % m;
-    case IP4: return murmur3_32(&addr->data.ip4, sizeof(addr->data.ip4), s) % m;
-    case IP6: return murmur3_32(&addr->data.ip6, sizeof(addr->data.ip6), s) % m;
-     default: return 0;
-    }
-}
 
 static inline const char *netroute_owner_name(const netroute_t *route)
 {

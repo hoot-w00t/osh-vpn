@@ -762,7 +762,7 @@ void oshd_init_conf(void)
     oshd.automatic_connections_interval = 3600; // 1 hour (60m, 3600s)
     oshd.automatic_connections_percent = 50;
 
-    oshd.route_table = netroute_table_create(4096);
+    oshd.route_table = netroute_table_create();
     netroute_add_broadcasts(oshd.route_table);
 
     oshd.dynamic_addr_stable = true;

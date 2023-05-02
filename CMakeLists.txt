@@ -208,6 +208,7 @@ set(OSHD_SOURCES
     src/endpoints.c
     src/events.c
     src/hashtable_murmur3_32.c
+    src/hashtable_netaddr.c
     src/hashtable.c
     src/logger.c
     src/murmurhash.c

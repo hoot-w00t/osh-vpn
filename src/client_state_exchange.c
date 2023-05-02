@@ -231,7 +231,9 @@ bool client_queue_route_exg(client_t *c)
     i = 0;
 
     // Format all known routes into oshpacket_route_t payloads
-    foreach_netroute_const(route, oshd.route_table, route_iter) {
+    hashtable_foreach_const(item, oshd.route_table->ht, item_iter) {
+        const netroute_t *route = (const netroute_t *) item->value;
+
         if (!route->owner)
             continue;
 

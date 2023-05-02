@@ -420,7 +420,9 @@ static void node_tree_dump_digraph_to(FILE *out)
     }
 
     // We define and label all routes
-    foreach_netroute_const(route, oshd.route_table, i) {
+    hashtable_foreach_const(item, oshd.route_table->ht, i) {
+        const netroute_t *route = (const netroute_t *) item->value;
+
         if (!route->owner)
             continue;
 
@@ -443,7 +445,9 @@ static void node_tree_dump_digraph_to(FILE *out)
     }
 
     // We connect all nodes to their routes
-    foreach_netroute_const(route, oshd.route_table, i) {
+    hashtable_foreach_const(item, oshd.route_table->ht, i) {
+        const netroute_t *route = (const netroute_t *) item->value;
+
         if (!route->owner)
             continue;
 

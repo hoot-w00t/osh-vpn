@@ -1,49 +1,77 @@
 #include "netroute.h"
 #include "events.h"
+#include "macros_assert.h"
 #include "xalloc.h"
 #include "logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-// Create a new netroute_t
-static netroute_t *netroute_create(
-    const netaddr_t *addr, netaddr_prefixlen_t prefixlen,
-    const netroute_hash_t addr_hash, node_id_t *owner)
+// Hash table value comparator, s1 must point to a netroute_t and vctx must point
+// to a node_id_t
+// Returns true if the route owner is the same as the one passed in vctx
+static bool netroute_owner_cmp_eq(const void *s1, size_t s1_len, void *vctx)
 {
-    netroute_t *route = xzalloc(sizeof(netroute_t));
+    const netroute_t *route = (const netroute_t *) s1;
+    const node_id_t *owner = (const node_id_t *) vctx;
 
+    assert(s1_len == sizeof(*route));
+    return route->owner == owner;
+}
+
+// Hash table value comparator, s1 must point to a netroute_t
+// Returns true if the route is orphan (owned by an offline node)
+static bool _netroute_orphan_cmp_eq(const void *s1, size_t s1_len,
+    __attribute__((unused)) void *vctx)
+{
+    const netroute_t *route = (const netroute_t *) s1;
+
+    assert(s1_len == sizeof(*route));
+    return  route->owner
+        && !route->owner->online
+        && !route->owner->local_node;
+}
+
+struct netroute_expired_cmp_eq_ctx {
+    struct timespec now;
+    time_t *next_expire;
+};
+
+// Hash table value comparator, s1 must point to a netroute_t and vctx must point
+// to a struct netroute_expired_cmp_eq_ctx
+// Returns true if the route has expired
+static bool netroute_expired_cmp_eq(const void *s1, size_t s1_len, void *vctx)
+{
+    const netroute_t *route = (const netroute_t *) s1;
+    struct netroute_expired_cmp_eq_ctx *ctx = (struct netroute_expired_cmp_eq_ctx *) vctx;
+    struct timespec delta;
+
+    assert(s1_len == sizeof(*route));
+    timespecsub(&route->expire_after, &ctx->now, &delta);
+
+    if (delta.tv_sec < 0) {
+        // Route has expired
+        return route->can_expire;
+    } else {
+        // Route has not expired
+        if ((delta.tv_sec + 1) < *(ctx->next_expire))
+            *(ctx->next_expire) = (delta.tv_sec + 1);
+        return false;
+    }
+}
+
+// Initialize a netroute_t
+static void netroute_init(netroute_t *route, const netaddr_t *addr,
+    netaddr_prefixlen_t prefixlen, node_id_t *owner)
+{
     netaddr_cpy(&route->addr, addr);
-    route->addr_hash = addr_hash;
-
     if (prefixlen > netaddr_max_prefixlen(addr->type)) {
         route->prefixlen = netaddr_max_prefixlen(addr->type);
     } else {
         route->prefixlen = prefixlen;
     }
     netaddr_mask_from_prefix(&route->mask, addr->type, route->prefixlen);
-
     route->owner = owner;
-    return route;
-}
-
-// Free netroute_t
-static void netroute_free(netroute_t *route)
-{
-    free(route);
-}
-
-// Free all the linked netroute_t
-static void netroute_free_all(netroute_t *head)
-{
-    netroute_t *route = head;
-    netroute_t *next;
-
-    while (route) {
-        next = route->next;
-        netroute_free(route);
-        route = next;
-    }
 }
 
 // Create a new netroute_mask_t
@@ -92,91 +120,6 @@ static netroute_mask_t *netroute_mask_find(netroute_table_t *table,
     foreach_netroute_mask_head(rmask, head) {
         if (rmask->prefixlen == prefixlen && netaddr_eq(&rmask->mask, mask))
             return rmask;
-    }
-    return NULL;
-}
-
-// Allocate an empty route table
-netroute_table_t *netroute_table_create(size_t hash_table_size)
-{
-    netroute_table_t *table = xzalloc(sizeof(netroute_table_t));
-
-    table->heads_count = hash_table_size;
-    if (table->heads_count == 0)
-        table->heads_count = 1;
-
-    table->heads = xzalloc(sizeof(netroute_t *) * table->heads_count);
-    logger_debug(DBG_NETROUTE, "Created table %p (size %zu)",
-        table, table->heads_count);
-    return table;
-}
-
-// Free route table
-void netroute_table_free(netroute_table_t *table)
-{
-    if (table) {
-        logger_debug(DBG_NETROUTE, "Freeing table %p", table);
-        netroute_table_clear(table);
-        netroute_mask_free_all(table->masks_mac);
-        netroute_mask_free_all(table->masks_ip4);
-        netroute_mask_free_all(table->masks_ip6);
-        free(table->heads);
-        free(table);
-    }
-}
-
-// Delete all routes from the table
-void netroute_table_clear(netroute_table_t *table)
-{
-    logger_debug(DBG_NETROUTE, "Clearing table %p", table);
-    for (size_t i = 0; i < table->heads_count; ++i) {
-        netroute_free_all(table->heads[i]);
-        table->heads[i] = NULL;
-    }
-    table->total_routes = 0;
-    table->total_owned_routes = 0;
-}
-
-// Search through all routes in the linked list for a matching address
-static inline netroute_t *netroute_find_head(
-    netroute_t *head, const netaddr_t *addr)
-{
-    foreach_netroute_head(route, head) {
-        if (netaddr_eq(&route->addr, addr))
-            return route;
-    }
-    return NULL;
-}
-
-// Returns a pointer to the netroute_t with the given network address
-// Returns NULL if no routes match
-static netroute_t *netroute_find(netroute_table_t *table, const netaddr_t *addr)
-{
-    const netroute_hash_t hash = netroute_hash(table, addr);
-
-    return netroute_find_head(table->heads[hash], addr);
-}
-
-// Looks up addr in the table, returns a netroute_t pointer if it is found
-// Returns NULL otherwise
-const netroute_t *netroute_lookup(netroute_table_t *table, const netaddr_t *addr)
-{
-    netroute_mask_t *head;
-    netaddr_t result;
-    netroute_t *route;
-
-    switch (addr->type) {
-        case MAC: head = table->masks_mac; break;
-        case IP4: head = table->masks_ip4; break;
-        case IP6: head = table->masks_ip6; break;
-         default: return NULL;
-    }
-
-    foreach_netroute_mask_head(rmask, head) {
-        netaddr_mask(&result, addr, &rmask->mask);
-        route = netroute_find(table, &result);
-        if (route)
-            return route;
     }
     return NULL;
 }
@@ -265,30 +208,91 @@ static bool netroute_del_mask(netroute_table_t *table, netroute_mask_t *rmask)
     return false;
 }
 
-// Insert a new netroute in the table
-static netroute_t *netroute_insert(netroute_table_t *table,
-    const netaddr_t *addr, netaddr_prefixlen_t prefixlen,
-    const netroute_hash_t addr_hash, node_id_t *owner)
+// Hash table remove callback
+// data must point to the netroute_table_t that owns the route
+// Updates route counts and masks after a route is deleted
+static void netroute_ht_remove_cb(hashtable_item_t *item, void *data)
 {
-    netroute_t **it = &table->heads[addr_hash];
+    netroute_t *route = (netroute_t *) item->value;
+    netroute_table_t *table = (netroute_table_t *) data;
     netroute_mask_t *rmask;
 
-    // Go to the end of the linked list
-    while (*it)
-        it = &(*it)->next;
+    // Update the route counts
+    table->total_routes -= 1;
+    if (route->owner)
+        table->total_owned_routes -= 1;
 
-    // Create the new route
-    *it = netroute_create(addr, prefixlen, addr_hash, owner);
-    table->total_routes += 1;
-    if (owner)
-        table->total_owned_routes += 1;
+    // Decrement the mask's use count and delete it if it reaches zero
+    rmask = netroute_mask_find(table, &route->mask, route->prefixlen);
+    if (rmask) {
+        if (rmask->use_count > 0)
+            rmask->use_count -= 1;
+        if (rmask->use_count == 0)
+            netroute_del_mask(table, rmask);
+    }
 
-    // Add the route's mask to the table
-    rmask = netroute_add_mask(table, &(*it)->mask, (*it)->prefixlen);
-    if (rmask)
-        rmask->use_count += 1;
+    if (logger_is_debugged(DBG_NETROUTE)) {
+        char addrw[NETADDR_ADDRSTRLEN];
 
-    return *it;
+        netaddr_ntop(addrw, sizeof(addrw), &route->addr);
+        logger_debug(DBG_NETROUTE, "Deleted %s/%u owned by %s from %p",
+            addrw, route->prefixlen, netroute_owner_name(route), table);
+    }
+}
+
+// Allocate an empty route table
+netroute_table_t *netroute_table_create(void)
+{
+    netroute_table_t *table = xzalloc(sizeof(netroute_table_t));
+
+    table->ht = hashtable_create_netaddr_autoresize(32, 32768, 4, 0);
+    hashtable_set_remove_cb(table->ht, netroute_ht_remove_cb, table);
+    logger_debug(DBG_NETROUTE, "Created table %p", table);
+    return table;
+}
+
+// Free route table
+void netroute_table_free(netroute_table_t *table)
+{
+    if (table) {
+        logger_debug(DBG_NETROUTE, "Freeing table %p", table);
+        netroute_table_clear(table);
+        netroute_mask_free_all(table->masks_mac);
+        netroute_mask_free_all(table->masks_ip4);
+        netroute_mask_free_all(table->masks_ip6);
+        free(table);
+    }
+}
+
+// Delete all routes from the table
+void netroute_table_clear(netroute_table_t *table)
+{
+    logger_debug(DBG_NETROUTE, "Clearing table %p", table);
+    hashtable_clear(table->ht);
+}
+
+// Looks up addr in the table, returns a netroute_t pointer if it is found
+// Returns NULL otherwise
+const netroute_t *netroute_lookup(netroute_table_t *table, const netaddr_t *addr)
+{
+    netroute_mask_t *head;
+    netaddr_t result;
+    hashtable_item_t *item;
+
+    switch (addr->type) {
+        case MAC: head = table->masks_mac; break;
+        case IP4: head = table->masks_ip4; break;
+        case IP6: head = table->masks_ip6; break;
+         default: return NULL;
+    }
+
+    foreach_netroute_mask_head(rmask, head) {
+        netaddr_mask(&result, addr, &rmask->mask);
+        item = hashtable_lookup(table->ht, &result, sizeof(result));
+        if (item)
+            return (const netroute_t *) item->value;
+    }
+    return NULL;
 }
 
 // Add a new route to the table
@@ -306,12 +310,29 @@ const netroute_t *netroute_add(netroute_table_t *table,
     const netaddr_t *addr, netaddr_prefixlen_t prefixlen,
     node_id_t *owner, time_t expire_in)
 {
-    const netroute_hash_t hash = netroute_hash(table, addr);
-    netroute_t *route = netroute_find_head(table->heads[hash], addr);
+    hashtable_item_t *item = hashtable_lookup(table->ht, addr, sizeof(*addr));
+    netroute_t *route;
 
-    if (!route) {
+    if (item) {
+        route = (netroute_t *) item->value;
+    } else {
+        netroute_mask_t *rmask;
+
         // The route doesn't exist, create it and append it to the list
-        route = netroute_insert(table, addr, prefixlen, hash, owner);
+        item = hashtable_insert(table->ht, addr, sizeof(*addr), NULL, sizeof(netroute_t));
+        route = (netroute_t *) item->value;
+
+        // Initialize the new route
+        netroute_init(route, addr, prefixlen, owner);
+        table->total_routes += 1;
+        if (owner)
+            table->total_owned_routes += 1;
+
+        // Add the route's mask to the table
+        rmask = netroute_add_mask(table, &route->mask, route->prefixlen);
+        if (rmask)
+            rmask->use_count += 1;
+
         route->can_expire = expire_in > 0;
     }
 
@@ -388,104 +409,26 @@ void netroute_add_broadcasts(netroute_table_t *table)
     netroute_add(table, &ip6_broadcast, 8, NULL, ROUTE_NEVER_EXPIRE);
 }
 
-// Delete route from the table
-static bool netroute_del(netroute_table_t *table, netroute_t *route)
-{
-    netroute_t **it = &table->heads[route->addr_hash];
-    netroute_mask_t *rmask;
-
-    while (*it) {
-        if (*it == route) {
-            // Remove the route from the linked list
-            *it = (*it)->next;
-            table->total_routes -= 1;
-            if (route->owner)
-                table->total_owned_routes -= 1;
-
-            // Decrement the mask's use count and delete it if it reaches zero
-            rmask = netroute_mask_find(table, &route->mask, route->prefixlen);
-            if (rmask) {
-                if (rmask->use_count > 0)
-                    rmask->use_count -= 1;
-                if (rmask->use_count == 0)
-                    netroute_del_mask(table, rmask);
-            }
-
-            if (logger_is_debugged(DBG_NETROUTE)) {
-                char addrw[NETADDR_ADDRSTRLEN];
-
-                netaddr_ntop(addrw, sizeof(addrw), &route->addr);
-                logger_debug(DBG_NETROUTE, "Deleted %s/%u owned by %s from %p",
-                    addrw, route->prefixlen, netroute_owner_name(route), table);
-            }
-
-            netroute_free(route);
-            return true;
-        }
-        it = &(*it)->next;
-    }
-    return false;
-}
-
 // Delete route that matches addr from the table
-// TODO: Optimize this function by doing the comparison and removal here
-//       instead of calling netroute_del
 void netroute_del_addr(netroute_table_t *table, const netaddr_t *addr)
 {
-    netroute_t *route = netroute_find(table, addr);
-
-    if (route)
-        netroute_del(table, route);
+    hashtable_remove_key(table->ht, addr, sizeof(*addr));
 }
 
 // Delete all routes owned by owner from the table
 // This function does not delete NULL owners
 void netroute_del_owner(netroute_table_t *table, node_id_t *owner)
 {
-    netroute_t *route;
-    netroute_t *next;
-
     // Don't remove routes without owners
-    if (!owner)
-        return;
-
-    for (size_t i = 0; i < table->heads_count; ++i) {
-        route = table->heads[i];
-
-        while (route) {
-            next = route->next;
-            if (route->owner == owner)
-                netroute_del(table, route);
-            route = next;
-        }
+    if (owner) {
+        hashtable_remove_value_ctx(table->ht, netroute_owner_cmp_eq, owner);
     }
 }
 
 // Delete all orphan routes from the table
 bool netroute_del_orphan_owners(netroute_table_t *table)
 {
-    bool deleted = false;
-    netroute_t *route;
-    netroute_t *next;
-
-    for (size_t i = 0; i < table->heads_count; ++i) {
-        route = table->heads[i];
-
-        while (route) {
-            next = route->next;
-
-            if (    route->owner
-                && !route->owner->online
-                && !route->owner->local_node)
-            {
-                netroute_del(table, route);
-                deleted = true;
-            }
-
-            route = next;
-        }
-    }
-    return deleted;
+    return hashtable_remove_value_ctx(table->ht, _netroute_orphan_cmp_eq, NULL) != 0;
 }
 
 // Delete all expired routes from the table
@@ -495,39 +438,19 @@ bool netroute_del_orphan_owners(netroute_table_t *table)
 bool netroute_del_expired(netroute_table_t *table, time_t *next_expire,
     time_t next_expire_max)
 {
-    struct timespec now;
-    struct timespec delta;
-    netroute_t *route;
-    netroute_t *next;
-    bool deleted = false;
+    struct netroute_expired_cmp_eq_ctx ctx;
+    size_t removed_count;
 
-    oshd_gettime(&now);
+    oshd_gettime(&ctx.now);
+    ctx.next_expire = next_expire;
+
     *next_expire = next_expire_max;
-    for (size_t i = 0; i < table->heads_count; ++i) {
-        route = table->heads[i];
-
-        while (route) {
-            next = route->next;
-
-            timespecsub(&route->expire_after, &now, &delta);
-            if (delta.tv_sec < 0) {
-                if (route->can_expire) {
-                    netroute_del(table, route);
-                    deleted = true;
-                }
-            } else {
-                if (delta.tv_sec < *next_expire)
-                    *next_expire = delta.tv_sec + 1;
-            }
-
-            route = next;
-        }
-    }
+    removed_count = hashtable_remove_value_ctx(table->ht, netroute_expired_cmp_eq, &ctx);
 
     if (*next_expire <= 0 || *next_expire > next_expire_max)
         *next_expire = next_expire_max;
 
-    return deleted;
+    return removed_count != 0;
 }
 
 // Dump all routes to outfile
@@ -535,7 +458,9 @@ void netroute_dump_to(netroute_table_t *table, FILE *outfile)
 {
     char addrw[NETADDR_ADDRSTRLEN];
 
-    foreach_netroute_const(route, table, i) {
+    hashtable_foreach_const(item, table->ht, it) {
+        const netroute_t *route = (const netroute_t *) item->value;
+
         netaddr_ntop(addrw, sizeof(addrw), &route->addr);
         fprintf(outfile, "\t%s owned by %s\n",
             addrw, netroute_owner_name(route));

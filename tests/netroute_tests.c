@@ -4,15 +4,6 @@
 
 #define fuzz_seed (0)
 
-Test(netroute_table_t, invalid_table_size)
-{
-    netroute_table_t *table = netroute_table_create(0);
-
-    cr_assert_not_null(table);
-    cr_assert_eq(table->heads_count, 1);
-    netroute_table_free(table);
-}
-
 static void rand_bytes(void *ptr, size_t size)
 {
     for (size_t i = 0; i < size; ++i)
@@ -38,8 +29,7 @@ static void rand_addr(netaddr_t *addr)
     }
 }
 
-static void fuzz_netroute_table(const size_t size, const size_t addr_count,
-    const uint32_t seed)
+static void fuzz_netroute_table(const size_t addr_count, const uint32_t seed)
 {
     netroute_table_t *table;
     const netroute_t *route;
@@ -49,13 +39,10 @@ static void fuzz_netroute_table(const size_t size, const size_t addr_count,
     zero_ts.tv_sec = 0;
     zero_ts.tv_nsec = 0;
     srand(seed);
-    table = netroute_table_create(size);
+    table = netroute_table_create();
 
     cr_assert_not_null(table);
-    cr_assert_not_null(table->heads);
-    cr_assert_eq(table->heads_count, size);
-    for (size_t i = 0; i < table->heads_count; ++i)
-        cr_assert_null(table->heads[i]);
+    cr_assert_not_null(table->ht);
 
     cr_assert_eq(table->total_routes, 0);
     cr_assert_eq(table->total_owned_routes, 0);
@@ -69,7 +56,6 @@ static void fuzz_netroute_table(const size_t size, const size_t addr_count,
 
         cr_assert_not_null(route);
         cr_assert_eq(netaddr_eq(&route->addr, &addr), true);
-        cr_assert_eq(route->addr_hash, netroute_hash(table, &addr));
         if (can_expire) {
             cr_assert_neq(route->expire_after.tv_sec, zero_ts.tv_sec);
             cr_assert_neq(route->expire_after.tv_nsec, zero_ts.tv_nsec);
@@ -95,34 +81,24 @@ static void fuzz_netroute_table(const size_t size, const size_t addr_count,
     netroute_table_free(table);
 }
 
-Test(netroute_table_t, fuzz_table_size_1_with_16384_addr)
+Test(netroute_table_t, fuzz_table_100_addr)
 {
-    fuzz_netroute_table(1, 16384, fuzz_seed);
+    fuzz_netroute_table(100, fuzz_seed);
 }
 
-Test(netroute_table_t, fuzz_table_size_128_with_16384_addr)
+Test(netroute_table_t, fuzz_table_1000_addr)
 {
-    fuzz_netroute_table(128, 16384, fuzz_seed);
+    fuzz_netroute_table(1000, fuzz_seed);
 }
 
-Test(netroute_table_t, fuzz_table_size_512_with_16384_addr)
+Test(netroute_table_t, fuzz_table_16384_addr)
 {
-    fuzz_netroute_table(512, 16384, fuzz_seed);
-}
-
-Test(netroute_table_t, fuzz_table_size_1024_with_16384_addr)
-{
-    fuzz_netroute_table(1024, 16384, fuzz_seed);
-}
-
-Test(netroute_table_t, fuzz_table_size_4096_with_16384_addr)
-{
-    fuzz_netroute_table(4096, 16384, fuzz_seed);
+    fuzz_netroute_table(16384, fuzz_seed);
 }
 
 Test(netroute_table_t, route_masks_order)
 {
-    netroute_table_t *table = netroute_table_create(4096);
+    netroute_table_t *table = netroute_table_create();
     netaddr_t nets[32];
     netaddr_t addr;
 
@@ -150,7 +126,7 @@ Test(netroute_table_t, route_masks_order)
 
 Test(netroute_table_t, lookup_ipv4_networks)
 {
-    netroute_table_t *table = netroute_table_create(4096);
+    netroute_table_t *table = netroute_table_create();
     node_id_t *owners[3];
     netaddr_t nets[3];
     netaddr_t addr;

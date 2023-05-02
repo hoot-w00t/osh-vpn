@@ -206,5 +206,11 @@ bool hashtable_default_value_cmp_eq(const void *s1, size_t s1_len,
 
 // Wrappers to set hash functions to use
 bool hashtable_use_murmur3_32(hashtable_t *ht, uint32_t seed);
+bool hashtable_use_netaddr(hashtable_t *ht, uint32_t seed);
+
+// Wrappers to create hash table with netaddr key comparator and netaddr hash function
+hashtable_t *hashtable_create_netaddr(size_t table_size, uint32_t hash_seed);
+hashtable_t *hashtable_create_netaddr_autoresize(size_t max_depth,
+    size_t min_size, size_t max_size, uint32_t hash_seed);
 
 #endif
