@@ -403,8 +403,11 @@ hashtable_item_t *hashtable_insert_ptr(hashtable_t *ht, const void *key, size_t 
 // linked list
 static void _hashtable_remove(hashtable_t *ht, hashtable_item_t **it)
 {
-    hashtable_item_t *item = *it;
+    hashtable_item_t *item;
 
+    assert(it != NULL);
+    assert(*it != NULL);
+    item = *it;
     *it = (*it)->next;
     ht->item_count -= 1;
     if (ht->remove_cb)
@@ -479,14 +482,11 @@ size_t hashtable_remove_value(hashtable_t *ht, const void *value, size_t valuele
 void hashtable_clear(hashtable_t *ht)
 {
     for (size_t i = 0; i < ht->table_size; ++i) {
-        while (ht->table[i] != NULL) {
-            hashtable_item_t *item = ht->table[i];
+        hashtable_item_t **it = &ht->table[i];
 
-            ht->table[i] = ht->table[i]->next;
-            hashtable_item_free(item);
-        }
+        while (*it)
+            _hashtable_remove(ht, it);
     }
-    ht->item_count = 0;
     _hashtable_autoshrink(ht);
 }
 

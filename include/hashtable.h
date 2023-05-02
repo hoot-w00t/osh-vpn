@@ -185,8 +185,7 @@ size_t hashtable_remove_value_ctx(hashtable_t *ht,
 size_t hashtable_remove_value(hashtable_t *ht, const void *value, size_t valuelen,
     hashtable_value_cmp_eq_t value_cmp_eq);
 
-// Clear all items from the hash table
-// This function does not fire the remove callback
+// Remove all items from the hash table
 void hashtable_clear(hashtable_t *ht);
 
 // Default key comparator function (compare pointers data)
