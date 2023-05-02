@@ -129,7 +129,7 @@ void hashtable_autoexpand(hashtable_t *ht, size_t max_depth, size_t max_size);
 //   50% of the allocated space is unused
 //
 // If max_depth is 0 automatic shrinking is disabled
-// The hash table size will not be shrinked below min_size (can be set to 0)
+// The hash table size will not be shrunk below min_size (can be set to 0)
 void hashtable_autoshrink(hashtable_t *ht, size_t max_depth, size_t min_size);
 #define hashtable_autoshrink_disable(ht) hashtable_autoshrink(ht, 0, 0)
 
