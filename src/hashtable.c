@@ -263,6 +263,8 @@ void hashtable_remove_hashfunc(hashtable_t *ht)
 
 void hashtable_resize(hashtable_t *ht, size_t new_table_size)
 {
+    new_table_size = hashtable_minsize(new_table_size);
+
     // Don't do anything if the size stays the same
     if (ht->table_size != new_table_size)
         hashtable_reallocate(ht, new_table_size);

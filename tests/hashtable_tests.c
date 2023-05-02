@@ -51,7 +51,7 @@ static void test_hashtable(hashtable_t *ht)
     cr_assert_eq(ht->item_count, (n / 2) - 1);
 }
 
-Test(hashtable, test_hashtable_insertion)
+Test(hashtable_t, test_hashtable_insertion)
 {
     hashtable_t *ht = hashtable_create(0, NULL);
 
@@ -59,5 +59,34 @@ Test(hashtable, test_hashtable_insertion)
     test_hashtable(ht);
     hashtable_use_murmur3_32(ht, 0);
     test_hashtable(ht);
+    hashtable_free(ht);
+}
+
+Test(hashtable_t, test_invalid_table_size)
+{
+    hashtable_t *ht = hashtable_create(0, NULL);
+
+    cr_assert_not_null(ht);
+    cr_assert_gt(ht->table_size, 0);
+    hashtable_resize(ht, 2);
+    cr_assert_eq(ht->table_size, 2);
+    hashtable_resize(ht, 0);
+    cr_assert_gt(ht->table_size, 0);
+    hashtable_free(ht);
+}
+
+Test(hashtable_t, test_hashtable_resize)
+{
+    hashtable_t *ht = hashtable_create(1, NULL);
+
+    cr_assert_eq(ht->table_size, 1);
+    for (size_t i = 1; i <= 1024; ++i) {
+        hashtable_resize(ht, i);
+        cr_assert_eq(ht->table_size, i);
+    }
+    for (size_t i = 1024; i > 0; --i) {
+        hashtable_resize(ht, i);
+        cr_assert_eq(ht->table_size, i);
+    }
     hashtable_free(ht);
 }
