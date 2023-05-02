@@ -257,6 +257,7 @@ void netroute_table_free(netroute_table_t *table)
     if (table) {
         logger_debug(DBG_NETROUTE, "Freeing table %p", table);
         netroute_table_clear(table);
+        hashtable_free(table->ht);
         netroute_mask_free_all(table->masks_mac);
         netroute_mask_free_all(table->masks_ip4);
         netroute_mask_free_all(table->masks_ip6);
