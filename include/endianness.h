@@ -92,19 +92,19 @@
         #endif
 
         #define htole16(x)  (x)
-        #define letoh16(x)  (x)
+        #define le16toh(x)  (x)
         #define htobe16(x)  osh_bswap16(x)
-        #define betoh16(x)  osh_bswap16(x)
+        #define be16toh(x)  osh_bswap16(x)
 
         #define htole32(x)  (x)
-        #define letoh32(x)  (x)
+        #define le32toh(x)  (x)
         #define htobe32(x)  osh_bswap32(x)
-        #define betoh32(x)  osh_bswap32(x)
+        #define be32toh(x)  osh_bswap32(x)
 
         #define htole64(x)  (x)
-        #define letoh64(x)  (x)
+        #define le64toh(x)  (x)
         #define htobe64(x)  osh_bswap64(x)
-        #define betoh64(x)  osh_bswap64(x)
+        #define be64toh(x)  osh_bswap64(x)
 
     #elif (_OSH_ENDIANNESS == _OSH_ENDIANNESS_BIG)
         // Big-endian
@@ -114,19 +114,19 @@
         #endif
 
         #define htole16(x)  osh_bswap16(x)
-        #define letoh16(x)  osh_bswap16(x)
+        #define le16toh(x)  osh_bswap16(x)
         #define htobe16(x)  (x)
-        #define betoh16(x)  (x)
+        #define be16toh(x)  (x)
 
         #define htole32(x)  osh_bswap32(x)
-        #define letoh32(x)  osh_bswap32(x)
+        #define le32toh(x)  osh_bswap32(x)
         #define htobe32(x)  (x)
-        #define betoh32(x)  (x)
+        #define be32toh(x)  (x)
 
         #define htole64(x)  osh_bswap64(x)
-        #define letoh64(x)  osh_bswap64(x)
+        #define le64toh(x)  osh_bswap64(x)
         #define htobe64(x)  (x)
-        #define betoh64(x)  (x)
+        #define be64toh(x)  (x)
     #else
         #error "Unknown _OSH_ENDIANNESS value"
     #endif
