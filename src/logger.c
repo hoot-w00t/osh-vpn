@@ -1,7 +1,9 @@
 #include "logger.h"
+#include "macros_assert.h"
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <pthread.h>
 
 static bool enabled_debug[debug_what_size] = {0};
 static const char *debug_names[debug_what_size] = {
@@ -31,10 +33,26 @@ static const char *level_names[loglevel_size] = {
     "Info"
 };
 
+static pthread_mutex_t logger_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// Lock logger mutex
+static void logger_lock(void)
+{
+    assert(pthread_mutex_lock(&logger_mutex) == 0);
+}
+
+// Unlock logger mutex
+static void logger_unlock(void)
+{
+    assert(pthread_mutex_unlock(&logger_mutex) == 0);
+}
+
 // Set logging level
 void logger_set_level(loglevel_t level)
 {
+    logger_lock();
     logger_level = level;
+    logger_unlock();
 }
 
 // Set logging level by name
@@ -52,7 +70,11 @@ bool logger_set_level_name(const char *name)
 // Returns the current logging level
 loglevel_t logger_get_level(void)
 {
-    return logger_level;
+    logger_lock();
+    loglevel_t value = logger_level;
+    logger_unlock();
+
+    return value;
 }
 
 // Returns the logging level name
@@ -64,8 +86,10 @@ const char *logger_get_level_name(loglevel_t level)
 // Toggle debugging for what
 void logger_toggle_debug(debug_what_t what)
 {
+    logger_lock();
     if (what < debug_what_size)
         enabled_debug[what] = !enabled_debug[what];
+    logger_unlock();
 }
 
 // Toggle debugging for *name
@@ -90,14 +114,18 @@ const char *logger_get_debug_name(debug_what_t what)
 // Returns true if what is being debugged
 bool logger_is_debugged(debug_what_t what)
 {
-    return enabled_debug[what];
+    logger_lock();
+    bool value = enabled_debug[what];
+    logger_unlock();
+
+    return value;
 }
 
 static void logger_print(const char *level, const char *format, va_list ap)
 {
     const time_t curr_time = time(NULL);
-    static char fmt_buf[256];
-    static char time_buf[32];
+    char fmt_buf[256];
+    char time_buf[32];
 
     strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S",
         localtime(&curr_time));
@@ -112,11 +140,13 @@ void logger(loglevel_t level, const char *format, ...)
 {
     va_list ap;
 
+    logger_lock();
     if (level <= logger_level) {
         va_start(ap, format);
         logger_print(level_names[level], format, ap);
         va_end(ap);
     }
+    logger_unlock();
 }
 
 // Log a message if what is being debugged
@@ -126,10 +156,12 @@ void logger_debug(debug_what_t what, const char *format, ...)
     va_list ap;
     char level[48];
 
+    logger_lock();
     if (enabled_debug[what]) {
         va_start(ap, format);
         snprintf(level, sizeof(level), "Debug: %s", logger_get_debug_name(what));
         logger_print(level, format, ap);
         va_end(ap);
     }
+    logger_unlock();
 }
