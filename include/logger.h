@@ -3,6 +3,8 @@
 
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
 typedef enum loglevel {
     LOG_CRIT = 0,
@@ -43,6 +45,9 @@ void logger_toggle_debug(debug_what_t what);
 bool logger_toggle_debug_name(const char *name);
 const char *logger_get_debug_name(debug_what_t what);
 bool logger_is_debugged(debug_what_t what);
+
+size_t logger_write_msg(const char *msg, bool is_error);
+size_t logger_write_uint(uintmax_t value, bool is_error);
 
 #ifdef __USE_MINGW_ANSI_STDIO
 #define _logger_fmt gnu_printf
