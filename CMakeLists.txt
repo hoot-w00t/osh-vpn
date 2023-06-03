@@ -234,6 +234,8 @@ set(OSHD_SOURCES
     src/oshpacket.c
     src/random_xoshiro256.c
     src/random.c
+    src/signals_callbacks.c
+    src/signals.c
     src/sock.c
     src/tcp.c
     src/xalloc.c

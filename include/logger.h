@@ -25,6 +25,7 @@ typedef enum debug_what {
     DBG_NODETREE,
     DBG_CMD,
     DBG_CONF,
+    DBG_SIGNALS,
     DBG_SOCKETS,
     DBG_EVENTS,
     DBG_ENCRYPTION,

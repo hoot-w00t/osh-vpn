@@ -17,6 +17,7 @@ static const char *debug_names[debug_what_size] = {
     "nodetree",
     "cmd",
     "conf",
+    "signals",
     "sockets",
     "events",
     "encryption",

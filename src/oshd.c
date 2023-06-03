@@ -9,6 +9,7 @@
 #include "tcp.h"
 #include "tuntap.h"
 #include "xalloc.h"
+#include "signals.h"
 #include "logger.h"
 #include <stdlib.h>
 #include <string.h>
@@ -18,46 +19,6 @@
 // Global variable
 oshd_t oshd;
 
-// Timeout for aio_poll
-// Never times out by default (-1)
-static ssize_t poll_timeout = -1;
-
-#if PLATFORM_IS_WINDOWS
-static WINBOOL WINAPI exit_handler(__attribute__((unused)) DWORD dwCtrlType)
-{
-    if (oshd.run) {
-        logger_debug(DBG_OSHD, "Received exit signal");
-        oshd_stop();
-    } else {
-        logger(LOG_CRIT, "Uncaught exit signal");
-        exit(EXIT_FAILURE);
-    }
-    return TRUE;
-}
-#else
-#include <signal.h>
-
-// The first time we get a signal, set oshd_run to false
-// If oshd_run is already false, call exit()
-static void oshd_signal_exit(int sig)
-{
-    if (oshd.run) {
-        logger_debug(DBG_OSHD, "Received exit signal");
-        oshd_stop();
-    } else {
-        logger(LOG_CRIT, "Uncaught exit signal: %s", strsignal(sig));
-        exit(EXIT_FAILURE);
-    }
-}
-
-// When we get this signal, dump the digraph of the network to stdout
-static void oshd_signal_digraph(__attribute__((unused)) int sig)
-{
-    logger_debug(DBG_OSHD, "Received digraph signal");
-    node_tree_dump_digraph();
-}
-#endif
-
 // Stop the daemon
 // Set the oshd.run variable to false
 // Then for all nodes: disable reconnection and queue GOODBYE packets
@@ -65,7 +26,6 @@ void oshd_stop(void)
 {
     logger_debug(DBG_OSHD, "Gracefully stopping");
     oshd.run = false;
-    poll_timeout = 1000;
     for (size_t i = 0; i < oshd.clients_count; ++i) {
         client_reconnect_disable(oshd.clients[i]);
         if (oshd.clients[i]->connected) {
@@ -215,13 +175,8 @@ bool oshd_init(void)
     if (oshd.tuntap && !oshd_cmd_execute("DevUp"))
         return false;
 
-#if PLATFORM_IS_WINDOWS
-    SetConsoleCtrlHandler(exit_handler, TRUE);
-#else
-    signal(SIGINT, oshd_signal_exit);
-    signal(SIGTERM, oshd_signal_exit);
-    signal(SIGUSR1, oshd_signal_digraph);
-#endif
+    // Initialize signals (statically defined in signals.c)
+    signal_init(oshd.aio);
 
     return true;
 }
@@ -283,6 +238,7 @@ void oshd_free(void)
     free(oshd.conf_routes);
 
     sock_deinit();
+    signal_deinit();
 }
 
 void oshd_loop(void)
@@ -320,9 +276,8 @@ void oshd_loop(void)
         // Otherwise we have to call the event_process_queued() function each
         // iteration and we timeout aio_poll() for the next timed event
 #ifdef EVENTS_USE_TIMERFD
-        events = aio_poll(oshd.aio, poll_timeout);
+        events = aio_poll(oshd.aio, -1);
 #else
-        // FIXME: Handle poll_timeout
         event_process_queued();
         events = aio_poll(oshd.aio, event_get_timeout_ms());
 #endif
