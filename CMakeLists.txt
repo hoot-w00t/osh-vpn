@@ -71,6 +71,15 @@ set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_CONTACT}")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libssl1.1")
 
 # Libraries
+# pthreads
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+find_package(Threads REQUIRED)
+if (NOT CMAKE_USE_PTHREADS_INIT)
+    message(WARNING "Threads library is not pthread compatible")
+endif()
+list(APPEND OSH_LINK_LIBRARIES Threads::Threads)
+
 # Winsock2 and bcrypt
 if (WIN32)
     list(APPEND OSH_LINK_LIBRARIES wsock32)
