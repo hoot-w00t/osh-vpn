@@ -36,14 +36,14 @@ typedef struct signal_handler {
 } signal_handler_t;
 
 #if PLATFORM_IS_WINDOWS
-    #define DEFAULT_PIPE_WRITE NULL
+    #define INVALID_PIPE_DESC       NULL
 
     static const signal_t _exit_signals[] = {CTRL_C_EVENT, CTRL_BREAK_EVENT, CTRL_CLOSE_EVENT, CTRL_LOGOFF_EVENT, CTRL_SHUTDOWN_EVENT};
 
     #define DIGRAPH_SIGNALS         NULL
     #define DIGRAPH_SIGNALS_COUNT   0
 #else
-    #define DEFAULT_PIPE_WRITE -1
+    #define INVALID_PIPE_DESC       -1
 
     static const signal_t _exit_signals[] = {SIGINT, SIGTERM};
     static const signal_t _digraph_signals[] = {SIGUSR1};
@@ -61,13 +61,13 @@ static signal_handler_t signal_handlers[signal_handlers_count] = {
         .signals = EXIT_SIGNALS,
         .signals_count = EXIT_SIGNALS_COUNT,
         .callback = oshd_signal_exit,
-        .pipe_write = DEFAULT_PIPE_WRITE
+        .pipe_write = INVALID_PIPE_DESC
     },
     {
         .signals = DIGRAPH_SIGNALS,
         .signals_count = DIGRAPH_SIGNALS_COUNT,
         .callback = oshd_signal_digraph,
-        .pipe_write = DEFAULT_PIPE_WRITE
+        .pipe_write = INVALID_PIPE_DESC
     }
 };
 
@@ -166,8 +166,8 @@ static void catch_signal(bool enable, signal_t sig)
 // Signals are always disabled if pipe_write is not valid
 static void catch_signal_handler(bool enable, const signal_handler_t *sh)
 {
-    if (sh->pipe_write == DEFAULT_PIPE_WRITE && enable) {
-        logger_debug(DBG_SIGNALS, "Force disabling signal with default pipe write");
+    if (sh->pipe_write == INVALID_PIPE_DESC && enable) {
+        logger_debug(DBG_SIGNALS, "Force disabling signal with invalid pipe_write");
         enable = false;
     }
 
@@ -182,12 +182,15 @@ static void signal_aio_delete(aio_event_t *event)
     catch_signal_handler(false, sh);
 
 #if PLATFORM_IS_WINDOWS
-    logger_debug(DBG_SIGNALS, "Closing event handle %p", event->read_handle);
-    if (event->read_handle)
+    if (event->read_handle != INVALID_PIPE_DESC) {
+        logger_debug(DBG_SIGNALS, "Closing event handle %p", event->read_handle);
         CloseHandle(event->read_handle);
+    }
 #else
-    logger_debug(DBG_SIGNALS, "Closing read pipe %d", event->fd);
-    close(event->fd);
+    if (event->fd != INVALID_PIPE_DESC) {
+        logger_debug(DBG_SIGNALS, "Closing read pipe %d", event->fd);
+        close(event->fd);
+    }
 #endif
 }
 
@@ -274,7 +277,7 @@ void signal_init(aio_t *aio)
     for (size_t i = 0; i < signal_handlers_count; ++i) {
         signal_handler_t *sh = &signal_handlers[i];
 
-        if (sh->pipe_write == DEFAULT_PIPE_WRITE && sh->signals_count > 0) {
+        if (sh->pipe_write == INVALID_PIPE_DESC && sh->signals_count > 0) {
             assert(sh->signals != NULL);
             if (create_signal_pipe(aio, sh))
                 catch_signal_handler(true, sh);
@@ -294,11 +297,13 @@ void signal_deinit(void)
 #if PLATFORM_IS_WINDOWS
         // pipe_write handle is closed by the AIO event's delete callback
 #else
-        logger_debug(DBG_SIGNALS, "Closing write pipe %d", sh->pipe_write);
-        close(sh->pipe_write);
+        if (sh->pipe_write != INVALID_PIPE_DESC) {
+            logger_debug(DBG_SIGNALS, "Closing write pipe %d", sh->pipe_write);
+            close(sh->pipe_write);
+        }
 #endif
 
-        sh->pipe_write = DEFAULT_PIPE_WRITE;
+        sh->pipe_write = INVALID_PIPE_DESC;
     }
 
     signal_handler_debug = false;
