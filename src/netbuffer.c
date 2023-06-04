@@ -25,14 +25,14 @@ netbuffer_t *netbuffer_create(size_t min_size, size_t alignment)
     nbuf->current_size = nbuf->min_size;
     nbuf->data = xalloc(nbuf->current_size);
     logger_debug(DBG_NETBUFFER, "Created netbuffer %p of %zu bytes, aligned to %zu bytes",
-        nbuf, nbuf->current_size, nbuf->alignment);
+        (void *) nbuf, nbuf->current_size, nbuf->alignment);
     return nbuf;
 }
 
 // Free netbuffer
 void netbuffer_free(netbuffer_t *nbuf)
 {
-    logger_debug(DBG_NETBUFFER, "Netbuffer %p: Freeing %zu bytes", nbuf,
+    logger_debug(DBG_NETBUFFER, "Netbuffer %p: Freeing %zu bytes", (void *) nbuf,
         nbuf->current_size);
     free(nbuf->data);
     free(nbuf);
@@ -44,7 +44,7 @@ void netbuffer_expand(netbuffer_t *nbuf, size_t size)
     const size_t aligned_size = align(size, nbuf->alignment);
 
     logger_debug(DBG_NETBUFFER, "Netbuffer %p: Expanding %zu bytes (unaligned %zu)",
-        nbuf, aligned_size, size);
+        (void *) nbuf, aligned_size, size);
     nbuf->current_size += aligned_size;
     nbuf->data = xrealloc(nbuf->data, nbuf->current_size);
 }
@@ -53,7 +53,7 @@ void netbuffer_expand(netbuffer_t *nbuf, size_t size)
 void netbuffer_shrink(netbuffer_t *nbuf)
 {
     logger_debug(DBG_NETBUFFER, "Netbuffer %p: Shrinking to %zu bytes (from %zu bytes)",
-        nbuf, nbuf->min_size, nbuf->current_size);
+        (void *) nbuf, nbuf->min_size, nbuf->current_size);
     nbuf->current_size = nbuf->min_size;
     nbuf->data = xrealloc(nbuf->data, nbuf->current_size);
 }
@@ -75,7 +75,7 @@ void *netbuffer_reserve(netbuffer_t *nbuf, size_t data_size)
     nbuf->data_size += data_size;
 
     logger_debug(DBG_NETBUFFER, "Netbuffer %p: Reserved %zu bytes (%p)",
-        nbuf, data_size, dataptr);
+        (void *) nbuf, data_size, dataptr);
     return dataptr;
 }
 
@@ -85,7 +85,7 @@ void netbuffer_cancel(netbuffer_t *nbuf, size_t data_size)
 {
     if (data_size >= nbuf->data_size) {
         logger_debug(DBG_NETBUFFER, "Netbuffer %p: Cancelled the last %zu bytes",
-            nbuf, nbuf->data_size);
+            (void *) nbuf, nbuf->data_size);
 
         nbuf->data_size = 0;
 
@@ -94,7 +94,7 @@ void netbuffer_cancel(netbuffer_t *nbuf, size_t data_size)
             netbuffer_shrink(nbuf);
     } else {
         logger_debug(DBG_NETBUFFER, "Netbuffer %p: Cancelled %zu bytes",
-            nbuf, data_size);
+            (void *) nbuf, data_size);
         nbuf->data_size -= data_size;
     }
 }
@@ -106,7 +106,7 @@ void netbuffer_push(netbuffer_t *nbuf, const void *data, size_t data_size)
 
     memcpy(dataptr, data, data_size);
     logger_debug(DBG_NETBUFFER, "Netbuffer %p: Pushed %zu bytes (%p)",
-        nbuf, data_size, dataptr);
+        (void *) nbuf, data_size, dataptr);
 }
 
 // Remove size bytes from the start of the data pointer
@@ -117,7 +117,7 @@ size_t netbuffer_pop(netbuffer_t *nbuf, size_t size)
     // shrink the netbuffer if necessary
     if (size >= nbuf->data_size) {
         logger_debug(DBG_NETBUFFER, "Netbuffer %p: Popped the last %zu bytes",
-            nbuf, nbuf->data_size);
+            (void *) nbuf, nbuf->data_size);
 
         nbuf->data_size = 0;
 
@@ -127,7 +127,7 @@ size_t netbuffer_pop(netbuffer_t *nbuf, size_t size)
     } else {
         // Otherwise we shift the data by size bytes and decrement the data_size
         logger_debug(DBG_NETBUFFER, "Netbuffer %p: Popped %zu/%zu bytes",
-            nbuf, size, nbuf->data_size);
+            (void *) nbuf, size, nbuf->data_size);
 
         nbuf->data_size -= size;
         memmove(nbuf->data, ((uint8_t *) nbuf->data) + size, nbuf->data_size);
