@@ -646,28 +646,27 @@ static bool conf_route_add(const netaddr_t *addr, netaddr_prefixlen_t prefixlen)
 // Route
 static bool oshd_param_route(ecp_t *ecp)
 {
-    char *addrp = NULL;
+    // If length of addrp changes its field width in sscanf() must be updated
+    char addrp[72];
     unsigned int prefixlen;
     netaddr_t addr;
 
     // Separate the address and prefix length
-    if (sscanf(ecp_value(ecp), "%m[^/]/%u", &addrp, &prefixlen) != 2) {
+    memset(addrp, 0, sizeof(addrp));
+    if (sscanf(ecp_value(ecp), "%71[^/]/%u", addrp, &prefixlen) != 2) {
         set_error("Invalid route format");
-        free(addrp);
         return false;
     }
 
     // Parse the address
-    if (!addrp || !netaddr_pton(&addr, addrp)) {
+    if (!netaddr_pton(&addr, addrp)) {
         set_error("Invalid route address");
-        free(addrp);
         return false;
     }
 
     // Verify the prefix length
     if (prefixlen > netaddr_max_prefixlen(addr.type)) {
         set_error("Invalid route prefix length %u", prefixlen);
-        free(addrp);
         return false;
     }
 
@@ -677,7 +676,6 @@ static bool oshd_param_route(ecp_t *ecp)
     } else {
         logger(LOG_WARN, "Ignoring duplicate local route %s/%u", addrp, prefixlen);
     }
-    free(addrp);
     return true;
 }
 
