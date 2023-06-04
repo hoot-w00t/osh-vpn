@@ -17,11 +17,11 @@ Test(netaddr_data_t, netaddr_data_union_pointers)
 {
     netaddr_data_t d;
 
-    cr_assert_eq(&d, d.b);
-    cr_assert_eq(&d, &d.ip4);
-    cr_assert_eq(&d, &d.ip6);
-    cr_assert_eq(&d, &d.ip6_ufast);
-    cr_assert_eq(&d, &d.mac);
+    cr_assert_eq((void *) &d, (void *) d.b);
+    cr_assert_eq((void *) &d, (void *) &d.ip4);
+    cr_assert_eq((void *) &d, (void *) &d.ip6);
+    cr_assert_eq((void *) &d, (void *) &d.ip6_ufast);
+    cr_assert_eq((void *) &d, (void *) &d.mac);
 }
 
 Test(netaddr_dton, test_netaddr_dton)
