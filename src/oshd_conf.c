@@ -37,8 +37,9 @@ typedef struct oshd_conf {
 static char oshd_conf_error[256];
 
 // Macro to snprintf to oshd_conf_error
-#define set_error(fmt, ...) \
-    snprintf(oshd_conf_error, sizeof(oshd_conf_error), fmt, ## __VA_ARGS__)
+#define set_error_fmt(fmt, ...) \
+    snprintf(oshd_conf_error, sizeof(oshd_conf_error), fmt, __VA_ARGS__)
+#define set_error(msg) set_error_fmt("%s", msg)
 
 // Line number of the last error message
 static size_t oshd_conf_error_line_no = 0;
@@ -94,7 +95,7 @@ static bool oshd_conf_load(const char *filename)
 
     // Load the file
     if (!(ec = ec_load_from_file(filename))) {
-        set_error("%s", strerror(errno));
+        set_error_fmt("%s", strerror(errno));
         return false;
     }
 
@@ -114,7 +115,7 @@ static bool oshd_conf_require_selected_node(const ecp_t *ecp)
 {
     if (oshd_conf_has_selected_node())
         return true;
-    set_error("Missing '%s' parameter for '%s'", "Node", ecp_name(ecp));
+    set_error_fmt("Missing '%s' parameter for '%s'", "Node", ecp_name(ecp));
     return false;
 }
 
@@ -199,7 +200,7 @@ static bool oshd_param_keystrust(ecp_t *ecp)
     } else if (!strcasecmp(ecp_value(ecp), "remote")) {
         oshd.remote_auth = true;
     } else {
-        set_error("Invalid KeysTrust: '%s'", ecp_value(ecp));
+        set_error_fmt("Invalid KeysTrust: '%s'", ecp_value(ecp));
         return false;
     }
     logger_debug(DBG_CONF, "%s authentication using remote keys",
@@ -230,11 +231,11 @@ static bool oshd_param_automaticconnectionsinterval(ecp_t *ecp)
     int interval;
 
     if (sscanf(ecp_value(ecp), "%i", &interval) != 1) {
-        set_error("Invalid %s value", ecp_name(ecp));
+        set_error_fmt("Invalid %s value", ecp_name(ecp));
         return false;
     }
     if (interval <= 0) {
-        set_error("%s must be a positive value", ecp_name(ecp));
+        set_error_fmt("%s must be a positive value", ecp_name(ecp));
         return false;
     }
     oshd.automatic_connections_interval = interval;
@@ -249,11 +250,11 @@ static bool oshd_param_automaticconnectionspercent(ecp_t *ecp)
     int percent;
 
     if (sscanf(ecp_value(ecp), "%i", &percent) != 1) {
-        set_error("Invalid %s value", ecp_name(ecp));
+        set_error_fmt("Invalid %s value", ecp_name(ecp));
         return false;
     }
     if (percent <= 0 || percent > 100) {
-        set_error("%s must be a value between 0 and 100 (excluded)", ecp_name(ecp));
+        set_error_fmt("%s must be a value between 0 and 100 (excluded)", ecp_name(ecp));
         return false;
     }
     oshd.automatic_connections_percent = percent;
@@ -272,7 +273,7 @@ static bool oshd_param_port(ecp_t *ecp)
         return false;
     }
     if (port <= 0 || port > 65535) {
-        set_error("Invalid port: %i", port);
+        set_error_fmt("Invalid port: %i", port);
         return false;
     }
     oshd.server_port = port;
@@ -397,11 +398,11 @@ static bool oshd_param_reconnectdelaymin(ecp_t *ecp)
     int delay;
 
     if (sscanf(ecp_value(ecp), "%i", &delay) != 1) {
-        set_error("Invalid %s value", ecp_name(ecp));
+        set_error_fmt("Invalid %s value", ecp_name(ecp));
         return false;
     }
     if (oshd.reconnect_delay_min <= 0) {
-        set_error("%s cannot be of 0 seconds or less", ecp_name(ecp));
+        set_error_fmt("%s cannot be of 0 seconds or less", ecp_name(ecp));
         return false;
     }
     oshd.reconnect_delay_min = delay;
@@ -416,11 +417,11 @@ static bool oshd_param_reconnectdelaymax(ecp_t *ecp)
     int delay;
 
     if (sscanf(ecp_value(ecp), "%i", &delay) != 1) {
-        set_error("Invalid %s value", ecp_name(ecp));
+        set_error_fmt("Invalid %s value", ecp_name(ecp));
         return false;
     }
     if (oshd.reconnect_delay_max <= 0) {
-        set_error("%s cannot be of 0 seconds or less", ecp_name(ecp));
+        set_error_fmt("%s cannot be of 0 seconds or less", ecp_name(ecp));
         return false;
     }
     oshd.reconnect_delay_max = delay;
@@ -435,7 +436,7 @@ static bool oshd_param_connectionslimit(ecp_t *ecp)
     unsigned int limit;
 
     if (sscanf(ecp_value(ecp), "%u", &limit) != 1) {
-        set_error("Invalid %s value", ecp_name(ecp));
+        set_error_fmt("Invalid %s value", ecp_name(ecp));
         return false;
     }
     oshd.clients_count_max = limit;
@@ -457,7 +458,7 @@ static bool oshd_param_digraphfile(ecp_t *ecp)
 static bool oshd_param_loglevel(ecp_t *ecp)
 {
     if (!logger_set_level_name(ecp_value(ecp))) {
-        set_error("Invalid LogLevel: %s", ecp_value(ecp));
+        set_error_fmt("Invalid LogLevel: %s", ecp_value(ecp));
         return false;
     }
     logger_debug(DBG_CONF, "Set LogLevel to %s",
@@ -472,7 +473,7 @@ static bool oshd_param_include(ecp_t *ecp)
 
     if (!oshd_conf_load(ecp_value(ecp))) {
         tmp = xstrdup(oshd_conf_error);
-        set_error("Failed to include '%s': %s", ecp_value(ecp), tmp);
+        set_error_fmt("Failed to include '%s': %s", ecp_value(ecp), tmp);
         free(tmp);
         return false;
     }
@@ -525,7 +526,7 @@ static bool oshd_param_privatekeyfile(ecp_t *ecp)
     }
 
     if (!(oshd.privkey = pkey_load_privkey_pem(filename))) {
-        set_error("Failed to load private key from '%s'", filename);
+        set_error_fmt("Failed to load private key from '%s'", filename);
         return false;
     }
 
@@ -545,27 +546,27 @@ static bool conf_pubkey_add(const char *node_name, const char *pubkey64)
 
     // Verify that the node's name is valid
     if (!node_valid_name(node_name)) {
-        set_error("Invalid node name: '%s'", node_name);
+        set_error_fmt("Invalid node name: '%s'", node_name);
         goto end;
     }
 
     // Verify that there is a public key
     pubkey64_size = pubkey64 ? strlen(pubkey64) : 0;
     if (pubkey64_size == 0) {
-        set_error("%s does not have a public key", node_name);
+        set_error_fmt("%s does not have a public key", node_name);
         goto end;
     }
 
     // Decode the Base64 public key
     pubkey = xzalloc(BASE64_DECODE_OUTSIZE(pubkey64_size));
     if (!base64_decode(pubkey, &pubkey_size, pubkey64, pubkey64_size)) {
-        set_error("Failed to decode public key for %s", node_name);
+        set_error_fmt("Failed to decode public key for %s", node_name);
         goto end;
     }
 
     // Load it
     if (!(pkey = pkey_load_ed25519_pubkey(pubkey, pubkey_size))) {
-        set_error("Failed to load public key for %s", node_name);
+        set_error_fmt("Failed to load public key for %s", node_name);
         goto end;
     }
 
@@ -573,7 +574,7 @@ static bool conf_pubkey_add(const char *node_name, const char *pubkey64)
     // duplicates
     for (size_t i = 0; i < oshd.conf_pubkeys_size; ++i) {
         if (!strcmp(oshd.conf_pubkeys[i].node_name, node_name)) {
-            set_error("A public key was already loaded for %s", node_name);
+            set_error_fmt("A public key was already loaded for %s", node_name);
             goto end;
         }
     }
@@ -646,28 +647,27 @@ static bool conf_route_add(const netaddr_t *addr, netaddr_prefixlen_t prefixlen)
 // Route
 static bool oshd_param_route(ecp_t *ecp)
 {
-    char *addrp = NULL;
+    // If length of addrp changes its field width in sscanf() must be updated
+    char addrp[72];
     unsigned int prefixlen;
     netaddr_t addr;
 
     // Separate the address and prefix length
-    if (sscanf(ecp_value(ecp), "%m[^/]/%u", &addrp, &prefixlen) != 2) {
+    memset(addrp, 0, sizeof(addrp));
+    if (sscanf(ecp_value(ecp), "%71[^/]/%u", addrp, &prefixlen) != 2) {
         set_error("Invalid route format");
-        free(addrp);
         return false;
     }
 
     // Parse the address
-    if (!addrp || !netaddr_pton(&addr, addrp)) {
+    if (!netaddr_pton(&addr, addrp)) {
         set_error("Invalid route address");
-        free(addrp);
         return false;
     }
 
     // Verify the prefix length
     if (prefixlen > netaddr_max_prefixlen(addr.type)) {
-        set_error("Invalid route prefix length %u", prefixlen);
-        free(addrp);
+        set_error_fmt("Invalid route prefix length %u", prefixlen);
         return false;
     }
 
@@ -677,7 +677,6 @@ static bool oshd_param_route(ecp_t *ecp)
     } else {
         logger(LOG_WARN, "Ignoring duplicate local route %s/%u", addrp, prefixlen);
     }
-    free(addrp);
     return true;
 }
 
@@ -848,13 +847,13 @@ bool oshd_load_conf(const char *filename)
                 if (   oshd_conf_params[i].type == VALUE_NONE
                     && ecp_value(ecp))
                 {
-                    set_error("%s does not take a value", oshd_conf_params[i].name);
+                    set_error_fmt("%s does not take a value", oshd_conf_params[i].name);
                     load_error = true;
                     break;
                 } else if (   oshd_conf_params[i].type == VALUE_REQUIRED
                            && !ecp_value(ecp))
                 {
-                    set_error("%s requires a value", oshd_conf_params[i].name);
+                    set_error_fmt("%s requires a value", oshd_conf_params[i].name);
                     load_error = true;
                     break;
                 }
@@ -866,7 +865,7 @@ bool oshd_load_conf(const char *filename)
         }
 
         if (!found) {
-            set_error("Invalid parameter: %s", ecp_name(ecp));
+            set_error_fmt("Invalid parameter: %s", ecp_name(ecp));
             load_error = true;
         }
 

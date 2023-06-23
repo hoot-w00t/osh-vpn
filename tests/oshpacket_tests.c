@@ -223,7 +223,8 @@ Test(oshpacket_devmode_t, check_dynamic_devmode_packet_struct)
     oshpacket_devmode_dynamic_t *dyn = (oshpacket_devmode_dynamic_t *) buf;
 
     cr_assert_eq(sizeof(*regular), sizeof(dyn->devmode_pkt));
-    cr_assert_eq(&dyn->network_name, ((uint8_t *) regular) + sizeof(*regular));
+    cr_assert_eq((void *) &dyn->network_name,
+        (void *) (((uint8_t *) regular) + sizeof(*regular)));
 }
 
 Test(oshpacket_t, oshpacket_init)

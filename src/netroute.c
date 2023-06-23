@@ -166,7 +166,7 @@ static netroute_mask_t *netroute_add_mask(netroute_table_t *table,
 
         netaddr_ntop(addrw, sizeof(addrw), &rmask->mask);
         logger_debug(DBG_NETROUTE, "Added mask %s/%u to %p",
-            addrw, rmask->prefixlen, table);
+            addrw, rmask->prefixlen, (void *) table);
     }
 
     return *it;
@@ -196,7 +196,7 @@ static bool netroute_del_mask(netroute_table_t *table, netroute_mask_t *rmask)
 
                 netaddr_ntop(addrw, sizeof(addrw), &rmask->mask);
                 logger_debug(DBG_NETROUTE, "Deleted mask %s/%u from %p",
-                    addrw, rmask->prefixlen, table);
+                    addrw, rmask->prefixlen, (void *) table);
             }
 
             netroute_mask_free(rmask);
@@ -236,7 +236,7 @@ static void netroute_ht_remove_cb(hashtable_item_t *item, void *data)
 
         netaddr_ntop(addrw, sizeof(addrw), &route->addr);
         logger_debug(DBG_NETROUTE, "Deleted %s/%u owned by %s from %p",
-            addrw, route->prefixlen, netroute_owner_name(route), table);
+            addrw, route->prefixlen, netroute_owner_name(route), (void *) table);
     }
 }
 
@@ -247,7 +247,7 @@ netroute_table_t *netroute_table_create(void)
 
     table->ht = hashtable_create_netaddr_autoresize(32, 32768, 4, 0);
     hashtable_set_remove_cb(table->ht, netroute_ht_remove_cb, table);
-    logger_debug(DBG_NETROUTE, "Created table %p", table);
+    logger_debug(DBG_NETROUTE, "Created table %p", (void *) table);
     return table;
 }
 
@@ -255,7 +255,7 @@ netroute_table_t *netroute_table_create(void)
 void netroute_table_free(netroute_table_t *table)
 {
     if (table) {
-        logger_debug(DBG_NETROUTE, "Freeing table %p", table);
+        logger_debug(DBG_NETROUTE, "Freeing table %p", (void *) table);
         netroute_table_clear(table);
         hashtable_free(table->ht);
         netroute_mask_free_all(table->masks_mac);
@@ -268,7 +268,7 @@ void netroute_table_free(netroute_table_t *table)
 // Delete all routes from the table
 void netroute_table_clear(netroute_table_t *table)
 {
-    logger_debug(DBG_NETROUTE, "Clearing table %p", table);
+    logger_debug(DBG_NETROUTE, "Clearing table %p", (void *) table);
     hashtable_clear(table->ht);
 }
 
@@ -371,7 +371,7 @@ const netroute_t *netroute_add(netroute_table_t *table,
         netaddr_ntop(addrw, sizeof(addrw), &route->addr);
         logger_debug(DBG_NETROUTE, "Added %s/%u owned by %s (%s expire) to %p",
             addrw, route->prefixlen, netroute_owner_name(route),
-            route->can_expire ? "can" : "cannot", table);
+            route->can_expire ? "can" : "cannot", (void *) table);
     }
 
     return route;

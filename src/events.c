@@ -124,7 +124,7 @@ void event_process_queued(void)
 
         // Handle the current event
         logger_debug(DBG_EVENTS, "Processing %s event %p (delay %" PRI_TIME_T ".%09lis)",
-            event->name, event, (pri_time_t) diff.tv_sec, diff.tv_nsec);
+            event->name, (void *) event, (pri_time_t) diff.tv_sec, diff.tv_nsec);
 
         new_delay = event->handler(event, &diff, event->userdata);
 
@@ -238,7 +238,7 @@ event_t *event_create(
 {
     event_t *event = xzalloc(sizeof(event_t));
 
-    logger_debug(DBG_EVENTS, "Creating %s event %p", name, event);
+    logger_debug(DBG_EVENTS, "Creating %s event %p", name, (void *) event);
     strncpy(event->name, name, sizeof(event->name) - 1);
     event->handler = handler;
     event->freedata = freedata;
@@ -249,7 +249,7 @@ event_t *event_create(
 // Free *event and its resources
 void event_free(event_t *event)
 {
-    logger_debug(DBG_EVENTS, "Freeing %s event %p", event->name, event);
+    logger_debug(DBG_EVENTS, "Freeing %s event %p", event->name, (void *) event);
     if (event->freedata)
         event->freedata(event, event->userdata);
     free(event);
@@ -267,7 +267,7 @@ static bool event_unqueue(event_t *event)
         if ((*i) == event) {
             // We found the event to remove
             logger_debug(DBG_EVENTS, "Unqueuing %s event %p",
-                event->name, event);
+                event->name, (void *) event);
 
             // Replace the next event pointed to by i to the one that will come
             // after
@@ -330,7 +330,7 @@ void event_queue_in(event_t *event, time_t delay)
             // return now as no changes will be made
             logger_debug(DBG_EVENTS,
                 "Queuing %s event %p in %" PRI_TIME_T EVENT_DELAY_UNIT " (no changes)",
-                event->name, event, (pri_time_t) delay);
+                event->name, (void *) event, (pri_time_t) delay);
             return;
         }
 
@@ -342,7 +342,7 @@ void event_queue_in(event_t *event, time_t delay)
     // Set the trigger time and queue the event
     event->trigger_at = trigger_at;
     logger_debug(DBG_EVENTS, "Queuing %s event %p in %" PRI_TIME_T EVENT_DELAY_UNIT,
-        event->name, event, (pri_time_t) delay);
+        event->name, (void *) event, (pri_time_t) delay);
 
     // Sort the events by their trigger time (ascending)
     while (*i) {
@@ -376,13 +376,13 @@ void event_cancel(event_t *event)
     if (event_unqueue(event)) {
         // The event was successfully removed from the queue
         logger_debug(DBG_EVENTS, "Canceling %s event %p",
-            event->name, event);
+            event->name, (void *) event);
         event_free(event);
     } else {
         // This should not happen, if it does something went wrong
         logger(LOG_CRIT,
             "Failed to cancel %s event %p: It was not found in the queue",
-            event->name, event);
+            event->name, (void *) event);
     }
 }
 

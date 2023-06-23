@@ -853,7 +853,7 @@ endpoint_t *endpoint_group_select_next(endpoint_group_t *group)
 {
     if (group->selected) {
         logger_debug(DBG_ENDPOINTS, "%s: Select next endpoint (%p -> %p)",
-            group->debug_id, group->selected, group->selected->next);
+            group->debug_id, (void *) group->selected, (void *) group->selected->next);
 
         group->selected = group->selected->next;
     }
@@ -865,7 +865,7 @@ endpoint_t *endpoint_group_select_first(endpoint_group_t *group)
 {
     if (group->selected != group->head) {
         logger_debug(DBG_ENDPOINTS, "%s: Select first endpoint (%p)",
-            group->debug_id, group->head);
+            group->debug_id, (void *) group->head);
 
         group->selected = group->head;
     }

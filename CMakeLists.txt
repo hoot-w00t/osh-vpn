@@ -289,10 +289,14 @@ install(TARGETS oshd RUNTIME)
 
 # Global compiler flags
 add_compiler_flag(CMAKE_C_FLAGS -pipe)
+add_compiler_flag(CMAKE_C_FLAGS -pedantic)
 add_compiler_flags(CMAKE_C_FLAGS -Wall -Wextra -Wshadow)
 add_compiler_flags(CMAKE_C_FLAGS -Wformat-security -Wformat-signedness)
 add_compiler_flags(CMAKE_C_FLAGS -Wcast-qual -Wpointer-arith -Wwrite-strings)
 add_compiler_flags(CMAKE_C_FLAGS -Wduplicated-branches -Wduplicated-cond)
+
+# Disable newline-eof warnings
+add_compiler_flag(CMAKE_C_FLAGS -Wno-newline-eof)
 
 if (CYGWIN)
     add_compiler_flag_nocheck(CMAKE_C_FLAGS "-D_GNU_SOURCE")
