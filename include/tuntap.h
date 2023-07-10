@@ -154,6 +154,7 @@ bool tuntap_nonblock(int fd);
 
 tuntap_t *tuntap_empty(const struct tuntap_drv *drv, const bool is_tap);
 
+void tuntap_generate_devname(char *dest, size_t dest_maxsize, const char *name_prefix);
 void tuntap_set_devname(tuntap_t *tuntap, const char *devname);
 void tuntap_set_devid(tuntap_t *tuntap, const char *devid);
 

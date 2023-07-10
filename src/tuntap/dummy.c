@@ -1,9 +1,5 @@
 #include "tuntap.h"
 #include "logger.h"
-#include "random.h"
-#include <stdio.h>
-#include <string.h>
-#include <inttypes.h>
 
 // Dummy TUN/TAP device that doesn't do anything
 
@@ -55,8 +51,7 @@ tuntap_t *_tuntap_open(const char *devname, bool tap)
     } else {
         char name[32];
 
-        memset(name, 0, sizeof(name));
-        snprintf(name, sizeof(name), "dummy%" PRIu64, random_xoshiro256() % 0x10000);
+        tuntap_generate_devname(name, sizeof(name), "dummy");
         tuntap_set_devname(tuntap, name);
     }
 

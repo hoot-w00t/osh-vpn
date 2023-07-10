@@ -5,9 +5,12 @@
 #include "tuntap.h"
 #include "netdefs/ether.h"
 #include "netdefs/ip.h"
+#include "random.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <inttypes.h>
 
 // Parse TAP packet header to *hdr
 static bool tap_to_packethdr(tuntap_packethdr_t *hdr, const void *packet, size_t packet_size)
@@ -111,6 +114,16 @@ tuntap_t *tuntap_empty(const struct tuntap_drv *drv, const bool is_tap)
 #endif
 
     return tuntap;
+}
+
+// Generate pseudo-random device name
+void tuntap_generate_devname(char *dest, size_t dest_maxsize, const char *name_prefix)
+{
+    int len = snprintf(dest, dest_maxsize, "%s%" PRIu64,
+        name_prefix, random_xoshiro256() % UINT64_C(0x10000));
+
+    if (len <= 0 || (unsigned) len >= dest_maxsize)
+        logger(LOG_WARN, "%s: %s", __func__, "truncated name");
 }
 
 // Set TUN/TAP device name
