@@ -124,6 +124,11 @@ endif()
 
 # TUN/TAP sources
 option(TUNTAP_DISABLE_EMULATION "Disable TUN/TAP emulation layers" OFF)
+if (TUNTAP_DISABLE_EMULATION)
+    set(OSH_TUNTAP_EMULATION_ENABLED OFF)
+else()
+    set(OSH_TUNTAP_EMULATION_ENABLED ON)
+endif()
 
 set(OSH_TUNTAP_SOURCES src/tuntap/common.c)
 set(OSH_TUNTAP_EMU_SOURCES src/tuntap/tun_emu.c)
@@ -133,10 +138,18 @@ if (NOT TUNTAP_DISABLE_EMULATION)
 endif()
 
 if (CYGWIN OR MSYS OR WIN32)
+    set(OSH_TUNTAP_DRIVER "Windows")
     set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} src/tuntap/windows.c "src/tuntap/tap-windows.c")
-else()
+elseif (LINUX)
+    set(OSH_TUNTAP_DRIVER "Linux")
     set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} src/tuntap/linux.c)
+else()
+    message(WARNING "No compatible TUN/TAP driver for this platform")
+    set(OSH_TUNTAP_DRIVER "Dummy")
+    set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} src/tuntap/dummy.c)
 endif()
+message(STATUS "TUN/TAP driver: ${OSH_TUNTAP_DRIVER}")
+message(STATUS "TUN/TAP emulation support: ${OSH_TUNTAP_EMULATION_ENABLED}")
 
 # Async I/O sources
 set(AIO_BACKEND_CONFIGURED "unknown")
