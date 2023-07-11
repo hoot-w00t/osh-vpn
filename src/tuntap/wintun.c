@@ -182,7 +182,7 @@ static WINTUN_ADAPTER_HANDLE create_adapter(struct wintun_ctx *ctx, const char *
     return adapter;
 }
 
-static void logger_callback(
+static void CALLBACK logger_callback(
     WINTUN_LOGGER_LEVEL wt_level,
     __attribute__((unused)) DWORD64 wt_timestamp,
     const WCHAR *wt_message)
