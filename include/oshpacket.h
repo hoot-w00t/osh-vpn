@@ -3,6 +3,7 @@
 
 #include "macros_bitfields.h"
 #include "crypto/cipher.h"
+#include "crypto/hash.h"
 #include "netaddr.h"
 #include "device_mode.h"
 #include <stdint.h>
@@ -48,10 +49,7 @@
 #endif
 
 // The node ID hash is a SHA3-512
-#define NODE_ID_HASH_SIZE (64)
-#if (NODE_ID_HASH_SIZE > EVP_MAX_MD_SIZE)
-#error "NODE_ID_HASH_SIZE is bigger than the maximum message digest size"
-#endif
+#define NODE_ID_HASH_SIZE (HASH_SHA3_512_SIZE)
 
 #define OSHPACKET_PAYLOAD_MAXSIZE (2048)
 

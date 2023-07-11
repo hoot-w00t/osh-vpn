@@ -131,11 +131,10 @@ void device_add(tuntap_t *tuntap)
 
 // Compute a hash using the network name, node name and the seed
 // This is used to create pseudo-random stable IP addresses
-static void stable_addr_hash(uint8_t dest[EVP_MAX_MD_SIZE], size_t seed)
+static void stable_addr_hash(uint8_t dest[HASH_SHA3_512_SIZE], size_t seed)
 {
     char str[(NODE_NAME_SIZE * 2) + 32];
     int r;
-    unsigned int h_size;
 
     memset(str, 0, sizeof(str));
 
@@ -144,8 +143,8 @@ static void stable_addr_hash(uint8_t dest[EVP_MAX_MD_SIZE], size_t seed)
     if (r <= 0 || r == sizeof(str))
         logger(LOG_WARN, "stable_addr_hash: truncated string");
 
-    memset(dest, 0, EVP_MAX_MD_SIZE);
-    hash_sha3_512(str, strlen(str), dest, &h_size);
+    memset(dest, 0, HASH_SHA3_512_SIZE);
+    hash_oneshot(HASH_SHA3_512, dest, HASH_SHA3_512_SIZE, str, strlen(str));
 }
 
 // Initialize other member variables of a dynamic address using its address
@@ -187,11 +186,10 @@ static void dynamic_addr_v4(netaddr_t *addr, const void *data, size_t data_len)
 // Sets environment variable OSHD_DYNAMIC_PREFIX6
 void device_dynamic_gen_prefix6(void)
 {
-    uint8_t h[EVP_MAX_MD_SIZE];
-    unsigned int h_size;
+    uint8_t h[HASH_SHA3_512_SIZE];
 
     memset(h, 0, sizeof(h));
-    hash_sha3_512(oshd.network_name, strlen(oshd.network_name), h, &h_size);
+    hash_oneshot(HASH_SHA3_512, h, sizeof(h), oshd.network_name, strlen(oshd.network_name));
 
     oshd.dynamic_prefixlen6 = 64;
 
@@ -230,7 +228,7 @@ void device_dynamic_gen_prefix4(void)
 // The IPv6 prefix must have been generated before calling this function
 void device_dynamic_gen_addr6_stable(dynamic_addr_t *daddr, size_t seed)
 {
-    uint8_t hash[EVP_MAX_MD_SIZE];
+    uint8_t hash[HASH_SHA3_512_SIZE];
 
     stable_addr_hash(hash, seed);
     netaddr_cpy(&daddr->addr, &oshd.dynamic_prefix6);
@@ -251,7 +249,7 @@ void device_dynamic_gen_addr6_random(dynamic_addr_t *daddr)
 // The IPv4 prefix must have been generated before calling this function
 void device_dynamic_gen_addr4_stable(dynamic_addr_t *daddr, size_t seed)
 {
-    uint8_t hash[EVP_MAX_MD_SIZE];
+    uint8_t hash[HASH_SHA3_512_SIZE];
 
     stable_addr_hash(hash, seed);
     dynamic_addr_v4(&daddr->addr, hash, sizeof(hash));

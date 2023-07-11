@@ -3,7 +3,7 @@
 #include "logger.h"
 #include "events.h"
 #include "xalloc.h"
-#include "crypto/common.h"
+#include "crypto/hash.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,13 +11,12 @@
 
 // Calculate the node's ID hash (name + public key + salt) and write it to *hash
 // Returns false on any error (no public key, invalid salt, hashing failure)
-// *hash must have a size of EVP_MAX_MD_SIZE bytes at least, the actual size of
-// the hash will be checked with the expected size
+// *hash must have a size of NODE_ID_HASH_SIZE bytes
 bool node_id_gen_hash(const node_id_t *nid, const uint8_t *salt,
     size_t salt_size, uint8_t *hash)
 {
-    EVP_MD_CTX *ctx;
-    unsigned int hash_size;
+    bool success;
+    hash_ctx_t *ctx;
 
     // The node must have a public key of the correct size
     if (!nid->pubkey_raw)
@@ -37,53 +36,24 @@ bool node_id_gen_hash(const node_id_t *nid, const uint8_t *salt,
     }
 
     // Initialize SHA3-512 context
-    ctx = EVP_MD_CTX_new();
-    if (!ctx) {
-        logger(LOG_ERR, "node_id_gen_hash: EVP_MD_CTX_new: %s",
-            osh_openssl_strerror);
-        goto error;
-    }
-    if (!EVP_DigestInit_ex(ctx, EVP_sha3_512(), NULL)) {
-        logger(LOG_ERR, "node_id_gen_hash: EVP_DigestInit_ex: %s",
-            osh_openssl_strerror);
-        goto error;
-    }
+    success = false;
+    ctx = hash_ctx_create(HASH_SHA3_512);
+    if (!ctx)
+        goto end;
 
     // Hash the node's name, public key and the salt
-    if (!EVP_DigestUpdate(ctx, nid->name, NODE_NAME_SIZE)) {
-        logger(LOG_ERR, "node_id_gen_hash: EVP_DigestUpdate(name): %s",
-            osh_openssl_strerror);
-        goto error;
-    }
-    if (!EVP_DigestUpdate(ctx, nid->pubkey_raw, HANDSHAKE_PUBKEY_SIZE)) {
-        logger(LOG_ERR, "node_id_gen_hash: EVP_DigestUpdate(pubkey_raw): %s",
-            osh_openssl_strerror);
-        goto error;
-    }
-    if (!EVP_DigestUpdate(ctx, salt, salt_size)) {
-        logger(LOG_ERR, "node_id_gen_hash: EVP_DigestUpdate(salt): %s",
-            osh_openssl_strerror);
-        goto error;
-    }
-    if (!EVP_DigestFinal_ex(ctx, hash, &hash_size)) {
-        logger(LOG_ERR, "node_id_gen_hash: EVP_DigestFinal_ex: %s",
-            osh_openssl_strerror);
-        goto error;
-    }
+    if (!hash_ctx_update(ctx, nid->name, NODE_NAME_SIZE))
+        goto end;
+    if (!hash_ctx_update(ctx, nid->pubkey_raw, HANDSHAKE_PUBKEY_SIZE))
+        goto end;
+    if (!hash_ctx_update(ctx, salt, salt_size))
+        goto end;
 
-    if (hash_size != NODE_ID_HASH_SIZE) {
-        // This should never happen
-        logger(LOG_CRIT, "node_id_gen_hash: Expected size %i but got %u",
-            NODE_ID_HASH_SIZE, hash_size);
-        goto error;
-    }
+    success = hash_ctx_final(ctx, hash, NODE_ID_HASH_SIZE);
 
-    EVP_MD_CTX_free(ctx);
-    return true;
-
-error:
-    EVP_MD_CTX_free(ctx);
-    return false;
+end:
+    hash_ctx_free(ctx);
+    return success;
 }
 
 // Find node_id_t with the corresponding ID hash in the node tree
@@ -91,7 +61,7 @@ error:
 node_id_t *node_id_find_by_hash(const uint8_t *hash,
     const uint8_t *salt, size_t salt_size)
 {
-    uint8_t nid_hash[EVP_MAX_MD_SIZE];
+    uint8_t nid_hash[NODE_ID_HASH_SIZE];
 
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
         if (!node_id_gen_hash(oshd.node_tree[i], salt, salt_size, nid_hash))

@@ -913,7 +913,7 @@ static bool handshake_generate_nonce(const client_t *c, oshpacket_handshake_t *p
 static bool handshake_generate_sender_id(const client_t *c, oshpacket_handshake_t *pkt)
 {
     const node_id_t *me = node_id_find_local();
-    uint8_t sender_id_hash[EVP_MAX_MD_SIZE];
+    uint8_t sender_id_hash[NODE_ID_HASH_SIZE];
 
     logger_debug(DBG_HANDSHAKE, "%s: Generating sender ID salt", c->addrw);
     if (!random_bytes(pkt->sender.id_salt, sizeof(pkt->sender.id_salt))) {
