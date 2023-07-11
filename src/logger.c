@@ -211,7 +211,7 @@ void logger(loglevel_t level, const char *format, ...)
     va_list ap;
 
     logger_lock();
-    if (level <= logger_level) {
+    if (logger_is_level_enabled(level, logger_level)) {
         va_start(ap, format);
         logger_print(level_names[level], format, ap);
         va_end(ap);

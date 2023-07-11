@@ -41,6 +41,7 @@ void logger_set_level(loglevel_t level);
 bool logger_set_level_name(const char *name);
 loglevel_t logger_get_level(void);
 const char *logger_get_level_name(loglevel_t level);
+#define logger_is_level_enabled(msg_level, logger_level) ((msg_level) <= (logger_level))
 
 void logger_toggle_debug(debug_what_t what);
 bool logger_toggle_debug_name(const char *name);
