@@ -139,7 +139,7 @@ endif()
 
 if (CYGWIN OR MSYS OR WIN32)
     set(OSH_TUNTAP_DRIVER "Windows")
-    set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} src/tuntap/windows.c "src/tuntap/tap-windows.c")
+    set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} src/tuntap/windows.c "src/tuntap/tap-windows.c" src/tuntap/wintun.c)
 elseif (LINUX)
     set(OSH_TUNTAP_DRIVER "Linux")
     set(OSH_TUNTAP_SOURCES ${OSH_TUNTAP_SOURCES} src/tuntap/linux.c)
@@ -310,6 +310,11 @@ add_compiler_flags(CMAKE_C_FLAGS -Wduplicated-branches -Wduplicated-cond)
 
 # Disable newline-eof warnings
 add_compiler_flag(CMAKE_C_FLAGS -Wno-newline-eof)
+
+# Disable -Wstrict-aliasing warning for wintun.c
+# Casting function pointers from GetProcAddress() always makes the compiler emit
+# warnings about it, we silence these ones here because it is intended
+set_source_files_properties("src/tuntap/wintun.c" PROPERTIES COMPILE_FLAGS -Wno-strict-aliasing)
 
 if (CYGWIN)
     add_compiler_flag_nocheck(CMAKE_C_FLAGS "-D_GNU_SOURCE")
