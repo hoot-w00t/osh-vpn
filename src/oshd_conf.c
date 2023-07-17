@@ -687,10 +687,20 @@ static bool oshd_param_node(ecp_t *ecp)
 }
 
 // Parameters that set commands (the command name is the same as the parameter)
+#define cmd_builtin "Builtin"
+#define cmd_builtin_len strlen(cmd_builtin)
 static bool oshd_param_command(ecp_t *ecp)
 {
-    oshd_cmd_set(ecp_name(ecp), ecp_value(ecp));
-    logger_debug(DBG_CONF, "Set %s to '%s'", ecp_name(ecp), ecp_value(ecp));
+    const char *orig = ecp_name(ecp);
+    const char *cmd_name;
+
+    if (!strncmp(orig, cmd_builtin, cmd_builtin_len))
+        cmd_name = orig + cmd_builtin_len;
+    else
+        cmd_name = orig;
+
+    oshd_cmd_set(cmd_name, ecp_value(ecp));
+    logger_debug(DBG_CONF, "Set %s (%s) to '%s'", orig, cmd_name, ecp_value(ecp));
     return true;
 }
 
@@ -717,8 +727,14 @@ static const oshd_conf_param_t oshd_conf_params[] = {
     { .name = "Mode", .type = VALUE_REQUIRED, &oshd_param_mode },
     { .name = "Device", .type = VALUE_REQUIRED, &oshd_param_device },
     { .name = "ExcludeDevice", .type = VALUE_OPTIONAL, &oshd_param_removed },
-    { .name = "DevUp", .type = VALUE_REQUIRED, &oshd_param_command },
-    { .name = "DevDown", .type = VALUE_REQUIRED, &oshd_param_command },
+    { .name = CMD_ON_DEV_UP, .type = VALUE_REQUIRED, &oshd_param_command },
+    { .name = CMD_ON_DEV_DOWN, .type = VALUE_REQUIRED, &oshd_param_command },
+    { .name = cmd_builtin CMD_ENABLE_DEV, .type = VALUE_REQUIRED, &oshd_param_command },
+    { .name = cmd_builtin CMD_DISABLE_DEV, .type = VALUE_REQUIRED, &oshd_param_command },
+    { .name = cmd_builtin CMD_ADD_IP6, .type = VALUE_REQUIRED, &oshd_param_command },
+    { .name = cmd_builtin CMD_ADD_IP4, .type = VALUE_REQUIRED, &oshd_param_command },
+    { .name = cmd_builtin CMD_DEL_IP6, .type = VALUE_REQUIRED, &oshd_param_command },
+    { .name = cmd_builtin CMD_DEL_IP4, .type = VALUE_REQUIRED, &oshd_param_command },
     { .name = "Endpoint", .type = VALUE_REQUIRED, &oshd_param_endpoint },
     { .name = "AlwaysConnect", .type = VALUE_NONE, &oshd_param_alwaysconnect },
     { .name = "ReconnectDelayMin", .type = VALUE_REQUIRED, &oshd_param_reconnectdelaymin },

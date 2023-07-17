@@ -183,7 +183,7 @@ static void dynamic_addr_v4(netaddr_t *addr, const void *data, size_t data_len)
 // Generate a stable IPv6 prefix from the network name
 // Initializes oshd.dynamic_prefix6, oshd.dynamic_prefixlen6 and
 // oshd.dynamic_prefix6_str
-// Sets environment variable OSHD_DYNAMIC_PREFIX6
+// Sets environment variable CMD_ENV_DYNAMIC_PREFIX6
 void device_dynamic_gen_prefix6(void)
 {
     uint8_t h[HASH_SHA3_512_SIZE];
@@ -201,13 +201,13 @@ void device_dynamic_gen_prefix6(void)
     netaddr_ntop(oshd.dynamic_prefix6_str, sizeof(oshd.dynamic_prefix6_str),
         &oshd.dynamic_prefix6);
 
-    oshd_cmd_setenv("OSHD_DYNAMIC_PREFIX6", oshd.dynamic_prefix6_str);
+    oshd_cmd_setenv(CMD_ENV_DYNAMIC_PREFIX6, oshd.dynamic_prefix6_str);
 }
 
 // Generate a stable IPv4 prefix
 // Initializes oshd.dynamic_prefix4, oshd.dynamic_prefixlen4 and
 // oshd.dynamic_prefix4_str
-// Sets environment variable OSHD_DYNAMIC_PREFIX4
+// Sets environment variable CMD_ENV_DYNAMIC_PREFIX4
 void device_dynamic_gen_prefix4(void)
 {
     oshd.dynamic_prefixlen4 = 16;
@@ -221,7 +221,7 @@ void device_dynamic_gen_prefix4(void)
     netaddr_ntop(oshd.dynamic_prefix4_str, sizeof(oshd.dynamic_prefix4_str),
         &oshd.dynamic_prefix4);
 
-    oshd_cmd_setenv("OSHD_DYNAMIC_PREFIX4", oshd.dynamic_prefix4_str);
+    oshd_cmd_setenv(CMD_ENV_DYNAMIC_PREFIX4, oshd.dynamic_prefix4_str);
 }
 
 // Generate a stable dynamic IPv6 address
@@ -267,90 +267,16 @@ void device_dynamic_gen_addr4_random(dynamic_addr_t *daddr)
     dynamic_addr_format(daddr, oshd.dynamic_prefixlen4);
 }
 
-// Set environment variables OSHD_DYNAMIC_ADDR and OSHD_DYNAMIC_PREFIXLEN with
-// the dynamic address' values
-// Returns false on error
-static bool set_dynamic_addr_env(const dynamic_addr_t *daddr)
-{
-    return    oshd_cmd_setenv("OSHD_DYNAMIC_ADDR",      daddr->addr_str)
-           && oshd_cmd_setenv("OSHD_DYNAMIC_PREFIXLEN", daddr->prefixlen_str);
-}
-
 // Add the dynamic address to the TUN/TAP device
 // Returns false on error
-bool device_dynamic_add(const dynamic_addr_t *daddr)
+bool device_dynamic_add(tuntap_t *tuntap, const dynamic_addr_t *daddr)
 {
-    if (!set_dynamic_addr_env(daddr))
-        return false;
-
-    switch (daddr->addr.type) {
-        case IP6: return oshd_cmd_execute("DynamicAddIP6");
-        case IP4: return oshd_cmd_execute("DynamicAddIP4");
-        default: return false;
-    }
+    return oshd_cmd_add_ip(tuntap->dev_name, &daddr->addr, daddr->prefixlen);
 }
 
 // Delete the dynamic address from the TUN/TAP device
 // Returns false on error
-bool device_dynamic_del(const dynamic_addr_t *daddr)
+bool device_dynamic_del(tuntap_t *tuntap, const dynamic_addr_t *daddr)
 {
-    if (!set_dynamic_addr_env(daddr))
-        return false;
-
-    switch (daddr->addr.type) {
-        case IP6: return oshd_cmd_execute("DynamicDelIP6");
-        case IP4: return oshd_cmd_execute("DynamicDelIP4");
-        default: return false;
-    }
+    return oshd_cmd_del_ip(tuntap->dev_name, &daddr->addr, daddr->prefixlen);
 }
-
-#if PLATFORM_IS_LINUX
-
-#define ip_bin         "/sbin/ip"
-#define ip_dev         "dev \"$OSHD_DEVICE\""
-#define ip_addr_prefix "\"$OSHD_DYNAMIC_ADDR/$OSHD_DYNAMIC_PREFIXLEN\""
-
-#define ip_link_up   ip_bin " link set up " ip_dev
-#define ip_link_down ip_bin " link set down " ip_dev
-
-#define ip_addr_add  ip_bin " addr add " ip_addr_prefix " " ip_dev
-#define ip_addr_del  ip_bin " addr del " ip_addr_prefix " " ip_dev
-
-void device_dynamic_init_commands(void)
-{
-    oshd_cmd_tryset("DynamicEnableDev",  ip_link_up);
-    oshd_cmd_tryset("DynamicDisableDev", ip_link_down);
-    oshd_cmd_tryset("DynamicAddIP6", ip_addr_add);
-    oshd_cmd_tryset("DynamicAddIP4", ip_addr_add);
-    oshd_cmd_tryset("DynamicDelIP6", ip_addr_del);
-    oshd_cmd_tryset("DynamicDelIP4", ip_addr_del);
-}
-
-#elif PLATFORM_IS_WINDOWS
-
-#define netsh_bin "C:\\Windows\\System32\\netsh.exe"
-
-#define ip6_iface "interface ipv6"
-#define ip4_iface "interface ipv4"
-
-#define ip6_dev "interface=\"%OSHD_DEVICE%\""
-#define ip4_dev "name=\"%OSHD_DEVICE%\""
-
-#define ip_addr "address=\"%OSHD_DYNAMIC_ADDR%\""
-#define ip_addr_prefix "address=\"%OSHD_DYNAMIC_ADDR%/%OSHD_DYNAMIC_PREFIXLEN%\""
-
-void device_dynamic_init_commands(void)
-{
-    oshd_cmd_tryset("DynamicAddIP6", netsh_bin " " ip6_iface " add addr " ip6_dev " " ip_addr_prefix);
-    oshd_cmd_tryset("DynamicAddIP4", netsh_bin " " ip4_iface " add addr " ip4_dev " " ip_addr_prefix);
-    oshd_cmd_tryset("DynamicDelIP6", netsh_bin " " ip6_iface " del addr " ip6_dev " " ip_addr);
-    oshd_cmd_tryset("DynamicDelIP4", netsh_bin " " ip4_iface " del addr " ip4_dev " " ip_addr);
-}
-
-#else
-#warning "Unsupported platform for device_dynamic_init_commands"
-
-void device_dynamic_init_commands(void)
-{
-}
-#endif

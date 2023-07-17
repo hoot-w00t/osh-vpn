@@ -22,8 +22,12 @@ struct conflict_routes {
 // Delete the current dynamic address and add a new random one
 static bool change_addr(struct conflict_routes *cr)
 {
+    // Make sure that there is a TUN/TAP device
+    if (!oshd.tuntap)
+        return false;
+
     // First delete the conflicting address from the TUN/TAP device
-    if (!device_dynamic_del(cr->daddr))
+    if (!device_dynamic_del(oshd.tuntap, cr->daddr))
         return false;
 
     // Delete and add the conflicting address to the routing table with the
@@ -43,7 +47,7 @@ static bool change_addr(struct conflict_routes *cr)
         cr->daddr->prefixlen_str);
 
     // Add the new address to the TUN/TAP device ..
-    if (!device_dynamic_add(cr->daddr))
+    if (!device_dynamic_add(oshd.tuntap, cr->daddr))
         return false;
 
     // .. to the routing table ..
@@ -109,7 +113,7 @@ void event_queue_dynamic_ip_conflict(node_id_t *s1, node_id_t *s2,
     dynamic_addr_t *daddr;
 
     // If the device mode is not dynamic Osh doesn't solve conflicts itself
-    if (oshd.device_mode != MODE_DYNAMIC)
+    if (oshd.device_mode != MODE_DYNAMIC || !oshd.tuntap)
         return;
 
     // Make sure that both pointers are valid and that they are different

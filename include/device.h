@@ -18,11 +18,7 @@ void device_dynamic_gen_addr6_random(dynamic_addr_t *daddr);
 void device_dynamic_gen_addr4_stable(dynamic_addr_t *daddr, size_t seed);
 void device_dynamic_gen_addr4_random(dynamic_addr_t *daddr);
 
-bool device_dynamic_add(const dynamic_addr_t *daddr);
-bool device_dynamic_del(const dynamic_addr_t *daddr);
-
-// Set Dynamic* commands which will be executed to configure the TUN/TAP
-// device with the dynamic address
-void device_dynamic_init_commands(void);
+bool device_dynamic_add(tuntap_t *tuntap, const dynamic_addr_t *daddr);
+bool device_dynamic_del(tuntap_t *tuntap, const dynamic_addr_t *daddr);
 
 #endif
