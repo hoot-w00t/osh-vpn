@@ -765,13 +765,6 @@ bool client_queue_packet_broadcast_forward(client_t *exclude, const oshpacket_hd
     return true;
 }
 
-// Queue a unicast DATA packet for a node (indirectly)
-bool client_queue_packet_data(node_id_t *dest, const void *payload,
-    const size_t payload_size)
-{
-    return client_queue_packet_indirect(dest, OSHPKT_DATA, payload, payload_size);
-}
-
 // Broadcast a DATA packet for all nodes (indirectly)
 // This function uses client_queue_packet_data to unicast the same payload to
 // all nodes (except *exclude if it is not NULL)
