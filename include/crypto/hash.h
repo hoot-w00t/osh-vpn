@@ -2,6 +2,7 @@
 #define _OSH_CRYPTO_HASH_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef enum hash_type {
