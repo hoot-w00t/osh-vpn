@@ -195,7 +195,6 @@ set(OSHD_SOURCES
     ${OSH_AIO_SOURCES}
     src/crypto/cipher.c
     src/crypto/hash.c
-    src/crypto/hkdf.c
     src/crypto/pkey.c
     src/events/automatic_connections.c
     src/events/connect.c

@@ -32,4 +32,10 @@ void hash_ctx_free(hash_ctx_t *ctx);
 bool hash_oneshot(hash_type_t type, void *out, size_t out_size,
     const void *in, size_t in_size);
 
+bool hash_hkdf(hash_type_t hash_type,
+    const void *key, size_t key_size,
+    const void *salt, size_t salt_size,
+    const void *label, size_t label_size,
+    void *out, size_t out_size);
+
 #endif

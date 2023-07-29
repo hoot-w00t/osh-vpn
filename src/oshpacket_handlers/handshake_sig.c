@@ -1,7 +1,7 @@
 #include "oshd.h"
 #include "logger.h"
 #include "events.h"
-#include "crypto/hkdf.h"
+#include "crypto/hash.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -105,7 +105,7 @@ static bool handshake_compute_hkdf(const client_t *c, const void *secret,
     memcpy(salt + HANDSHAKE_NONCE_SIZE, c->handshake_sig_data->receiver_handshake.nonce,  HANDSHAKE_NONCE_SIZE);
 
     logger_debug(DBG_HANDSHAKE, "%s: HKDF: Deriving %zu bytes", c->addrw, sizeof(*hkdf));
-    return hkdf_derive(secret, secret_size, salt, sizeof(salt),
+    return hash_hkdf(HASH_SHA2_512, secret, secret_size, salt, sizeof(salt),
         label, strlen(label), hkdf, sizeof(*hkdf));
 }
 

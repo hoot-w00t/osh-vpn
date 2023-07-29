@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <openssl/evp.h>
+#include <openssl/kdf.h>
 #include <openssl/sha.h>
 
 struct hash_type_def {
@@ -155,5 +156,78 @@ bool hash_oneshot(hash_type_t type, void *out, size_t out_size,
 
 end:
     hash_ctx_free(ctx);
+    return success;
+}
+
+// Derive out_size bytes to *out using HKDF
+// Returns false on error
+bool hash_hkdf(hash_type_t hash_type,
+    const void *key, size_t key_size,
+    const void *salt, size_t salt_size,
+    const void *label, size_t label_size,
+    void *out, size_t out_size)
+{
+    const struct hash_type_def *def = hash_type_lookup(hash_type);
+    EVP_PKEY_CTX *pctx = NULL;
+    const EVP_MD *evp_md = NULL;
+    bool success = false;
+
+    if (!def) {
+        logger(LOG_ERR, "%s: Invalid hash type %u", __func__, (unsigned) hash_type);
+        goto end;
+    }
+
+    evp_md = EVP_get_digestbyname(def->openssl_name);
+    if (!evp_md) {
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_get_digestbyname", osh_openssl_strerror);
+        goto end;
+    }
+
+    pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
+    if (!pctx) {
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_PKEY_CTX_new_id",
+            osh_openssl_strerror);
+        goto end;
+    }
+
+    if (EVP_PKEY_derive_init(pctx) <= 0) {
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_PKEY_derive_init",
+            osh_openssl_strerror);
+        goto end;
+    }
+    if (EVP_PKEY_CTX_set_hkdf_md(pctx, evp_md) <= 0) {
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_PKEY_CTX_set_hkdf_md",
+            osh_openssl_strerror);
+        goto end;
+    }
+
+    if (EVP_PKEY_CTX_set1_hkdf_salt(pctx, salt, salt_size) <= 0) {
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_PKEY_CTX_set1_hkdf_salt",
+            osh_openssl_strerror);
+        goto end;
+    }
+    if (EVP_PKEY_CTX_set1_hkdf_key(pctx, key, key_size) <= 0) {
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_PKEY_CTX_set1_hkdf_key",
+            osh_openssl_strerror);
+        goto end;
+    }
+    if (EVP_PKEY_CTX_add1_hkdf_info(pctx, label, label_size) <= 0) {
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_PKEY_CTX_add1_hkdf_info",
+            osh_openssl_strerror);
+        goto end;
+    }
+
+    // Derive out_size bytes to *out
+    if (EVP_PKEY_derive(pctx, out, &out_size) <= 0) {
+        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_PKEY_derive",
+            osh_openssl_strerror);
+        goto end;
+    }
+
+    success = true;
+
+end:
+    if (pctx)
+        EVP_PKEY_CTX_free(pctx);
     return success;
 }
