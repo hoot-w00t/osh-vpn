@@ -7,6 +7,14 @@ project(osh-vpn
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+if (CMAKE_VERSION VERSION_LESS "3.25.0")
+    # LINUX variable was added in CMake 3.25
+    # Manually set it on earlier versions
+    if (NOT LINUX AND UNIX AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set(LINUX TRUE)
+    endif()
+endif()
+
 # Local modules
 include(compiler_flags)
 include(linker_flags)
