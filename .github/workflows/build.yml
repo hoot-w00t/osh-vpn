@@ -35,7 +35,7 @@ jobs:
         with:
           msystem: ${{ matrix.msys_sys }}
           update: true
-          release: true
+          release: false
           install: >-
             base-devel
             git
@@ -61,6 +61,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: mpreisler/mingw-bundledlls
+          ref: master
           path: mingw-bundledlls
 
       - name: Clone Snaipe/Criterion repository (windows)
