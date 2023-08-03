@@ -19,12 +19,12 @@ static const struct hash_type_def hash_type_table[HASH_TYPE_COUNT] = {
     {
         .type = HASH_SHA2_256,
         .name = "sha2-256",
-        .openssl_name = "sha2-256"
+        .openssl_name = "sha256"
     },
     {
         .type = HASH_SHA2_512,
         .name = "sha2-512",
-        .openssl_name = "sha2-512"
+        .openssl_name = "sha512"
     },
     {
         .type = HASH_SHA3_512,
