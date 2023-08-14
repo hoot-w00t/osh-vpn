@@ -116,17 +116,17 @@ static bool handshake_create_ciphers(const client_t *c, const handshake_hkdf_key
     logger_debug(DBG_HANDSHAKE, "%s: Creating ciphers", c->addrw);
 
     if (c->initiator) {
-        *send_cipher = cipher_create("AES-256-GCM", true,
+        *send_cipher = cipher_create(HANDSHAKE_CIPHER_TYPE, true,
             hkdf->initiator_cipher_key, sizeof(hkdf->initiator_cipher_key),
             hkdf->initiator_cipher_iv,  sizeof(hkdf->initiator_cipher_iv));
-        *recv_cipher = cipher_create("AES-256-GCM", false,
+        *recv_cipher = cipher_create(HANDSHAKE_CIPHER_TYPE, false,
             hkdf->receiver_cipher_key, sizeof(hkdf->receiver_cipher_key),
             hkdf->receiver_cipher_iv,  sizeof(hkdf->receiver_cipher_iv));
     } else {
-        *send_cipher = cipher_create("AES-256-GCM", true,
+        *send_cipher = cipher_create(HANDSHAKE_CIPHER_TYPE, true,
             hkdf->receiver_cipher_key, sizeof(hkdf->receiver_cipher_key),
             hkdf->receiver_cipher_iv,  sizeof(hkdf->receiver_cipher_iv));
-        *recv_cipher = cipher_create("AES-256-GCM", false,
+        *recv_cipher = cipher_create(HANDSHAKE_CIPHER_TYPE, false,
             hkdf->initiator_cipher_key, sizeof(hkdf->initiator_cipher_key),
             hkdf->initiator_cipher_iv,  sizeof(hkdf->initiator_cipher_iv));
     }

@@ -241,15 +241,15 @@ Test(oshpacket_t, oshpacket_init)
     cr_assert_eq(pkt.packet, e_bytes);
     cr_assert_eq(pkt.packet_size, e_bytes_size);
 
-    cr_assert_eq(pkt.cipher_tag_size, CIPHER_TAG_SIZE);
-    cr_assert_eq(pkt.cipher_tag, e_bytes + e_bytes_size - CIPHER_TAG_SIZE);
+    cr_assert_eq(pkt.cipher_mac_size, HANDSHAKE_CIPHER_MAC_SIZE);
+    cr_assert_eq(pkt.cipher_mac, e_bytes + e_bytes_size - HANDSHAKE_CIPHER_MAC_SIZE);
 
     cr_assert_eq(pkt.hdr, pkt.packet);
     cr_assert_eq(pkt.payload, pkt.hdr + 1);
-    cr_assert_eq(pkt.payload_size, e_bytes_size - sizeof(oshpacket_hdr_t) - CIPHER_TAG_SIZE);
+    cr_assert_eq(pkt.payload_size, e_bytes_size - sizeof(oshpacket_hdr_t) - HANDSHAKE_CIPHER_MAC_SIZE);
 
     cr_assert_eq(pkt.encrypted, ((uint8_t *) pkt.hdr) + sizeof(uint16_t));
-    cr_assert_eq(pkt.encrypted_size, e_bytes_size - sizeof(uint16_t) - CIPHER_TAG_SIZE);
+    cr_assert_eq(pkt.encrypted_size, e_bytes_size - sizeof(uint16_t) - HANDSHAKE_CIPHER_MAC_SIZE);
 
     cr_assert_eq(OSHPACKET_CALC_SIZE(pkt.payload_size), pkt.packet_size);
 }

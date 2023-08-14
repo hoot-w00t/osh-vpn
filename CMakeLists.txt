@@ -270,6 +270,7 @@ endif()
 # All sources for oshd_tests
 set(OSHD_TESTS_SOURCES
     ${OSHD_SOURCES}
+    tests/crypto/cipher_tests.c
     tests/base64_tests.c
     tests/device_mode_tests.c
     tests/hashtable_tests.c

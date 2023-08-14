@@ -429,6 +429,17 @@ void client_finish_handshake(client_t *c)
     }
 }
 
+// Compute and set cipher IV from base IV and sequence number
+static void client_compute_cipher_iv(cipher_t *cipher, cipher_seqno_t seqno)
+{
+    union client_cipher_iv iv;
+
+    STATIC_ASSERT_NOMSG(sizeof(iv.s) == sizeof(iv.b));
+    assert(cipher_get_original_iv(cipher, iv.b, sizeof(iv.b)) == true);
+    iv.s.seqno_be ^= htobe64(seqno);
+    assert(cipher_set_iv(cipher, iv.b, sizeof(iv.b)) == true);
+}
+
 // Encrypt packet using the client's send cipher
 bool client_encrypt_packet(client_t *c, oshpacket_t *pkt)
 {
@@ -446,10 +457,12 @@ bool client_encrypt_packet(client_t *c, oshpacket_t *pkt)
 
     // We encrypt the packet at the same location because we are using a
     // streaming cipher
+    client_compute_cipher_iv(c->send_cipher, pkt->seqno);
     if (!cipher_encrypt(c->send_cipher,
             pkt->encrypted, &result,
             pkt->encrypted, pkt->encrypted_size,
-            pkt->cipher_tag, pkt->seqno))
+            NULL, 0,
+            pkt->cipher_mac, pkt->cipher_mac_size))
     {
         logger(LOG_ERR, "%s: Failed to encrypt packet seqno %" PRIu64, c->addrw, pkt->seqno);
         return false;
@@ -480,10 +493,12 @@ bool client_decrypt_packet(client_t *c, oshpacket_t *pkt)
 
     // We decrypt the packet at the same location because we are using a
     // streaming cipher
+    client_compute_cipher_iv(c->recv_cipher, pkt->seqno);
     if (!cipher_decrypt(c->recv_cipher,
             pkt->encrypted, &result,
             pkt->encrypted, pkt->encrypted_size,
-            pkt->cipher_tag, pkt->seqno))
+            NULL, 0,
+            pkt->cipher_mac, pkt->cipher_mac_size))
     {
         logger(LOG_ERR, "%s: Failed to decrypt packet seqno %" PRIu64, c->addrw, pkt->seqno);
         return false;
@@ -564,8 +579,8 @@ static bool packet_encrypt(client_t *c, oshpacket_t *pkt, const oshpacket_def_t 
         memset(&pkt->hdr->dest, 0,
             sizeof(pkt->hdr->dest));
 
-        // Zero the authentication tag as there is no encryption
-        memset(pkt->cipher_tag, 0, pkt->cipher_tag_size);
+        // Zero the MAC as there is no encryption
+        memset(pkt->cipher_mac, 0, pkt->cipher_mac_size);
 
         return true;
 

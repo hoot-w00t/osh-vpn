@@ -84,6 +84,14 @@ struct client_io {
     netbuffer_t *sendq;   // Network buffer for queuing packets
 };
 
+union client_cipher_iv {
+    uint8_t b[HANDSHAKE_CIPHER_IV_SIZE];
+    struct __attribute__((packed)) {
+        uint8_t _pad[HANDSHAKE_CIPHER_IV_SIZE - sizeof(cipher_seqno_t)];
+        cipher_seqno_t seqno_be;
+    } s;
+};
+
 struct client {
     sock_t sockfd;                      // Network socket
     endpoint_proto_t sa_proto;          // Socket protocol

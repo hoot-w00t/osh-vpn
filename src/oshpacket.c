@@ -238,7 +238,7 @@ static size_t ptrsize(const void *startptr, const void *endptr)
 void oshpacket_init(oshpacket_t *pkt, void *packet, size_t packet_size,
     cipher_seqno_t seqno)
 {
-    const size_t min_size = sizeof(oshpacket_hdr_t) + CIPHER_TAG_SIZE;
+    const size_t min_size = sizeof(oshpacket_hdr_t) + HANDSHAKE_CIPHER_MAC_SIZE;
 
     // *packet must be big enough or some pointers will be invalid
     assert(packet_size >= min_size);
@@ -247,13 +247,13 @@ void oshpacket_init(oshpacket_t *pkt, void *packet, size_t packet_size,
     pkt->packet = packet;
     pkt->packet_size = packet_size;
 
-    pkt->cipher_tag_size = CIPHER_TAG_SIZE;
-    pkt->cipher_tag = ((uint8_t *) packet) + packet_size - pkt->cipher_tag_size;
+    pkt->cipher_mac_size = HANDSHAKE_CIPHER_MAC_SIZE;
+    pkt->cipher_mac = ((uint8_t *) packet) + packet_size - pkt->cipher_mac_size;
 
     pkt->hdr = OSHPACKET_HDR(packet);
     pkt->payload = OSHPACKET_PAYLOAD(pkt->hdr);
-    pkt->payload_size = ptrsize(pkt->payload, pkt->cipher_tag);
+    pkt->payload_size = ptrsize(pkt->payload, pkt->cipher_mac);
 
     pkt->encrypted = OSHPACKET_PRIVATE_HDR(pkt->hdr);
-    pkt->encrypted_size = ptrsize(pkt->encrypted, pkt->cipher_tag);
+    pkt->encrypted_size = ptrsize(pkt->encrypted, pkt->cipher_mac);
 }

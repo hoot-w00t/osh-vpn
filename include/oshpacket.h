@@ -9,6 +9,11 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define HANDSHAKE_CIPHER_TYPE           CIPHER_TYPE_AES_256_GCM
+#define HANDSHAKE_CIPHER_KEY_SIZE       CIPHER_AES_256_GCM_KEY_SIZE
+#define HANDSHAKE_CIPHER_IV_SIZE        CIPHER_AES_256_GCM_IV_SIZE
+#define HANDSHAKE_CIPHER_MAC_SIZE       CIPHER_AES_256_GCM_MAC_SIZE
+
 #ifndef NODE_NAME_SIZE
 #define NODE_NAME_SIZE (16)
 #endif
@@ -135,8 +140,8 @@ typedef struct oshpacket {
                                 // NULL if there is no payload
     size_t payload_size;        // Packet payload size
 
-    void *cipher_tag;           // Cipher AEAD tag
-    size_t cipher_tag_size;     // Cipher AEAD tag size
+    void *cipher_mac;           // Cipher AEAD MAC
+    size_t cipher_mac_size;     // Cipher AEAD MAC size
 
     void *encrypted;            // Start of the encrypted data within the packet
     size_t encrypted_size;      // Size of the encrypted data
@@ -198,11 +203,11 @@ typedef struct __attribute__((__packed__)) oshpacket_handshake {
 
 // This structure is constructed locally and used as the output of the HKDF
 typedef struct __attribute__((packed)) handshake_hkdf_keys {
-    uint8_t initiator_cipher_key[CIPHER_KEY_SIZE];
-    uint8_t initiator_cipher_iv[CIPHER_IV_SIZE];
+    uint8_t initiator_cipher_key[HANDSHAKE_CIPHER_KEY_SIZE];
+    uint8_t initiator_cipher_iv[HANDSHAKE_CIPHER_IV_SIZE];
 
-    uint8_t receiver_cipher_key[CIPHER_KEY_SIZE];
-    uint8_t receiver_cipher_iv[CIPHER_IV_SIZE];
+    uint8_t receiver_cipher_key[HANDSHAKE_CIPHER_KEY_SIZE];
+    uint8_t receiver_cipher_iv[HANDSHAKE_CIPHER_IV_SIZE];
 } handshake_hkdf_keys_t;
 
 // This structure is constructed locally and never sent over the network
@@ -281,7 +286,7 @@ typedef struct __attribute__((__packed__)) oshpacket_route {
 #define OSHPACKET_PAYLOAD_CONST(pkt)     _OSHPACKET_OFFSET_CONST(pkt, OSHPACKET_HDR_SIZE)
 
 // Calculate the full packet size from its payload size
-#define OSHPACKET_CALC_SIZE(payload_size) (OSHPACKET_HDR_SIZE + (payload_size) + CIPHER_TAG_SIZE)
+#define OSHPACKET_CALC_SIZE(payload_size) (OSHPACKET_HDR_SIZE + (payload_size) + HANDSHAKE_CIPHER_MAC_SIZE)
 
 static inline bool oshpacket_type_valid(oshpacket_type_t type)
 {
