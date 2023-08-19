@@ -47,12 +47,15 @@ cipher_type_t cipher_get_type(const cipher_t *cipher);
 
 // Return cipher key size
 size_t cipher_get_key_size(const cipher_t *cipher);
+size_t cipher_get_key_size_from_type(cipher_type_t cipher_type);
 
 // Return cipher IV size
 size_t cipher_get_iv_size(const cipher_t *cipher);
+size_t cipher_get_iv_size_from_type(cipher_type_t cipher_type);
 
 // Return cipher MAC size
 size_t cipher_get_mac_size(const cipher_t *cipher);
+size_t cipher_get_mac_size_from_type(cipher_type_t cipher_type);
 
 // Set cipher key
 _cipher_attr

@@ -169,16 +169,37 @@ size_t cipher_get_key_size(const cipher_t *cipher)
     return cipher->def->key_size;
 }
 
+size_t cipher_get_key_size_from_type(cipher_type_t cipher_type)
+{
+    const cipher_def_t *def = cipher_def(cipher_type);
+
+    return def ? def->key_size : 0;
+}
+
 size_t cipher_get_iv_size(const cipher_t *cipher)
 {
     assert(cipher != NULL);
     return cipher->def->iv_size;
 }
 
+size_t cipher_get_iv_size_from_type(cipher_type_t cipher_type)
+{
+    const cipher_def_t *def = cipher_def(cipher_type);
+
+    return def ? def->iv_size : 0;
+}
+
 size_t cipher_get_mac_size(const cipher_t *cipher)
 {
     assert(cipher != NULL);
     return cipher->def->mac_size;
+}
+
+size_t cipher_get_mac_size_from_type(cipher_type_t cipher_type)
+{
+    const cipher_def_t *def = cipher_def(cipher_type);
+
+    return def ? def->mac_size : 0;
 }
 
 bool cipher_set_key(cipher_t *cipher, const void *key, size_t key_size)
