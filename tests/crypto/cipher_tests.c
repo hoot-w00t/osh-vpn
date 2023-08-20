@@ -35,6 +35,10 @@ static void test_cipher_type(cipher_type_t cipher_type, unsigned int srand_seed)
     pseudorandom_buf(ad, sizeof(ad));
     enc = cipher_create(cipher_type, true, key, sizeof(key), NULL, 0);
     dec = cipher_create(cipher_type, false, NULL, 0, NULL, 0);
+    cr_assert_not_null(enc);
+    cr_assert_not_null(dec);
+    cr_assert_eq(cipher_get_type(enc), cipher_type);
+    cr_assert_eq(cipher_get_type(dec), cipher_type);
 
     for (size_t i = 0; i < 16; ++i) {
         const size_t orig_plaintext = i;
