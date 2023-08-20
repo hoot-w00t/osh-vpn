@@ -12,7 +12,7 @@ STATIC_ASSERT_NOMSG(sizeof(struct test_cipher_iv) == 12);
 static void pseudorandom_buf(void *buf, size_t len)
 {
     for (size_t i = 0; i < len; ++i)
-        ((uint8_t *) buf)[i] = rand() % 0xFF;
+        ((uint8_t *) buf)[i] = rand() % 256;
 }
 
 static void test_cipher_type(cipher_type_t cipher_type, unsigned int srand_seed)
