@@ -4,6 +4,7 @@
 #include "events.h"
 #include "logger.h"
 #include "xalloc.h"
+#include <stdlib.h>
 #include <string.h>
 
 // Solve dynamic IP address conflicts when using the dynamic device mode

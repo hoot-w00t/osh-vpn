@@ -4,6 +4,7 @@
 #include "oshd_clock.h"
 #include "node.h"
 #include "hashtable.h"
+#include <stdio.h>
 #include <stddef.h>
 
 // Local routes expire sooner than remote routes so that Osh can advertise them

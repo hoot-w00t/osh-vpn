@@ -6,6 +6,7 @@
 #include "macros.h"
 #include "xalloc.h"
 #include "crypto/hash.h"
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
