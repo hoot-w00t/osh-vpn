@@ -129,6 +129,7 @@ bool hash_ctx_final(hash_ctx_t *ctx, void *out, size_t out_size)
     }
 
     memcpy(out, ctx->hash, ctx->hash_size);
+    memzero(ctx->hash, sizeof(ctx->hash));
     return true;
 }
 
@@ -136,6 +137,7 @@ bool hash_ctx_final(hash_ctx_t *ctx, void *out, size_t out_size)
 void hash_ctx_free(hash_ctx_t *ctx)
 {
     if (ctx) {
+        memzero(ctx->hash, sizeof(ctx->hash));
         EVP_MD_CTX_free(ctx->evp_ctx);
         free(ctx);
     }

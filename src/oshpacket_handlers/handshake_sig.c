@@ -2,6 +2,7 @@
 #include "logger.h"
 #include "events.h"
 #include "crypto/hash.h"
+#include "memzero.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -163,17 +164,22 @@ static bool handshake_setup_new_ciphers(client_t *c)
 
     // Derive secret bytes
     hkdf_success = handshake_compute_hkdf(c, ecdh_secret, ecdh_secret_size, &hkdf);
+    memzero(ecdh_secret, ecdh_secret_size);
     free(ecdh_secret);
 
     if (!hkdf_success) {
         logger(LOG_ERR, "%s: Handshake failed: %s",
             c->addrw, "HKDF failed");
+        memzero(&hkdf, sizeof(hkdf));
         return false;
     }
 
     // Create the ciphers
-    if (!handshake_create_ciphers(c, &hkdf, &new_send_cipher, &new_recv_cipher))
+    if (!handshake_create_ciphers(c, &hkdf, &new_send_cipher, &new_recv_cipher)) {
+        memzero(&hkdf, sizeof(hkdf));
         return false;
+    }
+    memzero(&hkdf, sizeof(hkdf));
 
     // Start using the new ciphers
     // There are two possibilities:

@@ -6,6 +6,7 @@
 #include "xalloc.h"
 #include "logger.h"
 #include "macros_assert.h"
+#include "memzero.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -511,7 +512,10 @@ static bool oshd_param_privatekey(ecp_t *ecp)
     logger_debug(DBG_CONF, "Loaded private key from configuration file");
 
 end:
-    free(privkey);
+    if (privkey) {
+        memzero(privkey, privkey_size);
+        free(privkey);
+    }
     return success;
 }
 

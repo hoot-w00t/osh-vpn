@@ -17,6 +17,7 @@ endif()
 
 # Local modules
 include(compiler_flags)
+include(have_symbol)
 include(linker_flags)
 
 # System modules
@@ -240,6 +241,7 @@ set(OSHD_SOURCES
     src/hashtable_netaddr.c
     src/hashtable.c
     src/logger.c
+    src/memzero.c
     src/murmurhash.c
     src/netaddr.c
     src/netbuffer.c
@@ -275,6 +277,7 @@ set(OSHD_TESTS_SOURCES
     tests/device_mode_tests.c
     tests/hashtable_tests.c
     tests/macros_bitfield_tests.c
+    tests/memzero_tests.c
     tests/netaddr_tests.c
     tests/netbuffer_tests.c
     tests/netroute_tests.c
@@ -345,6 +348,10 @@ endif()
 if (TUNTAP_DISABLE_EMULATION)
     add_compiler_flag_nocheck(CMAKE_C_FLAGS -DTUNTAP_DISABLE_EMULATION)
 endif()
+
+add_have_symbol(CMAKE_C_FLAGS "memset_s" "string.h" HAVE_MEMSET_S)
+add_have_symbol(CMAKE_C_FLAGS "memset_explicit" "string.h" HAVE_MEMSET_EXPLICIT)
+add_have_symbol(CMAKE_C_FLAGS "explicit_bzero" "string.h" HAVE_EXPLICIT_BZERO)
 
 # If no build type was specified we will use the default
 set(default_build_type "Debug")

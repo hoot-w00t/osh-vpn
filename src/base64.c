@@ -1,4 +1,5 @@
 #include "base64.h"
+#include "memzero.h"
 #include <string.h>
 
 static const char b64_table[64] = {
@@ -55,19 +56,19 @@ static const uint8_t b64_pad_table[3] = {0, 2, 1};
 // BASE64_ENCODE_EXACTSIZE macro
 void base64_encode(char *output, const void *input, size_t input_size)
 {
-    uint8_t b0, b1, b2;
+    uint8_t b[3];
     uint32_t word;
     size_t i = 0, j = 0;
 
     while (i < input_size) {
         // Copy the next 3 bytes (we don't need to check the index for the
         // first byte because it's tested in the loop condition)
-        b0 = ((const uint8_t *) input)[i++];
-        b1 = (i < input_size) ? ((const uint8_t *) input)[i++] : 0;
-        b2 = (i < input_size) ? ((const uint8_t *) input)[i++] : 0;
+        b[0] = ((const uint8_t *) input)[i++];
+        b[1] = (i < input_size) ? ((const uint8_t *) input)[i++] : 0;
+        b[2] = (i < input_size) ? ((const uint8_t *) input)[i++] : 0;
 
         // Merge the 3 bytes into a 24-bit word
-        word = (b0 << 16) | (b1 << 8) | (b2 << 0);
+        word = (b[0] << 16) | (b[1] << 8) | (b[2] << 0);
 
         // Write the encoded characters               // Groups of 6 bits
         output[j++] = b64_table[(word >> 18) & 0x3F]; // x___
@@ -82,6 +83,11 @@ void base64_encode(char *output, const void *input, size_t input_size)
     // Write padded characters when input size is not a multiple of 3
     for (size_t k = b64_pad_table[input_size % 3]; k > 0; --k)
         output[--j] = '=';
+
+    // Zero temporary buffers securely (they could contain parts of sensitive
+    // data like private keys)
+    memzero(b, sizeof(b));
+    memzero(&word, sizeof(word));
 }
 
 // Decodes Base64 input to output, returns true on success
@@ -127,5 +133,10 @@ bool base64_decode(void *output, size_t *output_size, const char *input,
                                     | ((b[3] & 0x3F) >> 0);
     }
     *output_size = j;
+
+    // Zero temporary buffers securely (they could contain parts of sensitive
+    // data like private keys)
+    memzero(b, sizeof(b));
+
     return true;
 }

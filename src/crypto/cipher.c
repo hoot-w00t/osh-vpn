@@ -152,7 +152,10 @@ void cipher_free(cipher_t *cipher)
 {
     if (cipher) {
         EVP_CIPHER_CTX_free(cipher->evp_ctx);
-        free(cipher->original_iv);
+        if (cipher->original_iv) {
+            memzero(cipher->original_iv, cipher->original_iv_len);
+            free(cipher->original_iv);
+        }
         free(cipher);
     }
 }
