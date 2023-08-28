@@ -77,9 +77,9 @@ cipher_t *cipher_create(cipher_type_t cipher_type, bool encrypts,
 {
     const cipher_def_t *def = cipher_def(cipher_type);
     const EVP_CIPHER *evp_cipher = NULL;
+    cipher_t *cipher = NULL;
     int cipher_key_len;
     int cipher_iv_len;
-    cipher_t *cipher = NULL;
 
     if (!def) {
         logger(LOG_ERR, "%s: Unknown cipher type %X", __func__, cipher_type);
@@ -115,7 +115,7 @@ cipher_t *cipher_create(cipher_type_t cipher_type, bool encrypts,
     if (key != NULL && (unsigned) cipher_key_len != key_size) {
         logger(LOG_CRIT, "%s: Invalid cipher %s size %zu for %s (expected %d)",
             __func__, "key", key_size, cipher->def->name, cipher_key_len);
-        return false;
+        goto error;
     }
 
     cipher_iv_len = EVP_CIPHER_iv_length(cipher->evp_cipher);
@@ -123,7 +123,7 @@ cipher_t *cipher_create(cipher_type_t cipher_type, bool encrypts,
     if (iv != NULL && (unsigned) cipher_iv_len != iv_size) {
         logger(LOG_CRIT, "%s: Invalid cipher %s size %zu for %s (expected %d)",
             __func__, "IV", iv_size, cipher->def->name, cipher_iv_len);
-        return false;
+        goto error;
     }
 
     // Initialize the cipher context for encryption or decryption
