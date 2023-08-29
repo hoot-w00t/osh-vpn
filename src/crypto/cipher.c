@@ -99,8 +99,7 @@ cipher_t *cipher_create(cipher_type_t cipher_type, bool encrypts,
     cipher->encrypts = encrypts;
     cipher->evp_cipher = evp_cipher;
     if (!(cipher->evp_ctx = EVP_CIPHER_CTX_new())) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_CIPHER_CTX_new",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_CIPHER_CTX_new");
         goto error;
     }
 
@@ -129,14 +128,12 @@ cipher_t *cipher_create(cipher_type_t cipher_type, bool encrypts,
     // Initialize the cipher context for encryption or decryption
     if (encrypts) {
         if (!EVP_EncryptInit_ex(cipher->evp_ctx, evp_cipher, NULL, key, iv)) {
-            logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_EncryptInit_ex",
-                osh_openssl_strerror);
+            osh_openssl_log_error("EVP_EncryptInit_ex");
             goto error;
         }
     } else {
         if (!EVP_DecryptInit_ex(cipher->evp_ctx, evp_cipher, NULL, key, iv)) {
-            logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_DecryptInit_ex",
-                osh_openssl_strerror);
+            osh_openssl_log_error("EVP_DecryptInit_ex");
             goto error;
         }
     }
@@ -220,14 +217,12 @@ bool cipher_set_key(cipher_t *cipher, const void *key, size_t key_size)
 
     if (cipher->encrypts) {
         if (!EVP_EncryptInit_ex(cipher->evp_ctx, NULL, NULL, key, NULL)) {
-            logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_EncryptInit_ex",
-                osh_openssl_strerror);
+            osh_openssl_log_error("EVP_EncryptInit_ex");
             return false;
         }
     } else {
         if (!EVP_DecryptInit_ex(cipher->evp_ctx, NULL, NULL, key, NULL)) {
-            logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_DecryptInit_ex",
-                osh_openssl_strerror);
+            osh_openssl_log_error("EVP_DecryptInit_ex");
             return false;
         }
     }
@@ -250,14 +245,12 @@ bool cipher_set_iv(cipher_t *cipher, const void *iv, size_t iv_size)
 
     if (cipher->encrypts) {
         if (!EVP_EncryptInit_ex(cipher->evp_ctx, NULL, NULL, NULL, iv)) {
-            logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_EncryptInit_ex",
-                osh_openssl_strerror);
+            osh_openssl_log_error("EVP_EncryptInit_ex");
             return false;
         }
     } else {
         if (!EVP_DecryptInit_ex(cipher->evp_ctx, NULL, NULL, NULL, iv)) {
-            logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_DecryptInit_ex",
-                osh_openssl_strerror);
+            osh_openssl_log_error("EVP_DecryptInit_ex");
             return false;
         }
     }
@@ -288,25 +281,21 @@ bool cipher_encrypt(cipher_t *cipher,
 
     assert(cipher != NULL);
     if (EVP_EncryptUpdate(cipher->evp_ctx, NULL, &ad_len, ad, ad_size) != 1) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_EncryptUpdate(ad)",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_EncryptUpdate(ad)");
         return false;
     }
     if (EVP_EncryptUpdate(cipher->evp_ctx, out, &out_len, in, in_size) != 1) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_EncryptUpdate",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_EncryptUpdate");
         return false;
     }
     if (EVP_EncryptFinal_ex(cipher->evp_ctx, ((uint8_t *) out) + out_len, &final_len) != 1) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_EncryptFinal_ex",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_EncryptFinal_ex");
         return false;
     }
     if (EVP_CIPHER_CTX_ctrl(cipher->evp_ctx,
             EVP_CTRL_AEAD_GET_TAG, mac_size, mac) != 1)
     {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_CIPHER_CTX_ctrl",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_CIPHER_CTX_ctrl");
         return false;
     }
     *out_size = out_len + final_len;
@@ -324,25 +313,21 @@ bool cipher_decrypt(cipher_t *cipher,
 
     assert(cipher != NULL);
     if (EVP_DecryptUpdate(cipher->evp_ctx, NULL, &ad_len, ad, ad_size) != 1) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_DecryptUpdate(ad)",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_DecryptUpdate(ad)");
         return false;
     }
     if (EVP_DecryptUpdate(cipher->evp_ctx, out, &out_len, in, in_size)  != 1) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_DecryptUpdate",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_DecryptUpdate");
         return false;
     }
     if (EVP_CIPHER_CTX_ctrl(cipher->evp_ctx,
             EVP_CTRL_AEAD_SET_TAG, mac_size, mac) != 1)
     {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_CIPHER_CTX_ctrl",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_CIPHER_CTX_ctrl");
         return false;
     }
     if (EVP_DecryptFinal_ex(cipher->evp_ctx, ((uint8_t *) out) + out_len, &final_len)  != 1) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_DecryptFinal_ex",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_DecryptFinal_ex");
         return false;
     }
     *out_size = out_len + final_len;

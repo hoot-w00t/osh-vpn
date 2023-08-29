@@ -77,18 +77,18 @@ hash_ctx_t *hash_ctx_create(hash_type_t type)
 
     evp_md = EVP_get_digestbyname(def->openssl_name);
     if (!evp_md) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_get_digestbyname", osh_openssl_strerror);
+        osh_openssl_log_error("EVP_get_digestbyname");
         goto err;
     }
 
     evp_ctx = EVP_MD_CTX_new();
     if (!evp_ctx) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_MD_CTX_new", osh_openssl_strerror);
+        osh_openssl_log_error("EVP_MD_CTX_new");
         goto err;
     }
 
     if (!EVP_DigestInit_ex(evp_ctx, evp_md, NULL)) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_DigestInit_ex", osh_openssl_strerror);
+        osh_openssl_log_error("EVP_DigestInit_ex");
         goto err;
     }
 
@@ -106,7 +106,7 @@ err:
 bool hash_ctx_update(hash_ctx_t *ctx, const void *in, size_t in_size)
 {
     if (!EVP_DigestUpdate(ctx->evp_ctx, in, in_size)) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_DigestUpdate", osh_openssl_strerror);
+        osh_openssl_log_error("EVP_DigestUpdate");
         return false;
     }
     return true;
@@ -118,7 +118,7 @@ bool hash_ctx_update(hash_ctx_t *ctx, const void *in, size_t in_size)
 bool hash_ctx_final(hash_ctx_t *ctx, void *out, size_t out_size)
 {
     if (!EVP_DigestFinal_ex(ctx->evp_ctx, ctx->hash, &ctx->hash_size)) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_DigestFinal_ex", osh_openssl_strerror);
+        osh_openssl_log_error("EVP_DigestFinal_ex");
         return false;
     }
 
@@ -181,48 +181,41 @@ bool hash_hkdf(hash_type_t hash_type,
 
     evp_md = EVP_get_digestbyname(def->openssl_name);
     if (!evp_md) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_get_digestbyname", osh_openssl_strerror);
+        osh_openssl_log_error("EVP_get_digestbyname");
         goto end;
     }
 
     pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
     if (!pctx) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_PKEY_CTX_new_id",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_PKEY_CTX_new_id");
         goto end;
     }
 
     if (EVP_PKEY_derive_init(pctx) <= 0) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_PKEY_derive_init",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_PKEY_derive_init");
         goto end;
     }
     if (EVP_PKEY_CTX_set_hkdf_md(pctx, evp_md) <= 0) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_PKEY_CTX_set_hkdf_md",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_PKEY_CTX_set_hkdf_md");
         goto end;
     }
 
     if (EVP_PKEY_CTX_set1_hkdf_salt(pctx, salt, salt_size) <= 0) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_PKEY_CTX_set1_hkdf_salt",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_PKEY_CTX_set1_hkdf_salt");
         goto end;
     }
     if (EVP_PKEY_CTX_set1_hkdf_key(pctx, key, key_size) <= 0) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_PKEY_CTX_set1_hkdf_key",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_PKEY_CTX_set1_hkdf_key");
         goto end;
     }
     if (EVP_PKEY_CTX_add1_hkdf_info(pctx, label, label_size) <= 0) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_PKEY_CTX_add1_hkdf_info",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_PKEY_CTX_add1_hkdf_info");
         goto end;
     }
 
     // Derive out_size bytes to *out
     if (EVP_PKEY_derive(pctx, out, &out_size) <= 0) {
-        logger(LOG_ERR, "%s: %s: %s", __func__, "EVP_PKEY_derive",
-            osh_openssl_strerror);
+        osh_openssl_log_error("EVP_PKEY_derive");
         goto end;
     }
 
