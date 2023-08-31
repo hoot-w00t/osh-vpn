@@ -15,14 +15,21 @@ typedef enum hash_type {
 } hash_type_t;
 #define HASH_TYPE_COUNT _HASH_TYPE_LAST
 
-#define HASH_SHA2_256_SIZE      32
-#define HASH_SHA2_512_SIZE      64
-#define HASH_SHA3_512_SIZE      64
-#define HASH_BLAKE2B_SIZE       64
+#define HASH_SHA2_256_LEN       32
+#define HASH_SHA2_512_LEN       64
+#define HASH_SHA3_512_LEN       64
+#define HASH_BLAKE2B_LEN        64
+
+// TODO: Remove *_SIZE macros
+#define HASH_SHA2_256_SIZE      HASH_SHA2_256_LEN
+#define HASH_SHA2_512_SIZE      HASH_SHA2_512_LEN
+#define HASH_SHA3_512_SIZE      HASH_SHA3_512_LEN
+#define HASH_BLAKE2B_SIZE       HASH_BLAKE2B_LEN
 
 typedef struct hash_ctx hash_ctx_t;
 
 const char *hash_type_name(hash_type_t type);
+size_t hash_type_length(hash_type_t type);
 
 hash_ctx_t *hash_ctx_create(hash_type_t type);
 bool hash_ctx_update(hash_ctx_t *ctx, const void *in, size_t in_size);

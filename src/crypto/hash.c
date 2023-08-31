@@ -9,8 +9,9 @@
 #include <openssl/sha.h>
 
 struct hash_type_def {
-    hash_type_t type;
+    const hash_type_t type;
     const char *name;
+    const size_t hash_length;
 
     const char *openssl_name;
 };
@@ -19,21 +20,29 @@ static const struct hash_type_def hash_type_table[HASH_TYPE_COUNT] = {
     {
         .type = HASH_SHA2_256,
         .name = "sha2-256",
+        .hash_length = HASH_SHA2_256_LEN,
+
         .openssl_name = "sha256"
     },
     {
         .type = HASH_SHA2_512,
         .name = "sha2-512",
+        .hash_length = HASH_SHA2_512_LEN,
+
         .openssl_name = "sha512"
     },
     {
         .type = HASH_SHA3_512,
         .name = "sha3-512",
+        .hash_length = HASH_SHA3_512_LEN,
+
         .openssl_name = "sha3-512"
     },
     {
         .type = HASH_BLAKE2B,
         .name = "blake2b",
+        .hash_length = HASH_BLAKE2B_LEN,
+
         .openssl_name = "blake2b512"
     }
 };
@@ -50,6 +59,13 @@ const char *hash_type_name(hash_type_t type)
     const struct hash_type_def *def = hash_type_lookup(type);
 
     return def ? def->name : NULL;
+}
+
+size_t hash_type_length(hash_type_t type)
+{
+    const struct hash_type_def *def = hash_type_lookup(type);
+
+    return def ? def->hash_length : 0;
 }
 
 #define HASH_CTX_MAX_HASH_SIZE EVP_MAX_MD_SIZE
