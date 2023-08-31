@@ -1,5 +1,6 @@
 #include "oshd.h"
 #include "logger.h"
+#include "macros_assert.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -31,12 +32,16 @@ static void handshake_copy_to_sig_data(client_t *c, const oshpacket_handshake_t 
     logger_debug(DBG_HANDSHAKE, "%s: Copying %s to signature data",
         c->addrw, "initiator ID");
     memcpy(c->handshake_sig_data->initiator_name, nid_initiator->name, NODE_NAME_SIZE);
-    memcpy(c->handshake_sig_data->initiator_pubkey, nid_initiator->pubkey_raw, HANDSHAKE_PUBKEY_SIZE);
+    assert(keypair_dump_public_key(nid_initiator->ed25519_key,
+        c->handshake_sig_data->initiator_pubkey,
+        sizeof(c->handshake_sig_data->initiator_pubkey)) == true);
 
     logger_debug(DBG_HANDSHAKE, "%s: Copying %s to signature data",
         c->addrw, "receiver ID");
     memcpy(c->handshake_sig_data->receiver_name, nid_receiver->name, NODE_NAME_SIZE);
-    memcpy(c->handshake_sig_data->receiver_pubkey, nid_receiver->pubkey_raw, HANDSHAKE_PUBKEY_SIZE);
+    assert(keypair_dump_public_key(nid_receiver->ed25519_key,
+        c->handshake_sig_data->receiver_pubkey,
+        sizeof(c->handshake_sig_data->receiver_pubkey)) == true);
 
     // The handshake signature data is now fully initialized
     c->handshake_sig_data_complete = true;
@@ -46,27 +51,14 @@ static void handshake_copy_to_sig_data(client_t *c, const oshpacket_handshake_t 
 // The signature is copied to *sig
 static bool handshake_sign_data(const client_t *c, uint8_t *sig, size_t sig_size)
 {
-    uint8_t *tmp_sig = NULL;
-    size_t tmp_sig_size;
-
     logger_debug(DBG_HANDSHAKE, "%s: Signing handshake signature data", c->addrw);
-    if (!pkey_sign(oshd.privkey,
+    if (!keypair_sig_sign(oshd.local_ed25519_key,
             c->handshake_sig_data, sizeof(oshpacket_handshake_sig_data_t),
-            &tmp_sig, &tmp_sig_size))
+            sig, sig_size))
     {
         logger(LOG_ERR, "%s: Failed to sign handshake signature data", c->addrw);
         return false;
     }
-
-    if (tmp_sig_size != sig_size) {
-        logger(LOG_ERR, "%s: Invalid handshake signature size (%zu but expected %zu)",
-            c->addrw, tmp_sig_size, sig_size);
-        free(tmp_sig);
-        return false;
-    }
-
-    memcpy(sig, tmp_sig, HANDSHAKE_SIG_SIZE);
-    free(tmp_sig);
     return true;
 }
 
@@ -80,10 +72,10 @@ static bool queue_handshakes_signature(client_t *c, const oshpacket_handshake_t 
     oshpacket_handshake_sig_t sig_packet;
 
     // Make sure both nodes have a valid public key, this should never fail
-    if (   !me->pubkey_raw
-        ||  me->pubkey_raw_size != HANDSHAKE_PUBKEY_SIZE
-        || !c->handshake_id->pubkey_raw
-        ||  c->handshake_id->pubkey_raw_size != HANDSHAKE_PUBKEY_SIZE)
+    if (   !keypair_has_public_key(me->ed25519_key)
+        ||  keypair_get_public_key_length(me->ed25519_key) != HANDSHAKE_PUBKEY_SIZE
+        || !keypair_has_public_key(c->handshake_id->ed25519_key)
+        ||  keypair_get_public_key_length(c->handshake_id->ed25519_key) != HANDSHAKE_PUBKEY_SIZE)
     {
         logger(LOG_ERR, "%s: Handshake failed: Invalid public keys", c->addrw);
         return false;
@@ -151,7 +143,7 @@ bool oshpacket_handler_handshake(client_t *c, oshpacket_t *pkt)
 
     // If the node's public key is not trusted, fail early as the signature
     // verification will fail later
-    if (!c->handshake_id->pubkey_local && !oshd.remote_auth) {
+    if (!keypair_is_trusted(c->handshake_id->ed25519_key) && !oshd.remote_auth) {
         logger(LOG_ERR, "%s: Handshake failed: No trusted public key for %s",
             c->addrw, c->handshake_id->name);
         return false;

@@ -35,49 +35,44 @@ static bool queue_hello(client_t *c)
 
 // Load remote node's ECDH public keys
 static bool handshake_load_ecdh_pubkey(client_t *c,
-    const oshpacket_handshake_t *handshake, EVP_PKEY **ecdh_pubkey)
+    const oshpacket_handshake_t *handshake, keypair_t *ecdh_keypair)
 {
     logger_debug(DBG_HANDSHAKE, "%s: Loading remote public ECDH key", c->addrw);
-    *ecdh_pubkey = pkey_load_x25519_pubkey(handshake->ecdh_pubkey,
-        sizeof(handshake->ecdh_pubkey));
-
-    if (*ecdh_pubkey == NULL) {
-        logger(LOG_ERR, "%s: Handshake failed: %s", c->addrw,
-            "Failed to load remote ECDH public key");
-        pkey_free(*ecdh_pubkey);
+    if (!keypair_set_public_key(ecdh_keypair, handshake->ecdh_pubkey, sizeof(handshake->ecdh_pubkey))) {
+        logger(LOG_ERR, "%s: Handshake failed: %s", c->addrw, "Failed to load remote ECDH public key");
         return false;
     }
-
     return true;
 }
 
 // Load the remote node's public ECDH key and derive the shared secret with our
 // own, returns false on error
-// The resulting secret is dynamically allocated and placed into *ecdh_secret
-static bool handshake_compute_ecdh_secret(client_t *c, uint8_t **ecdh_secret,
-    size_t *ecdh_secret_size)
+// The resulting secret is written to ecdh_secret
+static bool handshake_compute_ecdh_secret(client_t *c, void *ecdh_secret,
+    size_t ecdh_secret_size)
 {
-    EVP_PKEY *remote_ecdh_pubkey;
-    bool success;
+    keypair_t *remote_ecdh_pubkey = keypair_create_nofail(KEYPAIR_X25519);
+    bool success = false;
 
     // Load the remote node's public ECDH key
     if (!handshake_load_ecdh_pubkey(c,
             c->initiator ? &c->handshake_sig_data->receiver_handshake
                          : &c->handshake_sig_data->initiator_handshake,
-            &remote_ecdh_pubkey))
+            remote_ecdh_pubkey))
     {
-        return false;
+        goto end;
     }
 
     logger_debug(DBG_HANDSHAKE, "%s: Computing ECDH secret", c->addrw);
-    success = pkey_derive(c->ecdh_key, remote_ecdh_pubkey,
+    success = keypair_kex_dh(c->ecdh_key, remote_ecdh_pubkey,
         ecdh_secret, ecdh_secret_size);
 
-    // We no longer need the ECDH keys now
-    pkey_free(remote_ecdh_pubkey);
-    pkey_free(c->ecdh_key);
+end:
+    keypair_destroy(remote_ecdh_pubkey);
+    keypair_destroy(c->ecdh_key);
     c->ecdh_key = NULL;
-
+    if (!success)
+        memzero(ecdh_secret, ecdh_secret_size);
     return success;
 }
 
@@ -148,24 +143,22 @@ static bool handshake_create_ciphers(const client_t *c, const handshake_hkdf_key
 // This function does ECDH, HKDF and cipher rotation
 static bool handshake_setup_new_ciphers(client_t *c)
 {
-    uint8_t *ecdh_secret;
-    size_t ecdh_secret_size;
+    uint8_t ecdh_secret[KEYPAIR_X25519_SECRETLEN];
     handshake_hkdf_keys_t hkdf;
     bool hkdf_success;
     cipher_t *new_send_cipher;
     cipher_t *new_recv_cipher;
 
     // Calculate the shared secret
-    if (!handshake_compute_ecdh_secret(c, &ecdh_secret, &ecdh_secret_size)) {
+    if (!handshake_compute_ecdh_secret(c, ecdh_secret, sizeof(ecdh_secret))) {
         logger(LOG_ERR, "%s: Handshake failed: %s", c->addrw,
             "Failed to compute ECDH secret");
         return false;
     }
 
     // Derive secret bytes
-    hkdf_success = handshake_compute_hkdf(c, ecdh_secret, ecdh_secret_size, &hkdf);
-    memzero(ecdh_secret, ecdh_secret_size);
-    free(ecdh_secret);
+    hkdf_success = handshake_compute_hkdf(c, ecdh_secret, sizeof(ecdh_secret), &hkdf);
+    memzero(ecdh_secret, sizeof(ecdh_secret));
 
     if (!hkdf_success) {
         logger(LOG_ERR, "%s: Handshake failed: %s",
@@ -257,9 +250,9 @@ bool oshpacket_handler_handshake_sig(client_t *c, oshpacket_t *pkt)
     // Verify the handshake signature
     logger_debug(DBG_HANDSHAKE, "%s: %s has a %s public key",
         c->addrw, c->handshake_id->name,
-        c->handshake_id->pubkey_local ? "local" : "remote");
+        keypair_is_trusted(c->handshake_id->ed25519_key) ? "local" : "remote");
 
-    c->handshake_valid_signature = pkey_verify(c->handshake_id->pubkey,
+    c->handshake_valid_signature = keypair_sig_verify(c->handshake_id->ed25519_key,
         c->handshake_sig_data, sizeof(oshpacket_handshake_sig_data_t),
         sig_packet->sig, sizeof(sig_packet->sig));
 

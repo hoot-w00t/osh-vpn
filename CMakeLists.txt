@@ -204,7 +204,7 @@ set(OSHD_SOURCES
     ${OSH_AIO_SOURCES}
     src/crypto/cipher.c
     src/crypto/hash.c
-    src/crypto/pkey.c
+    src/crypto/keypair.c
     src/events/automatic_connections.c
     src/events/connect.c
     src/events/dynamic_ip_conflict.c
@@ -273,6 +273,7 @@ endif()
 set(OSHD_TESTS_SOURCES
     ${OSHD_SOURCES}
     tests/crypto/cipher_tests.c
+    tests/crypto/keypair_tests.c
     tests/base64_tests.c
     tests/device_mode_tests.c
     tests/hashtable_tests.c

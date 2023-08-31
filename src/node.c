@@ -18,15 +18,9 @@ bool node_id_gen_hash(const node_id_t *nid, const uint8_t *salt,
     bool success;
     hash_ctx_t *ctx;
 
-    // The node must have a public key of the correct size
-    if (!nid->pubkey_raw)
+    // The node must have a public key
+    if (!keypair_has_public_key(nid->ed25519_key))
         return false;
-    if (nid->pubkey_raw_size != HANDSHAKE_PUBKEY_SIZE) {
-        // This should never happen
-        logger(LOG_CRIT, "node_id_gen_hash: %s has an invalid public key size %zu",
-            nid->name, nid->pubkey_raw_size);
-        return false;
-    }
 
     // There must be a salt to generate the ID hash
     if (salt_size == 0) {
@@ -44,7 +38,7 @@ bool node_id_gen_hash(const node_id_t *nid, const uint8_t *salt,
     // Hash the node's name, public key and the salt
     if (!hash_ctx_update(ctx, nid->name, NODE_NAME_SIZE))
         goto end;
-    if (!hash_ctx_update(ctx, nid->pubkey_raw, HANDSHAKE_PUBKEY_SIZE))
+    if (!hash_ctx_update(ctx, keypair_get_public_key(nid->ed25519_key), keypair_get_public_key_length(nid->ed25519_key)))
         goto end;
     if (!hash_ctx_update(ctx, salt, salt_size))
         goto end;
@@ -139,6 +133,7 @@ node_id_t *node_id_add(const char *name)
         oshd.node_tree_count = new_count;
 
         strncpy(id->name, name, NODE_NAME_SIZE);
+        id->ed25519_key = keypair_create_nofail(KEYPAIR_ED25519);
         id->endpoints = endpoint_group_create(id->name, "known");
         id->connect_endpoints = endpoint_group_create(id->name, "connect");
     }
@@ -150,8 +145,7 @@ void node_id_free(node_id_t *nid)
 {
     event_cancel(nid->connect_event);
 
-    pkey_free(nid->pubkey);
-    free(nid->pubkey_raw);
+    keypair_destroy(nid->ed25519_key);
     free(nid->edges);
     endpoint_group_free(nid->endpoints);
     endpoint_group_free(nid->connect_endpoints);
@@ -212,32 +206,19 @@ void node_id_del_edge(node_id_t *src, node_id_t *dest)
     node_id_del_edge_internal(dest, src);
 }
 
-// Load a remote public key for *nid
+// Load a remote Ed25519 public key for *nid
 // If a public key was already loaded it will be replaced only if pubkey_local
 // is false; local public keys cannot be replaced
-bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
-    size_t pubkey_size)
+bool node_id_set_pubkey(node_id_t *nid, const void *pubkey, size_t pubkey_size)
 {
-    EVP_PKEY *new_key;
-
-    if (nid->pubkey_local) {
+    if (keypair_is_trusted(nid->ed25519_key)) {
         logger_debug(DBG_HANDSHAKE,
             "Ignoring new public key for %s: A local public key is already loaded",
             nid->name);
         return true;
     }
 
-    new_key = pkey_load_ed25519_pubkey(pubkey, pubkey_size);
-    if (!new_key)
-        return false;
-
-    pkey_free(nid->pubkey);
-    nid->pubkey = new_key;
-    free(nid->pubkey_raw);
-    nid->pubkey_raw = xmemdup(pubkey, pubkey_size);
-    nid->pubkey_raw_size = pubkey_size;
-    nid->pubkey_local = false;
-    return true;
+    return keypair_set_public_key(nid->ed25519_key, pubkey, pubkey_size);
 }
 
 // Link a client to a node
@@ -590,9 +571,9 @@ bool node_valid_name(const char *name)
 // Returns false if it does not have a public key, or we don't trust it
 bool node_has_trusted_pubkey(const node_id_t *nid)
 {
-    if (!nid->pubkey)
+    if (!keypair_has_public_key(nid->ed25519_key))
         return false;
-    return nid->pubkey_local || oshd.remote_auth;
+    return keypair_is_trusted(nid->ed25519_key) || oshd.remote_auth;
 }
 
 // Push the broadcast ID to the end of the seen broadcast IDs array

@@ -16,15 +16,7 @@ struct node_id {
     char name[NODE_NAME_SIZE + 1];
 
     // Node's public key for authentication
-    EVP_PKEY *pubkey;
-
-    // Public key data for public key exchanges
-    uint8_t *pubkey_raw;
-    size_t pubkey_raw_size;
-
-    // true if *pubkey is a local key loaded from the configuration
-    // false otherwise
-    bool pubkey_local;
+    keypair_t *ed25519_key;
 
     // The client associated to this ID (if we have a direct connection)
     client_t *node_socket;
@@ -77,8 +69,7 @@ node_id_t *node_id_add(const char *name);
 void node_id_free(node_id_t *nid);
 void node_id_add_edge(node_id_t *src, node_id_t *dest);
 void node_id_del_edge(node_id_t *src, node_id_t *dest);
-bool node_id_set_pubkey(node_id_t *nid, const uint8_t *pubkey,
-    size_t pubkey_size);
+bool node_id_set_pubkey(node_id_t *nid, const void *pubkey, size_t pubkey_size);
 
 #define node_id_linked_client(nid) ((nid)->node_socket)
 client_t *node_id_link_client(node_id_t *nid, client_t *c);

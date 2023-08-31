@@ -6,7 +6,7 @@
 #include "tuntap.h"
 #include "netroute.h"
 #include "device_mode.h"
-#include "crypto/pkey.h"
+#include "crypto/keypair.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -18,7 +18,7 @@
 
 typedef struct conf_pubkey {
     char node_name[NODE_NAME_SIZE + 1];
-    EVP_PKEY *pkey;
+    keypair_t *key;
 } conf_pubkey_t;
 
 typedef struct conf_route {
@@ -75,8 +75,8 @@ typedef struct oshd {
     time_t automatic_connections_interval;
     size_t automatic_connections_percent;
 
-    // The local node's private and public keys
-    EVP_PKEY *privkey;
+    // The local node's Ed25519 key
+    keypair_t *local_ed25519_key;
 
     // TUN/TAP device information
     device_mode_t device_mode; // The mode of the TUN/TAP device

@@ -85,12 +85,9 @@ bool oshd_init(void)
 
     // Load our own public key
     logger_debug(DBG_OSHD, "Loading the daemon's public key");
-    if (!pkey_save_pubkey(oshd.privkey, &me->pubkey_raw, &me->pubkey_raw_size))
+    if (!keypair_copy_public_key(me->ed25519_key, oshd.local_ed25519_key))
         return false;
-    me->pubkey = pkey_load_ed25519_pubkey(me->pubkey_raw, me->pubkey_raw_size);
-    if (!me->pubkey)
-        return false;
-    me->pubkey_local = true;
+    keypair_set_trusted(me->ed25519_key, true);
 
     // Add the loaded public keys to the tree
     for (size_t i = 0; i < oshd.conf_pubkeys_size; ++i) {
@@ -106,11 +103,11 @@ bool oshd_init(void)
 
         // Load the node's public key
         logger_debug(DBG_OSHD, "Loading the public key for %s", nid->name);
-        nid->pubkey = oshd.conf_pubkeys[i].pkey;
-        oshd.conf_pubkeys[i].pkey = NULL;
-        if (!pkey_save_pubkey(nid->pubkey, &nid->pubkey_raw, &nid->pubkey_raw_size))
+        if (!keypair_copy_public_key(nid->ed25519_key, oshd.conf_pubkeys[i].key))
             return false;
-        nid->pubkey_local = true;
+        keypair_set_trusted(nid->ed25519_key, true);
+        keypair_destroy(oshd.conf_pubkeys[i].key);
+        oshd.conf_pubkeys[i].key = NULL;
     }
 
     // Add all nodes' endpoints
@@ -223,11 +220,11 @@ void oshd_free(void)
 
     event_cancel_queue();
 
-    pkey_free(oshd.privkey);
+    keypair_destroy(oshd.local_ed25519_key);
     free(oshd.digraph_file);
 
     for (size_t i = 0; i < oshd.conf_pubkeys_size; ++i)
-        pkey_free(oshd.conf_pubkeys[i].pkey);
+        keypair_destroy(oshd.conf_pubkeys[i].key);
     free(oshd.conf_pubkeys);
 
     free(oshd.conf_routes);

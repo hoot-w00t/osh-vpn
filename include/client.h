@@ -9,7 +9,7 @@
 #include "oshpacket.h"
 #include "oshd_clock.h"
 #include "crypto/cipher.h"
-#include "crypto/pkey.h"
+#include "crypto/keypair.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -153,7 +153,7 @@ struct client {
     // ECDH key and ciphers to encrypt/decrypt traffic
     // The send cipher will be used to encrypt outgoing packets
     // The recv cipher will be used to decrypt incoming packets
-    EVP_PKEY *ecdh_key;
+    keypair_t *ecdh_key;
     cipher_t *send_cipher;
     cipher_t *recv_cipher;
     cipher_t *recv_cipher_next;

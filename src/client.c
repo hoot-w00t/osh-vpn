@@ -118,7 +118,7 @@ static void client_disconnect(client_t *c)
 // Free all ECDH keys and ciphers and reset their values to NULL
 static void client_reset_ciphers(client_t *c)
 {
-    pkey_free(c->ecdh_key);
+    keypair_destroy(c->ecdh_key);
     cipher_free(c->send_cipher);
     cipher_free(c->recv_cipher);
     cipher_free(c->recv_cipher_next);
@@ -876,33 +876,18 @@ static bool client_queue_packet_fragmented(
 
 // Generate ECDH keypair into *key (*key must be NULL)
 // Export the public key to *pubkey
-static bool handshake_generate_ecdh_key(const client_t *c, EVP_PKEY **key,
-    uint8_t *pubkey, size_t pubkey_size)
+static bool handshake_generate_ecdh_key(__attribute__((unused)) const client_t *c,
+    keypair_t **key, uint8_t *pubkey, size_t pubkey_size)
 {
-    uint8_t *tmp_pubkey;
-    size_t tmp_pubkey_size;
+    // Generate X25519 keypair and write public key
+    *key = keypair_create_nofail(KEYPAIR_X25519);
 
-    // Generate the Curve25519 keypair
-    *key = pkey_generate_x25519();
-    if (*key == NULL)
+    if (!keypair_generate_random(*key))
         return false;
 
-    // Export the public key
-    if (!pkey_save_pubkey(*key, &tmp_pubkey, &tmp_pubkey_size))
+    if (!keypair_dump_public_key(*key, pubkey, pubkey_size))
         return false;
 
-    // Verify that the buffer sizes match
-    if (tmp_pubkey_size != pubkey_size) {
-        logger(LOG_CRIT,
-            "%s: Invalid handshake ECDH public key size (%zu but expected %zu)",
-            c->addrw, tmp_pubkey_size, pubkey_size);
-        free(tmp_pubkey);
-        return false;
-    }
-
-    // Copy the public key
-    memcpy(pubkey, tmp_pubkey, pubkey_size);
-    free(tmp_pubkey);
     return true;
 }
 
@@ -1054,18 +1039,19 @@ bool client_queue_pubkey_broadcast(client_t *exclude, node_id_t *id)
 {
     oshpacket_pubkey_t packet;
 
-    if (   !id->pubkey
-        || !id->pubkey_raw
-        || id->pubkey_raw_size != NODE_PUBKEY_SIZE)
-    {
-        logger(LOG_ERR, "Failed to broadcast public key of %s: No public key",
-            id->name);
+    if (!keypair_has_public_key(id->ed25519_key)) {
+        logger(LOG_ERR, "Failed to broadcast public key of %s: %s",
+            id->name, "No public key");
         return false;
     }
 
     logger_debug(DBG_HANDSHAKE, "Broadcasting public key of %s", id->name);
     memcpy(packet.node_name, id->name, NODE_NAME_SIZE);
-    memcpy(packet.node_pubkey, id->pubkey_raw, NODE_PUBKEY_SIZE);
+    if (!keypair_dump_public_key(id->ed25519_key, packet.node_pubkey, sizeof(packet.node_pubkey))) {
+        logger(LOG_ERR, "Failed to broadcast public key of %s: %s",
+            id->name, "Invalid buffer size");
+        return false;
+    }
 
     return client_queue_packet_broadcast(exclude, OSHPKT_PUBKEY, &packet, sizeof(packet));
 }

@@ -484,39 +484,18 @@ static bool oshd_param_include(ecp_t *ecp)
 // PrivateKey
 static bool oshd_param_privatekey(ecp_t *ecp)
 {
-    const char *b64 = ecp_value(ecp);
-    const size_t b64_size = strlen(b64);
-    uint8_t *privkey = NULL;
-    size_t privkey_size;
-    bool success = false;
-
-    if (oshd.privkey) {
+    if (keypair_has_private_key(oshd.local_ed25519_key)) {
         set_error("A private key was already loaded");
-        goto end;
+        return false;
     }
 
-    privkey_size = BASE64_DECODE_OUTSIZE(b64_size);
-    privkey = xzalloc(privkey_size);
-
-    if (!base64_decode(privkey, &privkey_size, b64, b64_size)) {
-        set_error("Failed to decode private key");
-        goto end;
-    }
-
-    if (!(oshd.privkey = pkey_load_ed25519_privkey(privkey, privkey_size))) {
+    if (!keypair_set_private_key_base64(oshd.local_ed25519_key, ecp_value(ecp))) {
         set_error("Failed to load private key");
-        goto end;
+        return false;
     }
 
-    success = true;
     logger_debug(DBG_CONF, "Loaded private key from configuration file");
-
-end:
-    if (privkey) {
-        memzero(privkey, privkey_size);
-        free(privkey);
-    }
-    return success;
+    return true;
 }
 
 // PrivateKeyFile
@@ -524,12 +503,12 @@ static bool oshd_param_privatekeyfile(ecp_t *ecp)
 {
     const char *filename = ecp_value(ecp);
 
-    if (oshd.privkey) {
+    if (keypair_has_private_key(oshd.local_ed25519_key)) {
         set_error("A private key was already loaded");
         return false;
     }
 
-    if (!(oshd.privkey = pkey_load_privkey_pem(filename))) {
+    if (!keypair_set_private_key_pem(oshd.local_ed25519_key, filename)) {
         set_error_fmt("Failed to load private key from '%s'", filename);
         return false;
     }
@@ -542,10 +521,7 @@ static bool oshd_param_privatekeyfile(ecp_t *ecp)
 // Returns false on error
 static bool conf_pubkey_add(const char *node_name, const char *pubkey64)
 {
-    size_t pubkey64_size;
-    uint8_t *pubkey = NULL;
-    size_t pubkey_size;
-    EVP_PKEY *pkey = NULL;
+    keypair_t *keypair = keypair_create_nofail(KEYPAIR_ED25519);
     bool success = false;
 
     // Verify that the node's name is valid
@@ -555,21 +531,13 @@ static bool conf_pubkey_add(const char *node_name, const char *pubkey64)
     }
 
     // Verify that there is a public key
-    pubkey64_size = pubkey64 ? strlen(pubkey64) : 0;
-    if (pubkey64_size == 0) {
+    if (pubkey64 == NULL || strlen(pubkey64) == 0) {
         set_error_fmt("%s does not have a public key", node_name);
         goto end;
     }
 
-    // Decode the Base64 public key
-    pubkey = xzalloc(BASE64_DECODE_OUTSIZE(pubkey64_size));
-    if (!base64_decode(pubkey, &pubkey_size, pubkey64, pubkey64_size)) {
-        set_error_fmt("Failed to decode public key for %s", node_name);
-        goto end;
-    }
-
-    // Load it
-    if (!(pkey = pkey_load_ed25519_pubkey(pubkey, pubkey_size))) {
+    // Load the public key
+    if (!keypair_set_public_key_base64(keypair, pubkey64)) {
         set_error_fmt("Failed to load public key for %s", node_name);
         goto end;
     }
@@ -588,16 +556,15 @@ static bool conf_pubkey_add(const char *node_name, const char *pubkey64)
         oshd.conf_pubkeys_size + 1, sizeof(conf_pubkey_t));
     memset(&oshd.conf_pubkeys[oshd.conf_pubkeys_size], 0, sizeof(conf_pubkey_t));
     strncpy(oshd.conf_pubkeys[oshd.conf_pubkeys_size].node_name, node_name, NODE_NAME_SIZE);
-    oshd.conf_pubkeys[oshd.conf_pubkeys_size].pkey = pkey;
+    oshd.conf_pubkeys[oshd.conf_pubkeys_size].key = keypair;
     oshd.conf_pubkeys_size += 1;
 
-    pkey = NULL; // The key shouldn't be freed
+    keypair = NULL; // The key was moved to conf_pubkeys, it will be freed later
     success = true;
     logger_debug(DBG_CONF, "Loaded public key for %s", node_name);
 
 end:
-    free(pubkey);
-    pkey_free(pkey);
+    keypair_destroy(keypair);
     return success;
 }
 
@@ -772,6 +739,8 @@ void oshd_init_conf(void)
     memset(&oshd, 0, sizeof(oshd_t));
 
     // Everything that should not be zero by default is set
+    oshd.local_ed25519_key = keypair_create_nofail(KEYPAIR_ED25519);
+
     oshd.server_port = OSHD_DEFAULT_PORT;
     oshd.server_enabled = true;
 
@@ -799,7 +768,7 @@ static bool validate_configuration(void)
         return false;
     }
 
-    if (!oshd.privkey) {
+    if (!keypair_has_private_key(oshd.local_ed25519_key)) {
         logger(LOG_ERR, "The daemon must have a private key");
         return false;
     }

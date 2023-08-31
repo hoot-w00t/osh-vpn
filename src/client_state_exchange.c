@@ -50,9 +50,8 @@ bool client_queue_pubkey_exg(client_t *c)
     for (size_t i = 0; i < oshd.node_tree_count; ++i) {
         // Only exchange public keys from online nodes
         if (   !oshd.node_tree[i]->online
-            || !oshd.node_tree[i]->pubkey
-            || !oshd.node_tree[i]->pubkey_raw
-            ||  oshd.node_tree[i]->pubkey_raw_size != NODE_PUBKEY_SIZE)
+            || !keypair_has_public_key(oshd.node_tree[i]->ed25519_key)
+            ||  keypair_get_public_key_length(oshd.node_tree[i]->ed25519_key) != NODE_PUBKEY_SIZE)
         {
             continue;
         }
@@ -61,7 +60,8 @@ bool client_queue_pubkey_exg(client_t *c)
             c->addrw, c->id->name, oshd.node_tree[i]->name);
 
         memcpy(pkt[count].node_name, oshd.node_tree[i]->name, NODE_NAME_SIZE);
-        memcpy(pkt[count].node_pubkey, oshd.node_tree[i]->pubkey_raw, NODE_PUBKEY_SIZE);
+        assert(keypair_dump_public_key(oshd.node_tree[i]->ed25519_key,
+            pkt[count].node_pubkey, sizeof(pkt[count].node_pubkey)) == true);
         count += 1;
     }
 

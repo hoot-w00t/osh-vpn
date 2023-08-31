@@ -4,6 +4,7 @@
 #include "oshd.h"
 #include "oshd_conf.h"
 #include "xalloc.h"
+#include "memzero.h"
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -105,134 +106,103 @@ static void print_help(const char *cmd)
 // --generate-key
 static bool generate_key(void)
 {
-    uint8_t *privkey = NULL;
-    size_t privkey_size = 0;
-    char *privkey64 = NULL;
-    EVP_PKEY *pkey = NULL;
+    keypair_t *keypair = keypair_create_nofail(KEYPAIR_ED25519);
+    char *privkey_b64 = NULL;
     bool success = false;
 
-    // Generate the private key
-    if (!(pkey = pkey_generate_ed25519()))
+    if (!keypair_generate_random(keypair))
         goto end;
 
-    // Save it to memory
-    if (!pkey_save_privkey(pkey, &privkey, &privkey_size))
-        goto end;
-
-    // Encode it in Base64 and print it to stdout
-    privkey64 = xzalloc(BASE64_ENCODE_OUTSIZE(privkey_size));
-    base64_encode(privkey64, privkey, privkey_size);
-    printf("%s\n", privkey64);
+    privkey_b64 = keypair_get_private_key_b64(keypair);
+    assert(privkey_b64 != NULL);
     success = true;
+    printf("%s\n", privkey_b64);
 
 end:
-    free(privkey);
-    free(privkey64);
-    pkey_free(pkey);
+    keypair_destroy(keypair);
+    if (privkey_b64)
+        memzero_str_free(privkey_b64);
     return success;
 }
 
 // --generate-key-pem
 static bool generate_key_pem(const char *filename)
 {
-    bool success;
-    EVP_PKEY *pkey;
+    keypair_t *keypair = keypair_create_nofail(KEYPAIR_ED25519);
+    bool success = false;
 
-    // Generate the private key
-    pkey = pkey_generate_ed25519();
-    if (!pkey)
-        return false;
+    if (!keypair_generate_random(keypair))
+        goto end;
 
-    // Save it to filename
-    success = pkey_save_privkey_pem(pkey, filename);
-    if (success)
-        printf("Generated private key to: %s\n", filename);
+    if (!keypair_get_private_key_pem(keypair, filename))
+        goto end;
 
-    pkey_free(pkey);
+    printf("Generated private key to: %s\n", filename);
+    success = true;
+
+end:
+    keypair_destroy(keypair);
     return success;
 }
 
 // --public-key
 static bool public_key(void)
 {
-    char privkey64[BASE64_ENCODE_EXACTSIZE(ED25519_KEY_SIZE)];
-    size_t privkey64_size;
-    uint8_t privkey[BASE64_DECODE_OUTSIZE(sizeof(privkey64))];
-    size_t privkey_size;
-    uint8_t *pubkey = NULL;
-    size_t pubkey_size;
-    char *pubkey64 = NULL;
-    EVP_PKEY *pkey = NULL;
+    keypair_t *keypair = keypair_create_nofail(KEYPAIR_ED25519);
+    const size_t privkey_b64_maxlen = BASE64_ENCODE_EXACTSIZE(KEYPAIR_ED25519_KEYLEN);
+    const size_t privkey_b64_readlen = privkey_b64_maxlen - 1;
+    char *privkey_b64 = xzalloc(privkey_b64_maxlen);
+    size_t privkey_b64_len;
+    char *pubkey_b64 = NULL;
     bool success = false;
 
-    // Read the Base64 encoded private key from stdin
-    memset(privkey64, 0, sizeof(privkey64));
-    privkey64_size = fread(privkey64, 1, sizeof(privkey64) - 1, stdin);
-    if (privkey64_size < sizeof(privkey64) - 1) {
-        fprintf(stderr, "Encoded private key is too short\n");
+    // Read the Base64 private key from stdin
+    privkey_b64_len = fread(privkey_b64, 1, privkey_b64_readlen, stdin);
+    if (privkey_b64_len < privkey_b64_readlen) {
+        fprintf(stderr, "Private key is too short\n");
         goto end;
     }
 
-    // Decode it
-    if (!base64_decode(privkey, &privkey_size, privkey64, strlen(privkey64))) {
-        fprintf(stderr, "Failed to decode Base64 private key\n");
+    // Load it and dump the public key in Base64
+    if (!keypair_set_private_key_base64(keypair, privkey_b64))
         goto end;
-    }
 
-    // Load it
-    if (!(pkey = pkey_load_ed25519_privkey(privkey, privkey_size))) {
-        fprintf(stderr, "Failed to load private key\n");
+    pubkey_b64 = keypair_get_public_key_b64(keypair);
+    if (!pubkey_b64)
         goto end;
-    }
 
-    // Save the public key to memory
-    if (!pkey_save_pubkey(pkey, &pubkey, &pubkey_size)) {
-        fprintf(stderr, "Failed to save public key\n");
-        goto end;
-    }
-
-    // Encode it in Base64 and print it to stdout
-    pubkey64 = xzalloc(BASE64_ENCODE_OUTSIZE(pubkey_size));
-    base64_encode(pubkey64, pubkey, pubkey_size);
-    printf("%s\n", pubkey64);
+    printf("%s\n", pubkey_b64);
     success = true;
 
 end:
-    free(pubkey);
-    free(pubkey64);
-    pkey_free(pkey);
+    keypair_destroy(keypair);
+    memzero_free(privkey_b64, privkey_b64_maxlen);
+    if (pubkey_b64)
+        memzero_str_free(pubkey_b64);
     return success;
 }
 
 // --public-key-pem
 static bool public_key_pem(const char *filename)
 {
-    EVP_PKEY *pkey = NULL;
-    uint8_t *pubkey = NULL;
-    size_t pubkey_size;
-    char *pubkey64 = NULL;
+    keypair_t *keypair = keypair_create_nofail(KEYPAIR_ED25519);
+    char *pubkey_b64 = NULL;
     bool success = false;
 
-    // Load the private key from filename
-    if (!(pkey = pkey_load_privkey_pem(filename)))
+    if (!keypair_set_private_key_pem(keypair, filename))
         goto end;
 
-    // Save the public key to memory
-    if (!pkey_save_pubkey(pkey, &pubkey, &pubkey_size)) {
-        fprintf(stderr, "Failed to save public key\n");
+    pubkey_b64 = keypair_get_public_key_b64(keypair);
+    if (!pubkey_b64)
         goto end;
-    }
 
-    // Encode it in Base64 and print it to stdout
-    pubkey64 = xzalloc(BASE64_ENCODE_OUTSIZE(pubkey_size));
-    base64_encode(pubkey64, pubkey, pubkey_size);
-    printf("%s\n", pubkey64);
+    printf("%s\n", pubkey_b64);
     success = true;
 
 end:
-    free(pubkey);
-    free(pubkey64);
-    pkey_free(pkey);
+    keypair_destroy(keypair);
+    if (pubkey_b64)
+        memzero_str_free(pubkey_b64);
     return success;
 }
 

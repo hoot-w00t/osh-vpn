@@ -4,6 +4,7 @@
 #include "macros_bitfields.h"
 #include "crypto/cipher.h"
 #include "crypto/hash.h"
+#include "crypto/keypair.h"
 #include "netaddr.h"
 #include "device_mode.h"
 #include <stdint.h>
@@ -19,18 +20,15 @@
 #endif
 
 #ifndef ED25519_SIG_SIZE
-// Ed25519 signatures are 64 bytes in length
-#define ED25519_SIG_SIZE (64)
+#define ED25519_SIG_SIZE KEYPAIR_ED25519_SIGLEN
 #endif
 
 #ifndef ED25519_KEY_SIZE
-// Ed25519 keys are 32 bytes in length
-#define ED25519_KEY_SIZE (32)
+#define ED25519_KEY_SIZE KEYPAIR_ED25519_KEYLEN
 #endif
 
 #ifndef X25519_KEY_SIZE
-// X25519 keys are the same size as Ed25519 keys
-#define X25519_KEY_SIZE ED25519_KEY_SIZE
+#define X25519_KEY_SIZE KEYPAIR_X25519_KEYLEN
 #endif
 
 #ifndef NODE_PUBKEY_SIZE
