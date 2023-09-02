@@ -39,6 +39,13 @@ static const struct hash_type_def hash_type_table[HASH_TYPE_COUNT] = {
         .openssl_name = "sha3-512"
     },
     {
+        .type = HASH_BLAKE2S,
+        .name = "blake2s",
+        .hash_length = HASH_BLAKE2S_LEN,
+
+        .openssl_name = "blake2s256"
+    },
+    {
         .type = HASH_BLAKE2B,
         .name = "blake2b",
         .hash_length = HASH_BLAKE2B_LEN,

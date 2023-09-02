@@ -9,6 +9,7 @@ typedef enum hash_type {
     HASH_SHA2_256 = 0,
     HASH_SHA2_512,
     HASH_SHA3_512,
+    HASH_BLAKE2S,
     HASH_BLAKE2B,
 
     _HASH_TYPE_LAST
@@ -18,6 +19,7 @@ typedef enum hash_type {
 #define HASH_SHA2_256_LEN       32
 #define HASH_SHA2_512_LEN       64
 #define HASH_SHA3_512_LEN       64
+#define HASH_BLAKE2S_LEN        32
 #define HASH_BLAKE2B_LEN        64
 
 // TODO: Remove *_SIZE macros
