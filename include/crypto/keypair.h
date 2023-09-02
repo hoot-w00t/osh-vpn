@@ -8,6 +8,7 @@
 typedef enum keypair_type {
     KEYPAIR_ED25519 = 0,
     KEYPAIR_X25519,
+    KEYPAIR_X448,
 
     _KEYPAIR_LAST
 } keypair_type_t;
@@ -20,6 +21,9 @@ typedef struct keypair keypair_t;
 
 #define KEYPAIR_X25519_KEYLEN           32
 #define KEYPAIR_X25519_SECRETLEN        32
+
+#define KEYPAIR_X448_KEYLEN             56
+#define KEYPAIR_X448_SECRETLEN          56
 
 // Create keypair
 // Returns NULL on error

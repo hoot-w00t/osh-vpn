@@ -63,6 +63,18 @@ static const keypair_def_t keypair_def_table[KEYPAIR_COUNT] = {
         .secret_length = KEYPAIR_X25519_SECRETLEN,
 
         .ossl_id = EVP_PKEY_X25519
+    },
+    {
+        .type = KEYPAIR_X448,
+        .name = "X448",
+        .private_key_len = KEYPAIR_X448_KEYLEN,
+        .public_key_len = KEYPAIR_X448_KEYLEN,
+        .is_signing_key = false,
+        .signature_length = 0,
+        .is_dh_key = true,
+        .secret_length = KEYPAIR_X448_SECRETLEN,
+
+        .ossl_id = EVP_PKEY_X448
     }
 };
 

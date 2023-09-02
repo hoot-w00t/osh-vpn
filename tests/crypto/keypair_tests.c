@@ -34,6 +34,21 @@ Test(keypair_t, keypair_type_x25519)
     keypair_destroy(kp);
 }
 
+Test(keypair_t, keypair_type_x448)
+{
+    keypair_t *kp = keypair_create(KEYPAIR_X448);
+
+    cr_assert_not_null(kp);
+    cr_assert_eq(keypair_get_type(kp), KEYPAIR_X448);
+    cr_assert_eq(keypair_get_private_key_length(kp), KEYPAIR_X448_KEYLEN);
+    cr_assert_eq(keypair_get_public_key_length(kp), KEYPAIR_X448_KEYLEN);
+    cr_assert_eq(keypair_get_private_key_length_from_type(KEYPAIR_X448), KEYPAIR_X448_KEYLEN);
+    cr_assert_eq(keypair_get_public_key_length_from_type(KEYPAIR_X448), KEYPAIR_X448_KEYLEN);
+    cr_assert_eq(keypair_get_signature_length(kp), 0);
+    cr_assert_eq(keypair_get_secret_length(kp), KEYPAIR_X448_SECRETLEN);
+    keypair_destroy(kp);
+}
+
 static void test_keypair_trust(keypair_type_t type)
 {
     keypair_t *orig = keypair_create(type);
@@ -111,54 +126,109 @@ Test(keypair_t, keypair_trust_x25519)
     test_keypair_trust(KEYPAIR_X25519);
 }
 
-Test(keypair_t, keypair_kex_dh_x25519)
+Test(keypair_t, keypair_trust_x448)
 {
-    keypair_t *k1 = keypair_create(KEYPAIR_X25519);
-    keypair_t *k2 = keypair_create(KEYPAIR_X25519);
-    uint8_t s1[KEYPAIR_X25519_SECRETLEN];
-    uint8_t s2[KEYPAIR_X25519_SECRETLEN];
+    test_keypair_trust(KEYPAIR_X448);
+}
+
+static void test_keypair_kex_dh(keypair_type_t type)
+{
+    keypair_t *k1 = keypair_create(type);
+    keypair_t *k2 = keypair_create(type);
+    const size_t s1_len = keypair_get_secret_length(k1);
+    uint8_t *s1 = xalloc(s1_len);
+    const size_t s2_len = keypair_get_secret_length(k2);
+    uint8_t *s2 = xalloc(s2_len);
 
     cr_assert_not_null(k1);
     cr_assert_not_null(k2);
+    cr_assert_not_null(s1);
+    cr_assert_not_null(s2);
+    cr_assert_eq(s1_len, s2_len);
     cr_assert_eq(keypair_generate_random(k1), true);
     cr_assert_eq(keypair_generate_random(k2), true);
-    cr_assert_eq(keypair_kex_dh(k1, k2, s1, sizeof(s1)), true);
-    cr_assert_eq(keypair_kex_dh(k2, k1, s2, sizeof(s2)), true);
-    cr_assert_eq(sizeof(s1), sizeof(s2));
-    cr_assert_arr_eq(s1, s2, sizeof(s1));
+    cr_assert_eq(keypair_kex_dh(k1, k2, s1, s1_len), true);
+    cr_assert_eq(keypair_kex_dh(k2, k1, s2, s2_len), true);
+    cr_assert_arr_eq(s1, s2, s1_len);
+    memzero_free(s1, s1_len);
+    memzero_free(s2, s2_len);
     keypair_destroy(k1);
     keypair_destroy(k2);
+}
+
+static void test_keypair_kex_dh_missing_one_key(keypair_type_t type)
+{
+    keypair_t *k1 = keypair_create(type);
+    keypair_t *k2 = keypair_create(type);
+    const size_t s1_len = keypair_get_secret_length(k1);
+    uint8_t *s1 = xalloc(s1_len);
+    const size_t s2_len = keypair_get_secret_length(k2);
+    uint8_t *s2 = xalloc(s2_len);
+
+    cr_assert_not_null(k1);
+    cr_assert_not_null(k2);
+    cr_assert_not_null(s1);
+    cr_assert_not_null(s2);
+    cr_assert_eq(s1_len, s2_len);
+    cr_assert_eq(keypair_generate_random(k1), true);
+    cr_assert_eq(keypair_kex_dh(k1, k2, s1, s1_len), false);
+    cr_assert_eq(keypair_kex_dh(k2, k1, s2, s2_len), false);
+    memzero_free(s1, s1_len);
+    memzero_free(s2, s2_len);
+    keypair_destroy(k1);
+    keypair_destroy(k2);
+}
+
+static void test_keypair_kex_dh_missing_both_keys(keypair_type_t type)
+{
+    keypair_t *k1 = keypair_create(type);
+    keypair_t *k2 = keypair_create(type);
+    const size_t s1_len = keypair_get_secret_length(k1);
+    uint8_t *s1 = xalloc(s1_len);
+    const size_t s2_len = keypair_get_secret_length(k2);
+    uint8_t *s2 = xalloc(s2_len);
+
+    cr_assert_not_null(k1);
+    cr_assert_not_null(k2);
+    cr_assert_not_null(s1);
+    cr_assert_not_null(s2);
+    cr_assert_eq(s1_len, s2_len);
+    cr_assert_eq(keypair_kex_dh(k1, k2, s1, s1_len), false);
+    cr_assert_eq(keypair_kex_dh(k2, k1, s2, s2_len), false);
+    memzero_free(s1, s1_len);
+    memzero_free(s2, s2_len);
+    keypair_destroy(k1);
+    keypair_destroy(k2);
+}
+
+Test(keypair_t, keypair_kex_dh_x25519)
+{
+    test_keypair_kex_dh(KEYPAIR_X25519);
 }
 
 Test(keypair_t, keypair_kex_dh_x25519_missing_one_key)
 {
-    keypair_t *k1 = keypair_create(KEYPAIR_X25519);
-    keypair_t *k2 = keypair_create(KEYPAIR_X25519);
-    uint8_t s1[KEYPAIR_X25519_SECRETLEN];
-    uint8_t s2[KEYPAIR_X25519_SECRETLEN];
-
-    cr_assert_not_null(k1);
-    cr_assert_not_null(k2);
-    cr_assert_eq(keypair_generate_random(k1), true);
-    cr_assert_eq(keypair_kex_dh(k1, k2, s1, sizeof(s1)), false);
-    cr_assert_eq(keypair_kex_dh(k2, k1, s2, sizeof(s2)), false);
-    keypair_destroy(k1);
-    keypair_destroy(k2);
+    test_keypair_kex_dh_missing_one_key(KEYPAIR_X25519);
 }
 
 Test(keypair_t, keypair_kex_dh_x25519_missing_both_keys)
 {
-    keypair_t *k1 = keypair_create(KEYPAIR_X25519);
-    keypair_t *k2 = keypair_create(KEYPAIR_X25519);
-    uint8_t s1[KEYPAIR_X25519_SECRETLEN];
-    uint8_t s2[KEYPAIR_X25519_SECRETLEN];
+    test_keypair_kex_dh_missing_both_keys(KEYPAIR_X25519);
+}
 
-    cr_assert_not_null(k1);
-    cr_assert_not_null(k2);
-    cr_assert_eq(keypair_kex_dh(k1, k2, s1, sizeof(s1)), false);
-    cr_assert_eq(keypair_kex_dh(k2, k1, s2, sizeof(s2)), false);
-    keypair_destroy(k1);
-    keypair_destroy(k2);
+Test(keypair_t, keypair_kex_dh_x448)
+{
+    test_keypair_kex_dh(KEYPAIR_X448);
+}
+
+Test(keypair_t, keypair_kex_dh_x448_missing_one_key)
+{
+    test_keypair_kex_dh_missing_one_key(KEYPAIR_X448);
+}
+
+Test(keypair_t, keypair_kex_dh_x448_missing_both_keys)
+{
+    test_keypair_kex_dh_missing_both_keys(KEYPAIR_X448);
 }
 
 static void test_keypair_sig(keypair_type_t type)
