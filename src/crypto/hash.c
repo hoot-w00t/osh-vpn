@@ -6,7 +6,6 @@
 #include <string.h>
 #include <openssl/evp.h>
 #include <openssl/kdf.h>
-#include <openssl/sha.h>
 
 struct hash_type_def {
     const hash_type_t type;
