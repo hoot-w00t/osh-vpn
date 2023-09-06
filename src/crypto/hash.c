@@ -124,6 +124,16 @@ err:
     return NULL;
 }
 
+// Reset context to make it re-usable
+bool hash_ctx_reset(hash_ctx_t *ctx)
+{
+    if (!EVP_DigestInit_ex(ctx->evp_ctx, NULL, NULL)) {
+        osh_openssl_log_error("EVP_DigestInit_ex (reset)");
+        return false;
+    }
+    return true;
+}
+
 // Update message digest with in_size bytes from in
 bool hash_ctx_update(hash_ctx_t *ctx, const void *in, size_t in_size)
 {
@@ -152,7 +162,7 @@ bool hash_ctx_final(hash_ctx_t *ctx, void *out, size_t out_size)
 
     memcpy(out, ctx->hash, ctx->hash_size);
     memzero(ctx->hash, sizeof(ctx->hash));
-    return true;
+    return hash_ctx_reset(ctx);
 }
 
 // Free message digest context

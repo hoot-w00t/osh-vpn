@@ -34,6 +34,7 @@ const char *hash_type_name(hash_type_t type);
 size_t hash_type_length(hash_type_t type);
 
 hash_ctx_t *hash_ctx_create(hash_type_t type);
+bool hash_ctx_reset(hash_ctx_t *ctx);
 bool hash_ctx_update(hash_ctx_t *ctx, const void *in, size_t in_size);
 bool hash_ctx_final(hash_ctx_t *ctx, void *out, size_t out_size);
 void hash_ctx_free(hash_ctx_t *ctx);
