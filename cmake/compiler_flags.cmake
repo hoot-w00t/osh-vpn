@@ -23,6 +23,7 @@ function(add_compiler_flag destvar flag)
     string(REPLACE " " "_" checkvar "${checkvar}")
     string(TOLOWER "${checkvar}" checkvar)
 
+    set(CMAKE_REQUIRED_FLAGS "-Werror")
     check_c_compiler_flag("${flag}" ${checkvar})
     if (${checkvar})
         add_compiler_flag_nocheck(${destvar} "${flag}")
