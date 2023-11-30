@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10.0)
+cmake_minimum_required(VERSION 3.14.0)
 project(osh-vpn
     VERSION 0.0.1
     DESCRIPTION "Experimental mesh VPN"
@@ -79,6 +79,19 @@ set(CPACK_PACKAGE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/packages")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_CONTACT}")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libssl1.1")
 
+# Position Independent Code option
+option(ENABLE_PIC "Compile executables and libraries with position independent code" ON)
+
+if (ENABLE_PIC)
+    include(CheckPIESupported)
+
+    check_pie_supported(OUTPUT_VARIABLE check_pie_supported_output LANGUAGES C)
+
+    if (NOT CMAKE_C_LINK_PIE_SUPPORTED)
+        message(WARNING "Position independent code is enabled but linker does not support it: ${check_pie_supported_output}")
+    endif()
+endif()
+
 # Libraries
 # pthreads
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
@@ -105,6 +118,7 @@ list(APPEND OSH_LINK_LIBRARIES ${OPENSSL_CRYPTO_LIBRARIES})
 set(EASYCONF_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/easyconf")
 set(EASYCONF_BUILD "easyconf")
 set(EASYCONF_INCLUDEDIR "${EASYCONF_SOURCE}/include")
+set(EASYCONF_COMPILE_PIC ${ENABLE_PIC})
 
 set(EASYCONF_MSG "Configuring '${CMAKE_CURRENT_BINARY_DIR}/${EASYCONF_BUILD}' from '${EASYCONF_SOURCE}'")
 
@@ -288,6 +302,7 @@ set(OSHD_TESTS_SOURCES
 
 # Osh daemon
 add_executable(oshd ${OSHD_SOURCES} src/main.c)
+set_target_properties(oshd PROPERTIES POSITION_INDEPENDENT_CODE ${ENABLE_PIC})
 target_link_libraries(oshd ${OSH_LINK_LIBRARIES})
 add_dependencies(oshd version_git)
 
@@ -298,6 +313,7 @@ if (ENABLE_UNIT_TESTS)
 
     find_library(CRITERION_FOUND criterion REQUIRED)
     add_executable(oshd_tests ${OSHD_SOURCES} ${OSHD_TESTS_SOURCES})
+    set_target_properties(oshd_tests PROPERTIES POSITION_INDEPENDENT_CODE ${ENABLE_PIC})
     target_link_libraries(oshd_tests ${OSH_LINK_LIBRARIES} criterion)
     add_dependencies(oshd_tests version_git)
 
@@ -376,12 +392,6 @@ if (ENABLE_HARDENING)
 
     if (NOT MINGW)
         add_compiler_flag(HARDENING_C_FLAGS -fstack-clash-protection)
-    endif()
-
-    check_c_compiler_flag(-fPIE cflag_fpie)
-    if (cflag_fpie)
-        add_compiler_flag_nocheck(HARDENING_C_FLAGS -fPIE)
-        add_linker_flag_nocheck(HARDENING_LINKER_FLAGS -pie)
     endif()
 
     add_linker_flag(HARDENING_LINKER_FLAGS "-Wl,-z,relro")

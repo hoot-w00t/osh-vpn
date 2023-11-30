@@ -55,6 +55,7 @@ Build types can be changed with `-DCMAKE_BUILD_TYPE=<build_type>`
 | `DISABLE_EVENTS_TIMERFD` | `OFF`    | Disable the use of `timerfd` for timed events even when it is available |
 | `ENABLE_HARDENING`  | `ON`          | Enable hardening flags for release builds ([https://wiki.debian.org/Hardening](https://wiki.debian.org/Hardening)) |
 | `TUNTAP_DISABLE_EMULATION` | `OFF`  | Disable TUN/TAP emulation layers |
+| `ENABLE_PIC`        | `ON`          | Compile executables and libraries with position independent code |
 
 ## Installing
 It is possible to install Osh with `cmake --install <builddir>` after compiling.
