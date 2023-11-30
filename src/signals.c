@@ -335,18 +335,34 @@ const char *signal_name(signal_t sig)
         name_case(SIGKILL);
         name_case(SIGPIPE);
         name_case(SIGALRM);
+    #if defined(SIGURG)
         name_case(SIGURG);
+    #endif
         name_case(SIGSTOP);
         name_case(SIGTSTP);
         name_case(SIGCONT);
         name_case(SIGCHLD);
         name_case(SIGTTIN);
         name_case(SIGTTOU);
+
+    #if defined(SIGPOLL)
         name_case(SIGPOLL);
+    #elif defined(SIGIO)
+        name_case(SIGIO);
+    #endif
+
+    #if defined(SIGXFSZ)
         name_case(SIGXFSZ);
+    #endif
+    #if defined(SIGXCPU)
         name_case(SIGXCPU);
+    #endif
+    #if defined(SIGVTALRM)
         name_case(SIGVTALRM);
+    #endif
+    #if defined(SIGPROF)
         name_case(SIGPROF);
+    #endif
         name_case(SIGUSR1);
         name_case(SIGUSR2);
 #endif
