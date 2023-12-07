@@ -1,5 +1,3 @@
-// This header comes from https://git.zx2c4.com/wintun/plain/api/wintun.h
-
 /* SPDX-License-Identifier: GPL-2.0 OR MIT
  *
  * Copyright (C) 2018-2021 WireGuard LLC. All Rights Reserved.

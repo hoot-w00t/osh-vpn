@@ -63,3 +63,8 @@ It is possible to install Osh with `cmake --install <builddir>` after compiling.
 The installation prefix can be changed to install files to another location by setting `-DCMAKE_INSTALL_PREFIX=<path>` (defaults to `/usr/local` on Unix and `C:\Program Files` on Windows).
 
 After installing there will be an `install_manifest.txt` in your build directory, which lists all the files that were installed.
+
+## Credits / Licenses
+### External files
+- `include/tuntap/tap-windows.h` was copied from [https://github.com/OpenVPN/tap-windows6/blob/master/src/tap-windows.h](https://github.com/OpenVPN/tap-windows6/blob/master/src/tap-windows.h) (licensed under MIT: [https://github.com/OpenVPN/tap-windows6/blob/master/COPYRIGHT.MIT](https://github.com/OpenVPN/tap-windows6/blob/master/COPYRIGHT.MIT))
+- `include/tuntap/wintun.h` was copied from [https://git.zx2c4.com/wintun/tree/api/wintun.h](https://git.zx2c4.com/wintun/tree/api/wintun.h)

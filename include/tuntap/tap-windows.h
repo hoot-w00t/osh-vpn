@@ -1,6 +1,3 @@
-// This header comes from https://github.com/OpenVPN/tap-windows6/blob/master/src/tap-windows.h
-// It is licensed under the MIT license, see https://github.com/OpenVPN/tap-windows6/blob/master/COPYRIGHT.MIT
-
 /*
  *  TAP-Windows -- A kernel driver to provide virtual tap
  *                 device functionality on Windows.
