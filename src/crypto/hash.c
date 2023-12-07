@@ -124,7 +124,7 @@ err:
     return NULL;
 }
 
-// Reset context to make it re-usable
+// Reset context to make it reusable
 bool hash_ctx_reset(hash_ctx_t *ctx)
 {
     if (!EVP_DigestInit_ex(ctx->evp_ctx, NULL, NULL)) {

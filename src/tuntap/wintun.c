@@ -234,7 +234,7 @@ tuntap_t *tuntap_open_wintun(const char *devname, bool tap)
         tuntap_generate_devname(final_devname, sizeof(final_devname), "OshWintun");
     }
 
-    // Initiliaze Wintun and create adapter
+    // Initialize Wintun and create adapter
     struct wintun_ctx wintun_ctx;
     WINTUN_ADAPTER_HANDLE adapter;
     WINTUN_SESSION_HANDLE session;
