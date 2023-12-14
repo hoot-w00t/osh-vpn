@@ -90,7 +90,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          ctest --output-on-failure --test-dir "${GITHUB_WORKSPACE}/osh-vpn/build"
+          ctest --verbose --test-dir "${GITHUB_WORKSPACE}/osh-vpn/build"
 
       - name: Copy linked DLLs (windows)
         if: matrix.os == 'windows-latest'
