@@ -37,6 +37,7 @@ static inline void fixedbuf_init(
 
 // Copy len bytes from data pointer to the end of the buffer
 // If the buffer doesn't have enough space it is left unchanged and this returns false
+__attribute__((warn_unused_result))
 static inline bool fixedbuf_append(struct fixedbuf *buf, const void *data, size_t len)
 {
     if ((buf->len + len) > buf->maxlen)
@@ -51,6 +52,7 @@ static inline bool fixedbuf_append(struct fixedbuf *buf, const void *data, size_
 // Get next n bytes from buffer pointer starting at *offset
 // *offset is incremented by n bytes on success
 // This returns NULL if the offset is out of bounds or there is less than n bytes available after
+__attribute__((warn_unused_result))
 static inline void *fixedbuf_get(struct fixedbuf *buf, size_t *offset, size_t n)
 {
     void *retptr;
@@ -74,6 +76,7 @@ static inline size_t fixedbuf_get_remaining_length(const struct fixedbuf *buf, c
 }
 
 // Return true if the fixed buffer contains at least 1 byte of data
+__attribute__((warn_unused_result))
 static inline bool fixedbuf_has_data(const struct fixedbuf *buf)
 {
     return buf != NULL
