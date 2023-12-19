@@ -49,6 +49,20 @@ struct noise_handshakestate {
 
     bool has_processed_pre_messages;
     bool has_split;
+
+    struct {
+        // 7.3 rule 2
+        bool written_e;
+        bool written_s;
+        bool read_e;
+        bool read_s;
+
+        // 7.3 rule 3
+        bool processed_ee;
+        bool processed_es;
+        bool processed_se;
+        bool processed_ss;
+    } validity;
 };
 
 __attribute__((warn_unused_result))
@@ -106,6 +120,15 @@ noise_handshakestate_t *noise_handshakestate_create(const char *protocol_name, b
     ctx->has_mixed_psk = false;
     ctx->has_processed_pre_messages = false;
     ctx->curr_msg_idx = 0;
+
+    ctx->validity.written_e = false;
+    ctx->validity.written_s = false;
+    ctx->validity.read_e = false;
+    ctx->validity.read_s = false;
+    ctx->validity.processed_ee = false;
+    ctx->validity.processed_es = false;
+    ctx->validity.processed_se = false;
+    ctx->validity.processed_ss = false;
 
     ctx->psk_need_next = true;
     STATIC_ASSERT_NOMSG(sizeof(ctx->next_psk) == NOISE_PSK_LEN);
@@ -358,11 +381,23 @@ static bool handshake_dh(noise_handshakestate_t *ctx, keypair_t *local_keypair, 
 // DH (same for write/read)
 static bool noise_handshakestate_ee(noise_handshakestate_t *ctx)
 {
+    if (ctx->validity.processed_ee) {
+        logger(LOG_ERR, "%s: Already processed %s token", __func__, "ee");
+        return false;
+    }
+    ctx->validity.processed_ee = true;
+
     return handshake_dh(ctx, ctx->e, ctx->re);
 }
 
 static bool noise_handshakestate_es(noise_handshakestate_t *ctx)
 {
+    if (ctx->validity.processed_es) {
+        logger(LOG_ERR, "%s: Already processed %s token", __func__, "es");
+        return false;
+    }
+    ctx->validity.processed_es = true;
+
     return ctx->initiator
          ? handshake_dh(ctx, ctx->e, ctx->rs)
          : handshake_dh(ctx, ctx->s, ctx->re);
@@ -370,6 +405,12 @@ static bool noise_handshakestate_es(noise_handshakestate_t *ctx)
 
 static bool noise_handshakestate_se(noise_handshakestate_t *ctx)
 {
+    if (ctx->validity.processed_se) {
+        logger(LOG_ERR, "%s: Already processed %s token", __func__, "se");
+        return false;
+    }
+    ctx->validity.processed_se = true;
+
     return ctx->initiator
          ? handshake_dh(ctx, ctx->s, ctx->re)
          : handshake_dh(ctx, ctx->e, ctx->rs);
@@ -377,6 +418,12 @@ static bool noise_handshakestate_se(noise_handshakestate_t *ctx)
 
 static bool noise_handshakestate_ss(noise_handshakestate_t *ctx)
 {
+    if (ctx->validity.processed_ss) {
+        logger(LOG_ERR, "%s: Already processed %s token", __func__, "ss");
+        return false;
+    }
+    ctx->validity.processed_ss = true;
+
     return handshake_dh(ctx, ctx->s, ctx->rs);
 }
 
@@ -403,6 +450,19 @@ static bool noise_handshakestate_write_payload(
     const void *payload,
     size_t payload_len)
 {
+    // 7.3 validity rule 4
+    if (ctx->initiator) {
+        if (ctx->validity.processed_se && !ctx->validity.processed_ee)
+            return false;
+        if (ctx->validity.processed_ss && !ctx->validity.processed_es)
+            return false;
+    } else {
+        if (ctx->validity.processed_es && !ctx->validity.processed_ee)
+            return false;
+        if (ctx->validity.processed_ss && !ctx->validity.processed_se)
+            return false;
+    }
+
     if (noise_symmetricstate_has_key(ctx->symmetric)) {
         // PSK validity rule (see Noise Protocol specification 9.3)
         if (ctx->has_mixed_psk && !ctx->has_sent_e)
@@ -434,6 +494,12 @@ static bool noise_handshakestate_write_e(noise_handshakestate_t *ctx, struct fix
     const void *pub;
     size_t publen;
 
+    if (ctx->validity.written_e) {
+        logger(LOG_ERR, "%s: Already written e token", __func__);
+        return false;
+    }
+    ctx->validity.written_e = true;
+
     if (!keypair_has_private_key(ctx->e)) {
         if (!keypair_generate_random(ctx->e))
             return false;
@@ -457,6 +523,12 @@ static bool noise_handshakestate_write_e(noise_handshakestate_t *ctx, struct fix
 
 static bool noise_handshakestate_write_s(noise_handshakestate_t *ctx, struct fixedbuf *output)
 {
+    if (ctx->validity.written_s) {
+        logger(LOG_ERR, "%s: Already written s token", __func__);
+        return false;
+    }
+    ctx->validity.written_s = true;
+
     return noise_handshakestate_write_payload(ctx, output,
         keypair_get_public_key(ctx->s), keypair_get_public_key_length(ctx->s));
 }
@@ -499,6 +571,12 @@ static bool noise_handshakestate_read_e(noise_handshakestate_t *ctx, struct fixe
     const size_t publen = keypair_get_public_key_length(ctx->re);
     void *pub = fixedbuf_get(input, input_offset, publen);
 
+    if (ctx->validity.read_e) {
+        logger(LOG_ERR, "%s: Already read e token", __func__);
+        return false;
+    }
+    ctx->validity.read_e = true;
+
     if (!pub)
         return false;
     if (keypair_has_public_key(ctx->re))
@@ -519,6 +597,12 @@ static bool noise_handshakestate_read_e(noise_handshakestate_t *ctx, struct fixe
 static bool noise_handshakestate_read_s(noise_handshakestate_t *ctx, struct fixedbuf *input, size_t *input_offset)
 {
     bool success = false;
+
+    if (ctx->validity.read_s) {
+        logger(LOG_ERR, "%s: Already read s token", __func__);
+        return false;
+    }
+    ctx->validity.read_s = true;
 
     if (noise_symmetricstate_has_key(ctx->symmetric)) {
         const size_t ciphertext_len = keypair_get_public_key_length(ctx->rs);
