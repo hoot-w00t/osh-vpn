@@ -294,6 +294,7 @@ set(OSHD_TESTS_SOURCES
     ${OSHD_SOURCES}
     tests/crypto/cipher_tests.c
     tests/crypto/keypair_tests.c
+    tests/noise/unit_tests.c
     tests/base64_tests.c
     tests/device_mode_tests.c
     tests/hashtable_tests.c
@@ -330,6 +331,20 @@ if (ENABLE_UNIT_TESTS)
 else()
     message(STATUS "Unit tests disabled")
 endif()
+
+# Noise test vectors
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.12.0")
+    find_package(Python COMPONENTS Interpreter REQUIRED)
+else()
+    message(STATUS "Setting Python executable to default")
+    set(Python_EXECUTABLE "python3")
+endif()
+
+add_executable(noise_test_handshake ${OSHD_SOURCES} "tests/noise/noise_test_handshake.c")
+target_link_libraries(noise_test_handshake ${OSH_LINK_LIBRARIES})
+add_dependencies(noise_test_handshake version_git)
+add_test(NAME noise_test_vectors
+         COMMAND ${Python_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/noise/run_noise_test_vectors.py" $<TARGET_FILE:noise_test_handshake> "${CMAKE_CURRENT_BINARY_DIR}/noise_test_vector_tmp.json" "${CMAKE_CURRENT_SOURCE_DIR}/tests/noise/cacophony.json" "${CMAKE_CURRENT_SOURCE_DIR}/tests/noise/snow.json")
 
 # Installation rules
 install(TARGETS oshd RUNTIME)
