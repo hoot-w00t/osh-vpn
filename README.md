@@ -73,5 +73,5 @@ After installing there will be an `install_manifest.txt` in your build directory
 Noise protocol was implemented following specification revision 34 [https://noiseprotocol.org/](https://noiseprotocol.org/)
 
 [Test vectors](https://github.com/noiseprotocol/noise_wiki/wiki/Test-vectors) for Noise are copied from external sources:
-- `tests/noise/cacophony.txt` from [https://github.com/haskell-cryptography/cacophony/blob/master/vectors/cacophony.txt](https://github.com/haskell-cryptography/cacophony/blob/master/vectors/cacophony.txt) (only patterns that are supported by this implementation).
-- `tests/noise/snow.txt` from [https://github.com/mcginty/snow/blob/main/tests/vectors/snow.txt](https://github.com/mcginty/snow/blob/main/tests/vectors/snow.txt) (only patterns that are supported by this implementation)
+- `tests/noise/cacophony.txt` from [https://github.com/haskell-cryptography/cacophony/blob/master/vectors/cacophony.txt](https://github.com/haskell-cryptography/cacophony/blob/master/vectors/cacophony.txt)
+- `tests/noise/snow.txt` from [https://github.com/mcginty/snow/blob/main/tests/vectors/snow.txt](https://github.com/mcginty/snow/blob/main/tests/vectors/snow.txt)
