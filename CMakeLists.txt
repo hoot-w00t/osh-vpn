@@ -232,6 +232,8 @@ set(OSHD_SOURCES
     src/netutil/icmp_nd.c
     src/netutil/icmp.c
     src/noise/cipherstate.c
+    src/noise/crypto_table.c
+    src/noise/patterns_table.c
     src/noise/protocol_name.c
     src/noise/symmetricstate.c
     src/oshpacket_handlers/data.c
@@ -346,6 +348,15 @@ add_compiler_flag(CMAKE_C_FLAGS -Wno-newline-eof)
 # Casting function pointers from GetProcAddress() always makes the compiler emit
 # warnings about it, we silence these ones here because it is intended
 set_source_files_properties("src/tuntap/wintun.c" PROPERTIES COMPILE_FLAGS -Wno-strict-aliasing)
+
+if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    # Disable -Wmissing-braces warning the noise patterns table
+    # {0} is used multiple times to statically initialize Noise patterns and GCC
+    # wrongly emits a warning about it
+    # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80454
+    message(STATUS "Setting -Wno-missing-braces for src/noise/patterns_table.c")
+    set_source_files_properties("src/noise/patterns_table.c" PROPERTIES COMPILE_FLAGS -Wno-missing-braces)
+endif()
 
 if (CYGWIN)
     add_compiler_flag_nocheck(CMAKE_C_FLAGS "-D_GNU_SOURCE")
