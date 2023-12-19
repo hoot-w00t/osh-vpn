@@ -333,12 +333,7 @@ else()
 endif()
 
 # Noise test vectors
-if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.12.0")
-    find_package(Python COMPONENTS Interpreter REQUIRED)
-else()
-    message(STATUS "Setting Python executable to default")
-    set(Python_EXECUTABLE "python3")
-endif()
+find_package(Python COMPONENTS Interpreter REQUIRED)
 
 add_executable(noise_test_handshake ${OSHD_SOURCES} "tests/noise/noise_test_handshake.c")
 target_link_libraries(noise_test_handshake ${OSH_LINK_LIBRARIES})
