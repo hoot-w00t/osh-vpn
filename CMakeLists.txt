@@ -231,6 +231,7 @@ set(OSHD_SOURCES
     src/netutil/arp.c
     src/netutil/icmp_nd.c
     src/netutil/icmp.c
+    src/noise/protocol_name.c
     src/oshpacket_handlers/data.c
     src/oshpacket_handlers/devmode.c
     src/oshpacket_handlers/edge.c
