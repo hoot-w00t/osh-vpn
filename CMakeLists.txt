@@ -233,6 +233,7 @@ set(OSHD_SOURCES
     src/netutil/icmp.c
     src/noise/cipherstate.c
     src/noise/protocol_name.c
+    src/noise/symmetricstate.c
     src/oshpacket_handlers/data.c
     src/oshpacket_handlers/devmode.c
     src/oshpacket_handlers/edge.c
