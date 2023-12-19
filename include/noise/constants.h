@@ -48,8 +48,11 @@ enum noise_pattern_token {
     NOISE_TOK_SS,
     NOISE_TOK_ES,
     NOISE_TOK_SE,
-    NOISE_TOK_PSK
+    NOISE_TOK_PSK,
+
+    NOISE_TOK_LAST // invalid / last token
 };
+#define NOISE_TOK_COUNT NOISE_TOK_LAST
 
 // A single handshake (pre-)message
 struct noise_message {
