@@ -68,3 +68,10 @@ After installing there will be an `install_manifest.txt` in your build directory
 ### External files
 - `include/tuntap/tap-windows.h` was copied from [https://github.com/OpenVPN/tap-windows6/blob/master/src/tap-windows.h](https://github.com/OpenVPN/tap-windows6/blob/master/src/tap-windows.h) (licensed under MIT: [https://github.com/OpenVPN/tap-windows6/blob/master/COPYRIGHT.MIT](https://github.com/OpenVPN/tap-windows6/blob/master/COPYRIGHT.MIT))
 - `include/tuntap/wintun.h` was copied from [https://git.zx2c4.com/wintun/tree/api/wintun.h](https://git.zx2c4.com/wintun/tree/api/wintun.h)
+
+### Noise protocol
+Noise protocol was implemented following specification revision 34 [https://noiseprotocol.org/](https://noiseprotocol.org/)
+
+[Test vectors](https://github.com/noiseprotocol/noise_wiki/wiki/Test-vectors) for Noise are copied from external sources:
+- `tests/noise/cacophony.txt` from [https://github.com/haskell-cryptography/cacophony/blob/master/vectors/cacophony.txt](https://github.com/haskell-cryptography/cacophony/blob/master/vectors/cacophony.txt) (only patterns that are supported by this implementation).
+- `tests/noise/snow.txt` from [https://github.com/mcginty/snow/blob/main/tests/vectors/snow.txt](https://github.com/mcginty/snow/blob/main/tests/vectors/snow.txt) (only patterns that are supported by this implementation)
