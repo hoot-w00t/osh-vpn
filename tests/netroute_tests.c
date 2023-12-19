@@ -177,4 +177,7 @@ Test(netroute_table_t, lookup_ipv4_networks)
     }
 
     netroute_table_free(table);
+    free(owners[0]);
+    free(owners[1]);
+    free(owners[2]);
 }
