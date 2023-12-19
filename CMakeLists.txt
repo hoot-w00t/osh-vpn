@@ -233,6 +233,7 @@ set(OSHD_SOURCES
     src/netutil/icmp.c
     src/noise/cipherstate.c
     src/noise/crypto_table.c
+    src/noise/handshakestate.c
     src/noise/patterns_table.c
     src/noise/protocol_name.c
     src/noise/symmetricstate.c
