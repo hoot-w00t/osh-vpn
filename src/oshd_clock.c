@@ -5,20 +5,20 @@
 #include <errno.h>
 #include <unistd.h>
 
-// Stores the current elapsed time in *tp
+// Stores the current elapsed time in *ts
 // Aborts on error
-void oshd_gettime(struct timespec *tp)
+void oshd_gettime(struct timespec *ts)
 {
-    if (clock_gettime(oshd_gettime_clock, tp)) {
-        printf("%s:%i:%s: %s\n", __FILE__, __LINE__, __func__, strerror(errno));
+    if (clock_gettime(OSHD_CLOCK_MONOTONIC, ts) != 0) {
+        fprintf(stderr, "%s:%i:%s: %s\n", __FILE__, __LINE__, __func__, strerror(errno));
         abort();
     }
 }
 
-// Stores the current elapsed time + delay (in seconds) in *tp
+// Stores the current elapsed time + delay (in seconds) in *ts
 // Aborts on error
-void oshd_gettime_delay(struct timespec *tp, time_t delay)
+void oshd_gettime_delay(struct timespec *ts, time_t delay_s)
 {
-    oshd_gettime(tp);
-    tp->tv_sec += delay;
+    oshd_gettime(ts);
+    ts->tv_sec += delay_s;
 }

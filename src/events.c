@@ -191,7 +191,7 @@ static void event_aio_error(__attribute__((unused)) aio_event_t *event,
 // Adds an AIO event to oshd.aio
 bool event_init(void)
 {
-    int timerfd = timerfd_create(oshd_gettime_clock, TFD_NONBLOCK | TFD_CLOEXEC);
+    int timerfd = timerfd_create(OSHD_CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
     aio_event_t base_event;
 
     if (timerfd < 0) {

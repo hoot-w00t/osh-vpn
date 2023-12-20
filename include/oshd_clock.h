@@ -10,13 +10,13 @@ typedef int64_t pri_time_t;
 #define PRI_TIME_T PRId64
 
 #if defined(CLOCK_BOOTTIME)
-#define oshd_gettime_clock CLOCK_BOOTTIME
+    #define OSHD_CLOCK_MONOTONIC CLOCK_BOOTTIME
 #else
-#define oshd_gettime_clock CLOCK_MONOTONIC
+    #define OSHD_CLOCK_MONOTONIC CLOCK_MONOTONIC
 #endif
 
-void oshd_gettime(struct timespec *tp);
-void oshd_gettime_delay(struct timespec *tp, time_t delay);
+void oshd_gettime(struct timespec *ts);
+void oshd_gettime_delay(struct timespec *ts, time_t delay_s);
 
 #ifndef timespecsub
 // timersub for timespec structures
