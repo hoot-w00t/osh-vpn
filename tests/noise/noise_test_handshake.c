@@ -388,6 +388,7 @@ int main(int ac, char **av)
     uint8_t *init_handshake_hash = xalloc(init_handshake_hash_len);
     uint8_t *resp_handshake_hash = xalloc(resp_handshake_hash_len);
     const size_t mac_len = noise_handshakestate_get_maclen(init_handshake);
+    assert(mac_len > 0);
     assert(mac_len == noise_handshakestate_get_maclen(resp_handshake));
     uint8_t *mac = xalloc(mac_len);
 
@@ -468,6 +469,11 @@ int main(int ac, char **av)
             fixedbuf_init_input(&handshake_write_payload, msg->payload, msg->payload_len);
             fixedbuf_init_output(&handshake_read_payload, temp_buffer, buffer_maxlen);
 
+            assert(noise_handshakestate_expects_write(ctx_write) == true);
+            assert(noise_handshakestate_expects_write(ctx_read) == false);
+            assert(noise_handshakestate_expects_read(ctx_write) == false);
+            assert(noise_handshakestate_expects_read(ctx_read) == true);
+
             assert(handshake_write_payload.len == msg->payload_len);
             assert(noise_handshakestate_write_msg(ctx_write, &handshake_packet, &handshake_write_payload) == true);
             dump_payload(handshake_write_payload.ptr, handshake_write_payload.len, JSON_EOL_NEXT);
@@ -483,6 +489,11 @@ int main(int ac, char **av)
             has_split = init_has_split && resp_has_split;
 
             if (has_split) {
+                assert(noise_handshakestate_expects_write(ctx_write) == false);
+                assert(noise_handshakestate_expects_write(ctx_read) == false);
+                assert(noise_handshakestate_expects_read(ctx_write) == false);
+                assert(noise_handshakestate_expects_read(ctx_read) == false);
+
                 assert(noise_handshakestate_get_handshake_hash(init_handshake, init_handshake_hash, init_handshake_hash_len) == true);
                 assert(noise_handshakestate_get_handshake_hash(resp_handshake, resp_handshake_hash, resp_handshake_hash_len) == true);
                 assert(!memcmp(init_handshake_hash, resp_handshake_hash, init_handshake_hash_len));
