@@ -206,7 +206,6 @@ bool noise_symmetricstate_encrypt_and_hash(noise_symmetricstate_t *ctx,
     } else {
         return noise_symmetricstate_mix_hash(ctx, output, *output_len);
     }
-    return true;
 }
 
 bool noise_symmetricstate_decrypt_and_hash(noise_symmetricstate_t *ctx,
@@ -227,8 +226,6 @@ bool noise_symmetricstate_decrypt_and_hash(noise_symmetricstate_t *ctx,
     } else {
         return noise_symmetricstate_mix_hash(ctx, ciphertext, ciphertext_len);
     }
-
-    return true;
 }
 
 bool noise_symmetricstate_split(noise_symmetricstate_t *ctx,
