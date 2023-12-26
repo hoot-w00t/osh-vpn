@@ -277,12 +277,18 @@ bool noise_handshakestate_expects_write(const noise_handshakestate_t *ctx)
 {
     const struct noise_message *msg = get_curr_msg(ctx);
 
+    if (msg == NULL)
+        return false;
+
     return ctx->initiator ? msg->from_initiator : !(msg->from_initiator);
 }
 
 bool noise_handshakestate_expects_read(const noise_handshakestate_t *ctx)
 {
     const struct noise_message *msg = get_curr_msg(ctx);
+
+    if (msg == NULL)
+        return false;
 
     return ctx->initiator ? !(msg->from_initiator) : msg->from_initiator;
 }
