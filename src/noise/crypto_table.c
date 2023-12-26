@@ -5,6 +5,9 @@
 // Don't compile crypto definitions unused by Osh (unless NOISE_SUPPORT_UNUSED_CRYPTO is true)
 
 static const struct noise_cipher_def noise_cipher_table_array[] = {
+    // If this table is updated, NOISE_CIPHER_KEY_MAXLEN, NOISE_CIPHER_IV_MAXLEN
+    // and NOISE_CIPHER_MAC_MAXLEN in noise/constants.h must also be updated
+
     {
         .ciph_name = "ChaChaPoly",
         .ciph_type = CIPHER_TYPE_CHACHA20_POLY1305
@@ -22,6 +25,9 @@ static const struct noise_cipher_def noise_cipher_table_array[] = {
 };
 
 static const struct noise_hash_def noise_hash_table_array[] = {
+    // If this table is updated, NOISE_HASH_MAXLEN in noise/constants.h must
+    // also be updated
+
     {
         .hash_name = "SHA256",
         .hash_type = HASH_SHA2_256
@@ -47,6 +53,9 @@ static const struct noise_hash_def noise_hash_table_array[] = {
 };
 
 static const struct noise_dh_def noise_dh_table_array[] = {
+    // If this table is updated, NOISE_DH_MAXLEN in noise/constants.h must also
+    // be updated
+
     {
         .dh_name = "25519",
         .dh_type = KEYPAIR_X25519

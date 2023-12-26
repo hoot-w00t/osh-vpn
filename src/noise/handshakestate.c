@@ -26,7 +26,7 @@ struct noise_handshakestate {
 
     keypair_type_t keypair_type;
     size_t keypair_secretlen;
-    uint8_t *keypair_secret;        // used as temporary buffer for DH secrets
+    uint8_t keypair_secret[NOISE_DH_MAXLEN];    // used as temporary buffer for DH secrets
     keypair_t *s;
     keypair_t *e;
     keypair_t *rs;
@@ -146,17 +146,16 @@ noise_handshakestate_t *noise_handshakestate_create(const char *protocol_name, b
 
     // Initialize temporary buffer for DH secrets
     ctx->keypair_secretlen = keypair_get_secret_length(ctx->e);
-    if (ctx->keypair_secretlen == 0) {
-        logger(LOG_ERR, "%s: Incorrect DH secret length", __func__);
-        goto fail;
-    }
-    ctx->keypair_secret = xzalloc(ctx->keypair_secretlen);
+    assert(ctx->keypair_secretlen > 0);
+    assert(ctx->keypair_secretlen <= NOISE_DH_MAXLEN);
 
     // Create symmetric state
     ctx->maclen = cipher_get_mac_size_from_type(ctx->cipher_type);
     ctx->hash_len = hash_type_length(ctx->hash_type);
     assert(ctx->maclen > 0);
+    assert(ctx->maclen <= NOISE_CIPHER_MAC_MAXLEN);
     assert(ctx->hash_len > 0);
+    assert(ctx->hash_len <= NOISE_HASH_MAXLEN);
 
     ctx->symmetric = noise_symmetricstate_create(protocol_name, ctx->cipher_type, ctx->hash_type);
     if (ctx->symmetric == NULL) {
@@ -193,10 +192,7 @@ void noise_handshakestate_destroy(noise_handshakestate_t *ctx)
 
         noise_handshakestate_destroy_prologue(ctx);
 
-        if (ctx->keypair_secret != NULL && ctx->keypair_secretlen > 0)
-            memzero(ctx->keypair_secret, ctx->keypair_secretlen);
-        free(ctx->keypair_secret);
-
+        memzero(ctx->keypair_secret, NOISE_DH_MAXLEN);
         memzero(ctx->next_psk, NOISE_PSK_LEN);
 
         free(ctx);
@@ -374,7 +370,7 @@ static bool handshake_dh(noise_handshakestate_t *ctx, keypair_t *local_keypair, 
     success = keypair_kex_dh(local_keypair, remote_keypair, ctx->keypair_secret, ctx->keypair_secretlen)
            && noise_symmetricstate_mix_key(ctx->symmetric, ctx->keypair_secret, ctx->keypair_secretlen);
 
-    memzero(ctx->keypair_secret, ctx->keypair_secretlen);
+    memzero(ctx->keypair_secret, NOISE_DH_MAXLEN);
     return success;
 }
 

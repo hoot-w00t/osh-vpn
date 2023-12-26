@@ -12,10 +12,11 @@ struct __attribute__((packed)) noise_cipher_iv {
     uint64_t nonce;
 };
 typedef void (*cipherstate_make_iv_from_nonce_t)(struct noise_cipher_iv *iv, uint64_t nonce);
+STATIC_ASSERT_NOMSG(sizeof(struct noise_cipher_iv) == NOISE_CIPHER_IV_MAXLEN);
 
 struct noise_cipherstate {
     bool has_key;
-    uint8_t *key;
+    uint8_t key[NOISE_CIPHER_KEY_MAXLEN];
     size_t keylen;
 
     size_t ivlen;
@@ -93,7 +94,7 @@ noise_cipherstate_t *noise_cipherstate_create(cipher_type_t cipher_type, bool fa
     ctx->cipher_type = cipher_type;
     ctx->keylen = cipher_get_key_size_from_type(ctx->cipher_type);
     assert(ctx->keylen > 0);
-    ctx->key = xzalloc(ctx->keylen);
+    assert(ctx->keylen <= NOISE_CIPHER_KEY_MAXLEN);
     ctx->has_key = false;
     ctx->fail_without_key = fail_without_key;
 
@@ -118,10 +119,7 @@ fail:
 void noise_cipherstate_destroy(noise_cipherstate_t *ctx)
 {
     if (ctx) {
-        if (ctx->key && ctx->keylen > 0)
-            memzero(ctx->key, ctx->keylen);
-        free(ctx->key);
-
+        memzero(ctx->key, NOISE_CIPHER_KEY_MAXLEN);
         cipher_free(ctx->cipher);
         free(ctx);
     }
@@ -130,8 +128,10 @@ void noise_cipherstate_destroy(noise_cipherstate_t *ctx)
 // Returns true if a key was set, false otherwise
 bool noise_cipherstate_initialize_key(noise_cipherstate_t *ctx, const void *k, size_t len)
 {
+    // The current key bytes are always reset
+    memzero(ctx->key, NOISE_CIPHER_KEY_MAXLEN);
+
     if (k == NULL || len != ctx->keylen) {
-        memzero(ctx->key, ctx->keylen);
         ctx->has_key = false;
     } else {
         memcpy(ctx->key, k, ctx->keylen);

@@ -18,8 +18,8 @@ struct noise_symmetricstate {
     size_t hash_len;
     hash_ctx_t *hash_ctx;
 
-    uint8_t *chaining_key;
-    uint8_t *hash;
+    uint8_t chaining_key[NOISE_HASH_MAXLEN];
+    uint8_t hash[NOISE_HASH_MAXLEN];
 };
 
 __attribute__((warn_unused_result))
@@ -69,12 +69,11 @@ noise_symmetricstate_t *noise_symmetricstate_create(const char *protocol_name,
         goto fail;
 
     assert(ctx->keylen > 0);
+    assert(ctx->keylen <= NOISE_CIPHER_KEY_MAXLEN);
     assert(ctx->hash_len > 0);
+    assert(ctx->hash_len <= NOISE_HASH_MAXLEN);
     assert(ctx->hash_len >= ctx->keylen); // we get keys from hashes (truncated if KEYLEN is smaller than HASHLEN)
                                           // so HASHLEN must not be smaller than KEYLEN
-
-    ctx->chaining_key = xzalloc(ctx->hash_len);
-    ctx->hash = xzalloc(ctx->hash_len);
 
     if (name_len <= ctx->hash_len) {
         memcpy(ctx->hash, protocol_name, name_len);
@@ -102,10 +101,8 @@ fail:
 void noise_symmetricstate_destroy(noise_symmetricstate_t *ctx)
 {
     if (ctx) {
-        if (ctx->chaining_key != NULL)
-            memzero_free(ctx->chaining_key, ctx->hash_len);
-        if (ctx->hash != NULL)
-            memzero_free(ctx->hash, ctx->hash_len);
+        memzero(ctx->chaining_key, NOISE_HASH_MAXLEN);
+        memzero(ctx->hash, NOISE_HASH_MAXLEN);
 
         hash_ctx_free(ctx->hash_ctx);
         noise_cipherstate_destroy(ctx->cipher);

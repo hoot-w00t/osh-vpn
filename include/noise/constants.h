@@ -8,6 +8,12 @@
 #define NOISE_PROTOCOL_NAME_MAXLEN          255
 #define NOISE_PSK_LEN                       32
 
+#define NOISE_CIPHER_KEY_MAXLEN             32
+#define NOISE_CIPHER_IV_MAXLEN              12
+#define NOISE_CIPHER_MAC_MAXLEN             16
+#define NOISE_HASH_MAXLEN                   64
+#define NOISE_DH_MAXLEN                     32
+
 #define NOISE_MAX_PRE_MESSAGES              2
 #define NOISE_MAX_MESSAGES                  4
 #define NOISE_MAX_TOKENS_PER_MESSAGE        8
