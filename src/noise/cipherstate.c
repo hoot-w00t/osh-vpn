@@ -162,6 +162,9 @@ bool noise_cipherstate_encrypt_with_ad(noise_cipherstate_t *ctx,
 {
     struct noise_cipher_iv iv;
 
+    if (plaintext_len > NOISE_MESSAGE_MAXLEN)
+        return false;
+
     if (!noise_cipherstate_has_key(ctx)) {
         if (ctx->fail_without_key)
             return false;
@@ -204,6 +207,9 @@ bool noise_cipherstate_decrypt_with_ad(noise_cipherstate_t *ctx,
 // FIXME: Make *mac const once cipher_decrypt() *mac becomes const
 {
     struct noise_cipher_iv iv;
+
+    if (ciphertext_len > NOISE_MESSAGE_MAXLEN)
+        return false;
 
     if (!noise_cipherstate_has_key(ctx)) {
         if (ctx->fail_without_key)
