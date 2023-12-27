@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #define NOISE_PROTOCOL_NAME_MAXLEN          255
+#define NOISE_MESSAGE_MAXLEN                UINT16_MAX
 #define NOISE_PSK_LEN                       32
 
 #define NOISE_CIPHER_KEY_MAXLEN             32
