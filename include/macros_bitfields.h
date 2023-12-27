@@ -1,16 +1,11 @@
-#ifndef _OSH_MACROS_BITFIELDS_H
-#define _OSH_MACROS_BITFIELDS_H
+#ifndef OSH_MACROS_BITFIELDS_H_
+#define OSH_MACROS_BITFIELDS_H_
 
-// Set a single bit
-#define BIT_SET(x, bit)     (x |= (1u << (bit)))
+#include <stdint.h>
 
-// Clear a single bit
-#define BIT_CLEAR(x, bit)   (x &= ~(1u << (bit)))
-
-// Test a single bit
-#define BIT_TEST(x, bit)    ((x) & (1u << (bit)))
-
-// Get a single bit
-#define BIT_GET(x, bit)     (((x) >> (bit)) & 1u)
+#define BIT_SET(x, bit)         ((x) |= (UINT64_C(1) << (bit)))
+#define BIT_CLEAR(x, bit)       ((x) &= ~(UINT64_C(1) << (bit)))
+#define BIT_TEST(x, bit)        ((x) & (UINT64_C(1) << (bit)))
+#define BIT_GET(x, bit)         (((x) >> (bit)) & UINT64_C(1))
 
 #endif
