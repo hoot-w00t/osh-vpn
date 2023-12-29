@@ -20,6 +20,7 @@ struct noise_cipherstate {
     size_t keylen;
 
     size_t ivlen;
+    size_t maclen;
 
     uint64_t nonce;
 
@@ -100,6 +101,9 @@ noise_cipherstate_t *noise_cipherstate_create(cipher_type_t cipher_type, bool fa
 
     ctx->ivlen = cipher_get_iv_size_from_type(ctx->cipher_type);
     assert(ctx->ivlen == sizeof(struct noise_cipher_iv));
+    ctx->maclen = cipher_get_mac_size_from_type(ctx->cipher_type);
+    assert(ctx->maclen > 0);
+    assert(ctx->maclen <= NOISE_CIPHER_MAC_MAXLEN);
 
     // Nonce is encoded in big-endian with AESGCM and little-endian with ChaChaPoly
     // Default to little-endian if cipher type is unknown
