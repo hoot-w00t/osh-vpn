@@ -129,6 +129,26 @@ void noise_cipherstate_destroy(noise_cipherstate_t *ctx)
     }
 }
 
+cipher_type_t noise_cipherstate_get_cipher_type(const noise_cipherstate_t *ctx)
+{
+    return ctx->cipher_type;
+}
+
+size_t noise_cipherstate_get_key_length(const noise_cipherstate_t *ctx)
+{
+    return ctx->keylen;
+}
+
+size_t noise_cipherstate_get_iv_length(const noise_cipherstate_t *ctx)
+{
+    return ctx->ivlen;
+}
+
+size_t noise_cipherstate_get_mac_length(const noise_cipherstate_t *ctx)
+{
+    return ctx->maclen;
+}
+
 // Returns true if a key was set, false otherwise
 bool noise_cipherstate_initialize_key(noise_cipherstate_t *ctx, const void *k, size_t len)
 {

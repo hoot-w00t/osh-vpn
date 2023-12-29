@@ -13,6 +13,11 @@ __attribute__((warn_unused_result))
 noise_cipherstate_t *noise_cipherstate_create(cipher_type_t cipher_type, bool fail_without_key);
 void noise_cipherstate_destroy(noise_cipherstate_t *ctx);
 
+cipher_type_t noise_cipherstate_get_cipher_type(const noise_cipherstate_t *ctx);
+size_t noise_cipherstate_get_key_length(const noise_cipherstate_t *ctx);
+size_t noise_cipherstate_get_iv_length(const noise_cipherstate_t *ctx);
+size_t noise_cipherstate_get_mac_length(const noise_cipherstate_t *ctx);
+
 __attribute__((warn_unused_result))
 bool noise_cipherstate_initialize_key(noise_cipherstate_t *ctx, const void *k, size_t len);
 bool noise_cipherstate_has_key(const noise_cipherstate_t *ctx);
