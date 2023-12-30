@@ -20,34 +20,39 @@ struct noise_symmetricstate {
 
     uint8_t chaining_key[NOISE_HASH_MAXLEN];
     uint8_t hash[NOISE_HASH_MAXLEN];
+
+    uint8_t hkdf_output_buf[NOISE_HASH_MAXLEN * 3];
+    void *hkdf_output1;
+    void *hkdf_output2;
+    void *hkdf_output3;
 };
+
+// Reset HKDF result buffer
+static void reset_hkdf_output(noise_symmetricstate_t *ctx)
+{
+    memzero(ctx->hkdf_output_buf, sizeof(ctx->hkdf_output_buf));
+}
 
 __attribute__((warn_unused_result))
 static bool noise_hkdf(noise_symmetricstate_t *ctx,
-    const void *ikm, size_t ikm_len,
-    size_t num_outputs,
-    void *output1, void *output2, void *output3)
+    const void *ikm, size_t ikm_len, size_t num_outputs)
 {
     const char label = 0;
-    bool success = false;
-    size_t outlen = 0;
-    uint8_t *out = NULL;
+    size_t hkdf_output_len;
 
-    assert(num_outputs == 2 || num_outputs == 3);
-    outlen = num_outputs * ctx->hash_len;
-    out = xzalloc(outlen);
+    if (num_outputs != 2 && num_outputs != 3)
+        return false;
 
-    success = hash_hkdf(ctx->hash_type, ikm, ikm_len, ctx->chaining_key, ctx->hash_len, &label, 0, out, outlen);
-    if (success) {
-        memcpy(output1, out + (0 * ctx->hash_len), ctx->hash_len);
-        memcpy(output2, out + (1 * ctx->hash_len), ctx->hash_len);
-        if (num_outputs == 3)
-            memcpy(output3, out + (2 * ctx->hash_len), ctx->hash_len);
-    }
+    hkdf_output_len = ctx->hash_len * num_outputs;
+    if (hkdf_output_len > sizeof(ctx->hkdf_output_buf))
+        return false;
 
-    memzero(out, outlen);
-    free(out);
-    return success;
+    reset_hkdf_output(ctx);
+    return hash_hkdf(ctx->hash_type,
+        ikm, ikm_len,
+        ctx->chaining_key, ctx->hash_len,
+        &label, 0,
+        ctx->hkdf_output_buf, hkdf_output_len);
 }
 
 noise_symmetricstate_t *noise_symmetricstate_create(const char *protocol_name,
@@ -74,6 +79,11 @@ noise_symmetricstate_t *noise_symmetricstate_create(const char *protocol_name,
     assert(ctx->hash_len <= NOISE_HASH_MAXLEN);
     assert(ctx->hash_len >= ctx->keylen); // we get keys from hashes (truncated if KEYLEN is smaller than HASHLEN)
                                           // so HASHLEN must not be smaller than KEYLEN
+
+    assert(sizeof(ctx->hkdf_output_buf) >= (ctx->hash_len * 3));
+    ctx->hkdf_output1 = ctx->hkdf_output_buf + (ctx->hash_len * 0);
+    ctx->hkdf_output2 = ctx->hkdf_output_buf + (ctx->hash_len * 1);
+    ctx->hkdf_output3 = ctx->hkdf_output_buf + (ctx->hash_len * 2);
 
     if (name_len <= ctx->hash_len) {
         memcpy(ctx->hash, protocol_name, name_len);
@@ -103,6 +113,7 @@ void noise_symmetricstate_destroy(noise_symmetricstate_t *ctx)
     if (ctx) {
         memzero(ctx->chaining_key, NOISE_HASH_MAXLEN);
         memzero(ctx->hash, NOISE_HASH_MAXLEN);
+        reset_hkdf_output(ctx);
 
         hash_ctx_free(ctx->hash_ctx);
         noise_cipherstate_destroy(ctx->cipher);
@@ -117,22 +128,15 @@ bool noise_symmetricstate_has_key(noise_symmetricstate_t *ctx)
 
 bool noise_symmetricstate_mix_key(noise_symmetricstate_t *ctx, const void *ikm, size_t ikm_len)
 {
-    bool success = false;
-    uint8_t *ck_out1 = xzalloc(ctx->hash_len);
-    uint8_t *temp_k_out2 = xzalloc(ctx->hash_len);
+    bool success;
 
-    if (!noise_hkdf(ctx, ikm, ikm_len, 2, ck_out1, temp_k_out2, NULL))
-        goto end;
+    if (!noise_hkdf(ctx, ikm, ikm_len, 2))
+        return false;
 
-    memcpy(ctx->chaining_key, ck_out1, ctx->hash_len);
-    if (!noise_cipherstate_initialize_key(ctx->cipher, temp_k_out2, ctx->keylen))
-        goto end;
+    memcpy(ctx->chaining_key, ctx->hkdf_output1, ctx->hash_len);
+    success = noise_cipherstate_initialize_key(ctx->cipher, ctx->hkdf_output2, ctx->keylen);
 
-    success = true;
-
-end:
-    memzero_free(ck_out1, ctx->hash_len);
-    memzero_free(temp_k_out2, ctx->hash_len);
+    reset_hkdf_output(ctx);
     return success;
 }
 
@@ -158,26 +162,16 @@ bool noise_symmetricstate_mix_hash_2(noise_symmetricstate_t *ctx,
 
 bool noise_symmetricstate_mix_key_and_hash(noise_symmetricstate_t *ctx, const void *ikm, size_t ikm_len)
 {
-    bool success = false;
-    uint8_t *ck_out1 = xzalloc(ctx->hash_len);
-    uint8_t *temp_h_out2 = xzalloc(ctx->hash_len);
-    uint8_t *temp_k_out3 = xzalloc(ctx->hash_len);
+    bool success;
 
-    if (!noise_hkdf(ctx, ikm, ikm_len, 3, ck_out1, temp_h_out2, temp_k_out3))
-        goto end;
+    if (!noise_hkdf(ctx, ikm, ikm_len, 3))
+        return false;
 
-    memcpy(ctx->chaining_key, ck_out1, ctx->hash_len);
-    if (!noise_symmetricstate_mix_hash(ctx, temp_h_out2, ctx->hash_len))
-        goto end;
-    if (!noise_cipherstate_initialize_key(ctx->cipher, temp_k_out3, ctx->keylen))
-        goto end;
+    memcpy(ctx->chaining_key, ctx->hkdf_output1, ctx->hash_len);
+    success = noise_symmetricstate_mix_hash(ctx, ctx->hkdf_output2, ctx->hash_len)
+           && noise_cipherstate_initialize_key(ctx->cipher, ctx->hkdf_output3, ctx->keylen);
 
-    success = true;
-
-end:
-    memzero_free(ck_out1, ctx->hash_len);
-    memzero_free(temp_h_out2, ctx->hash_len);
-    memzero_free(temp_k_out3, ctx->hash_len);
+    reset_hkdf_output(ctx);
     return success;
 }
 
@@ -228,8 +222,6 @@ bool noise_symmetricstate_decrypt_and_hash(noise_symmetricstate_t *ctx,
 bool noise_symmetricstate_split(noise_symmetricstate_t *ctx,
     noise_cipherstate_t **c1, noise_cipherstate_t **c2)
 {
-    uint8_t *temp_k1 = xzalloc(ctx->hash_len);
-    uint8_t *temp_k2 = xzalloc(ctx->hash_len);
     const uint8_t empty = 0;
     bool success = false;
 
@@ -241,26 +233,25 @@ bool noise_symmetricstate_split(noise_symmetricstate_t *ctx,
     *c1 = NULL;
     *c2 = NULL;
 
-    if (!noise_hkdf(ctx, &empty, 0, 2, temp_k1, temp_k2, NULL))
+    if (!noise_hkdf(ctx, &empty, 0, 2))
         goto end;
 
     *c1 = noise_cipherstate_create(ctx->cipher_type, true);
     if (*c1 == NULL)
         goto end;
-    if (!noise_cipherstate_initialize_key(*c1, temp_k1, ctx->keylen))
+    if (!noise_cipherstate_initialize_key(*c1, ctx->hkdf_output1, ctx->keylen))
         goto end;
 
     *c2 = noise_cipherstate_create(ctx->cipher_type, true);
     if (*c2 == NULL)
         goto end;
-    if (!noise_cipherstate_initialize_key(*c2, temp_k2, ctx->keylen))
+    if (!noise_cipherstate_initialize_key(*c2, ctx->hkdf_output2, ctx->keylen))
         goto end;
 
     success = true;
 
 end:
-    memzero_free(temp_k1, ctx->hash_len);
-    memzero_free(temp_k2, ctx->hash_len);
+    reset_hkdf_output(ctx);
     if (!success) {
         noise_cipherstate_destroy(*c1);
         *c1 = NULL;
