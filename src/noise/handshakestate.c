@@ -32,11 +32,6 @@ struct noise_handshakestate {
     keypair_t *rs;
     keypair_t *re;
 
-    bool has_prologue;              // true after the prologue was set once to prevent setting it again
-                                    // this does not reflect the validity of the prologue pointer/length
-    void *prologue;
-    size_t prologue_len;
-
     bool has_sent_e;
     bool has_mixed_psk;
     bool psk_need_next;
@@ -47,6 +42,7 @@ struct noise_handshakestate {
     const struct noise_pattern *pattern;
     size_t curr_msg_idx;
 
+    bool has_processed_prologue;
     bool has_processed_pre_messages;
     bool has_split;
 
@@ -118,6 +114,7 @@ noise_handshakestate_t *noise_handshakestate_create(const char *protocol_name, b
     ctx->has_split = false;
     ctx->has_sent_e = false;
     ctx->has_mixed_psk = false;
+    ctx->has_processed_prologue = false;
     ctx->has_processed_pre_messages = false;
     ctx->curr_msg_idx = 0;
 
@@ -170,16 +167,6 @@ fail:
     return NULL;
 }
 
-static void noise_handshakestate_destroy_prologue(noise_handshakestate_t *ctx)
-{
-    if (ctx->prologue && ctx->prologue_len > 0)
-        memzero(ctx->prologue, ctx->prologue_len);
-    free(ctx->prologue);
-
-    ctx->prologue = NULL;
-    ctx->prologue_len = 0;
-}
-
 void noise_handshakestate_destroy(noise_handshakestate_t *ctx)
 {
     if (ctx) {
@@ -189,8 +176,6 @@ void noise_handshakestate_destroy(noise_handshakestate_t *ctx)
         keypair_destroy(ctx->e);
         keypair_destroy(ctx->rs);
         keypair_destroy(ctx->re);
-
-        noise_handshakestate_destroy_prologue(ctx);
 
         memzero(ctx->keypair_secret, NOISE_DH_MAXLEN);
         memzero(ctx->next_psk, NOISE_PSK_LEN);
@@ -248,26 +233,6 @@ const keypair_t *noise_handshakestate_get_rs(const noise_handshakestate_t *ctx)
     return ctx->rs;
 }
 
-bool noise_handshakestate_set_prologue(noise_handshakestate_t *ctx, const void *prologue, size_t prologue_len)
-{
-    if (ctx->has_prologue) {
-        logger(LOG_ERR, "%s: A prologue was already set", __func__);
-        return false;
-    }
-
-    noise_handshakestate_destroy_prologue(ctx);
-
-    if (prologue == NULL || prologue_len == 0) {
-        ctx->prologue = NULL;
-        ctx->prologue_len = 0;
-    } else {
-        ctx->prologue = xmemdup(prologue, prologue_len);
-        ctx->prologue_len = prologue_len;
-    }
-    ctx->has_prologue = true;
-    return true;
-}
-
 bool noise_handshakestate_is_initiator(const noise_handshakestate_t *ctx)
 {
     return ctx->initiator;
@@ -315,27 +280,50 @@ bool noise_handshakestate_need_next_psk(const noise_handshakestate_t *ctx)
     return ctx->pattern->psk_mode && ctx->psk_need_next;
 }
 
-// Mix prologue and process pattern pre-messages
+// Mix prologue
 __attribute__((warn_unused_result))
-static bool process_pre_messages(noise_handshakestate_t *ctx)
+static bool process_prologue(noise_handshakestate_t *ctx,
+    const void *prologue, const size_t prologue_len)
 {
     const uint8_t empty = 0;
 
-    if (ctx->has_processed_pre_messages) {
-        logger(LOG_ERR, "%s: Already processed pre-messages", __func__);
+    if (ctx->has_processed_prologue) {
+        logger(LOG_ERR, "%s: Already processed prologue", __func__);
         return false;
     }
 
     // Mix handshake prologue
-    if (ctx->prologue && ctx->prologue_len > 0) {
-        if (!noise_symmetricstate_mix_hash(ctx->symmetric, ctx->prologue, ctx->prologue_len))
+    if (prologue != NULL && prologue_len > 0) {
+        if (!noise_symmetricstate_mix_hash(ctx->symmetric, prologue, prologue_len))
             return false;
     } else {
         if (!noise_symmetricstate_mix_hash(ctx->symmetric, &empty, 0))
             return false;
     }
-    ctx->has_prologue = true;
-    noise_handshakestate_destroy_prologue(ctx);
+
+    ctx->has_processed_prologue = true;
+    return true;
+}
+
+bool noise_handshakestate_set_prologue(noise_handshakestate_t *ctx, const void *prologue, size_t prologue_len)
+{
+    return process_prologue(ctx, prologue, prologue_len);
+}
+
+// Mix empty prologue (if none was set) and process pattern pre-messages
+__attribute__((warn_unused_result))
+static bool process_pre_messages(noise_handshakestate_t *ctx)
+{
+    if (ctx->has_processed_pre_messages) {
+        logger(LOG_ERR, "%s: Already processed pre-messages", __func__);
+        return false;
+    }
+
+    // Mix empty prologue
+    if (!ctx->has_processed_prologue) {
+        if (!process_prologue(ctx, NULL, 0))
+            return false;
+    }
 
     // Process pre-messages
     for (size_t i = 0; i < ctx->pattern->pre_msgs_count; ++i) {

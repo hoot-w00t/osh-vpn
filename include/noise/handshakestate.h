@@ -25,9 +25,6 @@ bool noise_handshakestate_set_re(noise_handshakestate_t *ctx, const keypair_t *r
 const keypair_t *noise_handshakestate_get_s(const noise_handshakestate_t *ctx);
 const keypair_t *noise_handshakestate_get_rs(const noise_handshakestate_t *ctx);
 
-__attribute__((warn_unused_result))
-bool noise_handshakestate_set_prologue(noise_handshakestate_t *ctx, const void *prologue, size_t prologue_len);
-
 bool noise_handshakestate_is_initiator(const noise_handshakestate_t *ctx);
 
 bool noise_handshakestate_expects_write(const noise_handshakestate_t *ctx);
@@ -35,6 +32,9 @@ bool noise_handshakestate_expects_read(const noise_handshakestate_t *ctx);
 
 bool noise_handshakestate_set_next_psk(noise_handshakestate_t *ctx, const void *psk, size_t len);
 bool noise_handshakestate_need_next_psk(const noise_handshakestate_t *ctx);
+
+__attribute__((warn_unused_result))
+bool noise_handshakestate_set_prologue(noise_handshakestate_t *ctx, const void *prologue, size_t prologue_len);
 
 __attribute__((warn_unused_result))
 bool noise_handshakestate_write_msg(
