@@ -47,7 +47,7 @@ __attribute__((warn_unused_result))
 bool noise_handshakestate_ready_to_split(const noise_handshakestate_t *ctx);
 __attribute__((warn_unused_result))
 bool noise_handshakestate_split(noise_handshakestate_t *ctx,
-    noise_cipherstate_t **c1, noise_cipherstate_t **c2);
+    noise_cipherstate_t **send_cipher, noise_cipherstate_t **recv_cipher);
 
 __attribute__((warn_unused_result))
 bool noise_handshakestate_get_handshake_hash(const noise_handshakestate_t *ctx, void *dest, size_t dest_len);

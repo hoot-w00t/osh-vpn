@@ -39,7 +39,7 @@ bool noise_symmetricstate_decrypt_and_hash(noise_symmetricstate_t *ctx,
     void *mac, size_t mac_len);
 
 __attribute__((warn_unused_result))
-bool noise_symmetricstate_split(noise_symmetricstate_t *ctx,
-    noise_cipherstate_t **c1, noise_cipherstate_t **c2);
+bool noise_symmetricstate_split(noise_symmetricstate_t *ctx, bool initiator,
+    noise_cipherstate_t **send_cipher, noise_cipherstate_t **recv_cipher);
 
 #endif

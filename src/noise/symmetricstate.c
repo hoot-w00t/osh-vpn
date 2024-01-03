@@ -220,46 +220,54 @@ bool noise_symmetricstate_decrypt_and_hash(noise_symmetricstate_t *ctx,
     }
 }
 
-bool noise_symmetricstate_split(noise_symmetricstate_t *ctx,
-    noise_cipherstate_t **c1, noise_cipherstate_t **c2)
+bool noise_symmetricstate_split(noise_symmetricstate_t *ctx, bool initiator,
+    noise_cipherstate_t **send_cipher, noise_cipherstate_t **recv_cipher)
 {
     const uint8_t empty = 0;
+    noise_cipherstate_t *c1 = NULL; // for *send_cipher
+    noise_cipherstate_t *c2 = NULL; // for *recv_cipher
     bool success = false;
 
-    assert(c1 != NULL);
-    assert(c2 != NULL);
-    assert(c1 != c2);
-
-    // Both ciphers will be accessed on error so they have to be initialized here first
-    *c1 = NULL;
-    *c2 = NULL;
+    assert(send_cipher != NULL);
+    assert(recv_cipher != NULL);
+    assert(send_cipher != recv_cipher);
 
     if (!noise_hkdf(ctx, &empty, 0, 2))
         goto end;
 
-    *c1 = noise_cipherstate_create(ctx->cipher_type,
-        NOISE_CIPHERSTATE_FAIL_WITHOUT_KEY | NOISE_CIPHERSTATE_CAN_ENCRYPT | NOISE_CIPHERSTATE_CAN_DECRYPT);
-    if (*c1 == NULL)
-        goto end;
-    if (!noise_cipherstate_initialize_key(*c1, ctx->hkdf_output1, ctx->keylen))
+    c1 = noise_cipherstate_create(ctx->cipher_type,
+        NOISE_CIPHERSTATE_FAIL_WITHOUT_KEY | NOISE_CIPHERSTATE_CAN_ENCRYPT);
+    if (c1 == NULL)
         goto end;
 
-    *c2 = noise_cipherstate_create(ctx->cipher_type,
-        NOISE_CIPHERSTATE_FAIL_WITHOUT_KEY | NOISE_CIPHERSTATE_CAN_ENCRYPT | NOISE_CIPHERSTATE_CAN_DECRYPT);
-    if (*c2 == NULL)
-        goto end;
-    if (!noise_cipherstate_initialize_key(*c2, ctx->hkdf_output2, ctx->keylen))
+    c2 = noise_cipherstate_create(ctx->cipher_type,
+        NOISE_CIPHERSTATE_FAIL_WITHOUT_KEY | NOISE_CIPHERSTATE_CAN_DECRYPT);
+    if (c2 == NULL)
         goto end;
 
+    // output 1 is the encryption key for the initiator
+    // output 2 is the encryption key for the responder
+    if (initiator) {
+        if (!noise_cipherstate_initialize_key(c1, ctx->hkdf_output1, ctx->keylen))
+            goto end;
+        if (!noise_cipherstate_initialize_key(c2, ctx->hkdf_output2, ctx->keylen))
+            goto end;
+    } else {
+        if (!noise_cipherstate_initialize_key(c1, ctx->hkdf_output2, ctx->keylen))
+            goto end;
+        if (!noise_cipherstate_initialize_key(c2, ctx->hkdf_output1, ctx->keylen))
+            goto end;
+    }
+
+    *send_cipher = c1;
+    *recv_cipher = c2;
     success = true;
 
 end:
     reset_hkdf_output(ctx);
     if (!success) {
-        noise_cipherstate_destroy(*c1);
-        *c1 = NULL;
-        noise_cipherstate_destroy(*c2);
-        *c2 = NULL;
+        noise_cipherstate_destroy(c1);
+        noise_cipherstate_destroy(c2);
     }
     return success;
 }

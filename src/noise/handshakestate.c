@@ -803,16 +803,16 @@ bool noise_handshakestate_ready_to_split(const noise_handshakestate_t *ctx)
 }
 
 bool noise_handshakestate_split(noise_handshakestate_t *ctx,
-    noise_cipherstate_t **c1, noise_cipherstate_t **c2)
+    noise_cipherstate_t **send_cipher, noise_cipherstate_t **recv_cipher)
 {
     bool success;
 
     if (!noise_handshakestate_ready_to_split(ctx))
         return false;
 
-    success = ctx->initiator
-         ? noise_symmetricstate_split(ctx->symmetric, c1, c2)
-         : noise_symmetricstate_split(ctx->symmetric, c2, c1);
+    success = noise_symmetricstate_split(ctx->symmetric, ctx->initiator,
+        send_cipher, recv_cipher);
+
     ctx->has_split = success;
     return success;
 }
