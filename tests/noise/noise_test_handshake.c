@@ -7,6 +7,7 @@
 #include "noise/crypto_table.h"
 #include "noise/patterns_table.h"
 #include "crypto/keypair.h"
+#include "logger.h"
 #include "xalloc.h"
 #include "macros_assert.h"
 #include <stddef.h>
@@ -319,6 +320,7 @@ int main(int ac, char **av)
 {
     noise_handshakestate_t *init_handshake = NULL;
     noise_handshakestate_t *resp_handshake = NULL;
+    const loglevel_t initial_loglevel = logger_get_level();
 
     parse_args(ac, av);
     assert(protocol_name != NULL);
@@ -329,11 +331,15 @@ int main(int ac, char **av)
     assert(resp_handshake != NULL);
 
     assert(noise_handshakestate_set_prologue(init_handshake, init_prologue, init_prologue_len) == true);
+    assert(noise_handshakestate_set_prologue(resp_handshake, resp_prologue, resp_prologue_len) == true);
+
+    // these checks log expected errors, no need to actually print them
+    logger_set_level(LOG_CRIT);
     assert(noise_handshakestate_set_prologue(init_handshake, NULL, 0) == false);
     assert(noise_handshakestate_set_prologue(init_handshake, init_prologue, init_prologue_len) == false);
-    assert(noise_handshakestate_set_prologue(resp_handshake, resp_prologue, resp_prologue_len) == true);
     assert(noise_handshakestate_set_prologue(resp_handshake, NULL, 0) == false);
     assert(noise_handshakestate_set_prologue(resp_handshake, resp_prologue, resp_prologue_len) == false);
+    logger_set_level(initial_loglevel);
 
     if (keypair_has_private_key(init_static))
         assert(noise_handshakestate_set_s(init_handshake, init_static) == true);
