@@ -27,9 +27,9 @@ struct noise_cipherstate {
     uint64_t nonce;
 
     cipher_type_t cipher_type;
-    cipher_t *cipher;
+    cipher_t *encrypt_cipher;
+    cipher_t *decrypt_cipher;
     cipherstate_make_iv_from_nonce_t make_iv_from_nonce;
-    bool encrypts;
 };
 
 // Little-endian encoding of nonce (ChaChaPoly)
@@ -53,42 +53,6 @@ static void inc_nonce(noise_cipherstate_t *ctx)
         ctx->nonce += 1;
 }
 
-// Free ctx->cipher and reset cipher related variables
-static void delete_cipher(noise_cipherstate_t *ctx)
-{
-    cipher_free(ctx->cipher);
-    ctx->cipher = NULL;
-    ctx->encrypts = false;
-}
-
-// Update ctx->cipher
-// Returns true if the cipher was created and can be used
-// Returns false if there is no cipher
-__attribute__((warn_unused_result))
-static bool update_cipher(noise_cipherstate_t *ctx, bool encrypts)
-{
-    // If we already have a cipher for encryption/decryption don't re-create it
-    if (ctx->cipher && ctx->encrypts == encrypts)
-        return true;
-
-    // If there is no key we can't create a cipher
-    if (!noise_cipherstate_has_key(ctx)) {
-        delete_cipher(ctx);
-        return false;
-    }
-
-    // Create a new cipher
-    cipher_free(ctx->cipher);
-    ctx->cipher = cipher_create(ctx->cipher_type, encrypts, ctx->key, ctx->keylen, NULL, 0);
-    ctx->encrypts = encrypts;
-
-    if (ctx->cipher == NULL) {
-        delete_cipher(ctx);
-        return false;
-    }
-    return true;
-}
-
 noise_cipherstate_t *noise_cipherstate_create(cipher_type_t cipher_type, enum noise_cipherstate_flags flags)
 {
     noise_cipherstate_t *ctx = xzalloc(sizeof(*ctx));
@@ -100,6 +64,18 @@ noise_cipherstate_t *noise_cipherstate_create(cipher_type_t cipher_type, enum no
     assert(ctx->keylen > 0);
     assert(ctx->keylen <= NOISE_CIPHER_KEY_MAXLEN);
     ctx->has_key = false;
+
+    if (ctx->flags & NOISE_CIPHERSTATE_CAN_ENCRYPT) {
+        ctx->encrypt_cipher = cipher_create(ctx->cipher_type, true, NULL, 0, NULL, 0);
+        if (ctx->encrypt_cipher == NULL)
+            goto fail;
+    }
+
+    if (ctx->flags & NOISE_CIPHERSTATE_CAN_DECRYPT) {
+        ctx->decrypt_cipher = cipher_create(ctx->cipher_type, false, NULL, 0, NULL, 0);
+        if (ctx->decrypt_cipher == NULL)
+            goto fail;
+    }
 
     ctx->ivlen = cipher_get_iv_size_from_type(ctx->cipher_type);
     assert(ctx->ivlen == sizeof(struct noise_cipher_iv));
@@ -115,20 +91,24 @@ noise_cipherstate_t *noise_cipherstate_create(cipher_type_t cipher_type, enum no
 
     return ctx;
 
-/* Commented out because unused currently
 fail:
     noise_cipherstate_destroy(ctx);
     return NULL;
-*/
 }
 
 void noise_cipherstate_destroy(noise_cipherstate_t *ctx)
 {
     if (ctx) {
         memzero(ctx->key, NOISE_CIPHER_KEY_MAXLEN);
-        cipher_free(ctx->cipher);
+        cipher_free(ctx->encrypt_cipher);
+        cipher_free(ctx->decrypt_cipher);
         free(ctx);
     }
+}
+
+enum noise_cipherstate_flags noise_cipherstate_get_flags(const noise_cipherstate_t *ctx)
+{
+    return ctx->flags;
 }
 
 cipher_type_t noise_cipherstate_get_cipher_type(const noise_cipherstate_t *ctx)
@@ -156,6 +136,7 @@ bool noise_cipherstate_initialize_key(noise_cipherstate_t *ctx, const void *k, s
 {
     // The current key bytes are always reset
     memzero(ctx->key, NOISE_CIPHER_KEY_MAXLEN);
+    ctx->nonce = 0;
 
     if (k == NULL || len != ctx->keylen) {
         ctx->has_key = false;
@@ -164,9 +145,25 @@ bool noise_cipherstate_initialize_key(noise_cipherstate_t *ctx, const void *k, s
         ctx->has_key = true;
     }
 
-    ctx->nonce = 0;
-    delete_cipher(ctx);
+    // Update cipher keys if one is set
+    if (ctx->has_key) {
+        if (ctx->encrypt_cipher) {
+            if (!cipher_set_key(ctx->encrypt_cipher, ctx->key, ctx->keylen))
+                goto fail;
+        }
+        if (ctx->decrypt_cipher) {
+            if (!cipher_set_key(ctx->decrypt_cipher, ctx->key, ctx->keylen))
+                goto fail;
+        }
+    }
+
     return ctx->has_key;
+
+fail:
+    // Reset the key on error
+    memzero(ctx->key, NOISE_CIPHER_KEY_MAXLEN);
+    ctx->has_key = false;
+    return false;
 }
 
 bool noise_cipherstate_has_key(const noise_cipherstate_t *ctx)
@@ -204,12 +201,10 @@ bool noise_cipherstate_encrypt_with_ad(noise_cipherstate_t *ctx,
     if (!noise_nonce_is_valid(ctx->nonce))
         return false;
 
-    if (!update_cipher(ctx, true))
-        return false;
-
     ctx->make_iv_from_nonce(&iv, ctx->nonce);
-    return cipher_set_iv(ctx->cipher, &iv, sizeof(iv))
-        && cipher_encrypt(ctx->cipher, output, output_len, plaintext, plaintext_len, ad, ad_len, mac, mac_len);
+    return ctx->encrypt_cipher != NULL
+        && cipher_set_iv(ctx->encrypt_cipher, &iv, sizeof(iv))
+        && cipher_encrypt(ctx->encrypt_cipher, output, output_len, plaintext, plaintext_len, ad, ad_len, mac, mac_len);
 }
 
 bool noise_cipherstate_encrypt_with_ad_postinc(noise_cipherstate_t *ctx,
@@ -249,12 +244,10 @@ bool noise_cipherstate_decrypt_with_ad(noise_cipherstate_t *ctx,
     if (!noise_nonce_is_valid(ctx->nonce))
         return false;
 
-    if (!update_cipher(ctx, false))
-        return false;
-
     ctx->make_iv_from_nonce(&iv, ctx->nonce);
-    return cipher_set_iv(ctx->cipher, &iv, sizeof(iv))
-        && cipher_decrypt(ctx->cipher, output, output_len, ciphertext, ciphertext_len, ad, ad_len, mac, mac_len);
+    return ctx->decrypt_cipher != NULL
+        && cipher_set_iv(ctx->decrypt_cipher, &iv, sizeof(iv))
+        && cipher_decrypt(ctx->decrypt_cipher, output, output_len, ciphertext, ciphertext_len, ad, ad_len, mac, mac_len);
 }
 
 bool noise_cipherstate_decrypt_with_ad_postinc(noise_cipherstate_t *ctx,
