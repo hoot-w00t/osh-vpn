@@ -37,16 +37,14 @@ __attribute__((warn_unused_result))
 bool noise_handshakestate_set_prologue(noise_handshakestate_t *ctx, const void *prologue, size_t prologue_len);
 
 __attribute__((warn_unused_result))
-bool noise_handshakestate_write_msg(
-    noise_handshakestate_t *ctx,
-    struct fixedbuf *output,
-    const struct fixedbuf *payload);
+bool noise_handshakestate_write_msg(noise_handshakestate_t *ctx,
+    struct fixedbuf *output, const struct fixedbuf *payload);
 __attribute__((warn_unused_result))
-bool noise_handshakestate_read_msg(
-    noise_handshakestate_t *ctx,
-    struct fixedbuf *input,
-    struct fixedbuf *payload);
+bool noise_handshakestate_read_msg(noise_handshakestate_t *ctx,
+    struct fixedbuf *input, struct fixedbuf *payload);
 
+__attribute__((warn_unused_result))
+bool noise_handshakestate_ready_to_split(const noise_handshakestate_t *ctx);
 __attribute__((warn_unused_result))
 bool noise_handshakestate_split(noise_handshakestate_t *ctx,
     noise_cipherstate_t **c1, noise_cipherstate_t **c2);

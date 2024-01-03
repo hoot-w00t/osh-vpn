@@ -482,10 +482,14 @@ int main(int ac, char **av)
             assert(handshake_read_payload.len == handshake_write_payload.len);
             assert(!memcmp(handshake_read_payload.ptr, handshake_write_payload.ptr, handshake_read_payload.len));
 
+            const bool init_ready_to_split = noise_handshakestate_ready_to_split(init_handshake);
+            const bool resp_ready_to_split = noise_handshakestate_ready_to_split(resp_handshake);
             const bool init_has_split = noise_handshakestate_split(init_handshake, &init_send_cipher, &init_recv_cipher);
             const bool resp_has_split = noise_handshakestate_split(resp_handshake, &resp_send_cipher, &resp_recv_cipher);
 
+            assert(init_ready_to_split == resp_ready_to_split);
             assert(init_has_split == resp_has_split);
+            assert(init_ready_to_split == init_has_split);
             has_split = init_has_split && resp_has_split;
 
             if (has_split) {

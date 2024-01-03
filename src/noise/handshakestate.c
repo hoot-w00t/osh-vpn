@@ -629,10 +629,8 @@ static bool noise_handshakestate_read_s(noise_handshakestate_t *ctx, struct fixe
     return success;
 }
 
-bool noise_handshakestate_write_msg(
-    noise_handshakestate_t *ctx,
-    struct fixedbuf *output,
-    const struct fixedbuf *payload)
+bool noise_handshakestate_write_msg(noise_handshakestate_t *ctx,
+    struct fixedbuf *output, const struct fixedbuf *payload)
 {
     const uint8_t empty = 0;
     const struct noise_message *msg;
@@ -689,7 +687,6 @@ bool noise_handshakestate_write_msg(
                 return false;
         }
     }
-    ctx->curr_msg_idx += 1;
 
     if (fixedbuf_has_data(payload)) {
         if (!noise_handshakestate_write_payload(ctx, output, payload->ptr, payload->len))
@@ -699,13 +696,12 @@ bool noise_handshakestate_write_msg(
             return false;
     }
 
+    ctx->curr_msg_idx += 1;
     return true;
 }
 
-bool noise_handshakestate_read_msg(
-    noise_handshakestate_t *ctx,
-    struct fixedbuf *input,
-    struct fixedbuf *payload)
+bool noise_handshakestate_read_msg(noise_handshakestate_t *ctx,
+    struct fixedbuf *input, struct fixedbuf *payload)
 {
     const struct noise_message *msg;
     size_t input_offset;
@@ -766,9 +762,9 @@ bool noise_handshakestate_read_msg(
                 return false;
         }
     }
-    ctx->curr_msg_idx += 1;
 
     const size_t remaining_len = fixedbuf_get_remaining_length(input, &input_offset);
+    bool success;
 
     if (noise_symmetricstate_has_key(ctx->symmetric)) {
         if (remaining_len < ctx->maclen)
@@ -778,22 +774,32 @@ bool noise_handshakestate_read_msg(
         void *ciphertext = fixedbuf_get(input, &input_offset, ciphertext_len);
         void *mac = fixedbuf_get(input, &input_offset, ctx->maclen);
 
-        return noise_handshakestate_read_payload(ctx, ciphertext, ciphertext_len, mac, ctx->maclen, payload);
+        success = noise_handshakestate_read_payload(ctx, ciphertext, ciphertext_len, mac, ctx->maclen, payload);
 
-    } else {
-        if (remaining_len == 0)
-            return true;
-
+    } else if (remaining_len != 0) {
         void *plaintext = fixedbuf_get(input, &input_offset, remaining_len);
 
         if (plaintext == NULL)
             return false;
 
-        return noise_symmetricstate_mix_hash(ctx->symmetric, plaintext, remaining_len)
-            && fixedbuf_append(payload, plaintext, remaining_len);
+        success = noise_symmetricstate_mix_hash(ctx->symmetric, plaintext, remaining_len)
+               && fixedbuf_append(payload, plaintext, remaining_len);
+    } else {
+        success = true;
     }
 
-    return true;
+    if (success)
+        ctx->curr_msg_idx += 1;
+    return success;
+}
+
+bool noise_handshakestate_ready_to_split(const noise_handshakestate_t *ctx)
+{
+    return  get_curr_msg(ctx) == NULL
+        &&  ctx->has_processed_prologue
+        &&  ctx->has_processed_pre_messages
+        &&  ctx->curr_msg_idx == ctx->pattern->msgs_count
+        && !ctx->has_split;
 }
 
 bool noise_handshakestate_split(noise_handshakestate_t *ctx,
@@ -801,7 +807,7 @@ bool noise_handshakestate_split(noise_handshakestate_t *ctx,
 {
     bool success;
 
-    if (get_curr_msg(ctx) != NULL || ctx->has_split)
+    if (!noise_handshakestate_ready_to_split(ctx))
         return false;
 
     success = ctx->initiator
