@@ -62,7 +62,7 @@ noise_symmetricstate_t *noise_symmetricstate_create(const char *protocol_name,
     const size_t name_len = strlen(protocol_name);
 
     ctx->cipher_type = cipher_type;
-    ctx->cipher = noise_cipherstate_create(ctx->cipher_type, false);
+    ctx->cipher = noise_cipherstate_create(ctx->cipher_type, NOISE_CIPHERSTATE_NO_FLAGS);
     if (ctx->cipher == NULL)
         goto fail;
 
@@ -236,13 +236,13 @@ bool noise_symmetricstate_split(noise_symmetricstate_t *ctx,
     if (!noise_hkdf(ctx, &empty, 0, 2))
         goto end;
 
-    *c1 = noise_cipherstate_create(ctx->cipher_type, true);
+    *c1 = noise_cipherstate_create(ctx->cipher_type, NOISE_CIPHERSTATE_FAIL_WITHOUT_KEY);
     if (*c1 == NULL)
         goto end;
     if (!noise_cipherstate_initialize_key(*c1, ctx->hkdf_output1, ctx->keylen))
         goto end;
 
-    *c2 = noise_cipherstate_create(ctx->cipher_type, true);
+    *c2 = noise_cipherstate_create(ctx->cipher_type, NOISE_CIPHERSTATE_FAIL_WITHOUT_KEY);
     if (*c2 == NULL)
         goto end;
     if (!noise_cipherstate_initialize_key(*c2, ctx->hkdf_output2, ctx->keylen))

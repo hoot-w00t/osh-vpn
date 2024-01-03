@@ -15,6 +15,8 @@ typedef void (*cipherstate_make_iv_from_nonce_t)(struct noise_cipher_iv *iv, uin
 STATIC_ASSERT_NOMSG(sizeof(struct noise_cipher_iv) == NOISE_CIPHER_IV_MAXLEN);
 
 struct noise_cipherstate {
+    enum noise_cipherstate_flags flags;
+
     bool has_key;
     uint8_t key[NOISE_CIPHER_KEY_MAXLEN];
     size_t keylen;
@@ -28,7 +30,6 @@ struct noise_cipherstate {
     cipher_t *cipher;
     cipherstate_make_iv_from_nonce_t make_iv_from_nonce;
     bool encrypts;
-    bool fail_without_key;
 };
 
 // Little-endian encoding of nonce (ChaChaPoly)
@@ -88,16 +89,17 @@ static bool update_cipher(noise_cipherstate_t *ctx, bool encrypts)
     return true;
 }
 
-noise_cipherstate_t *noise_cipherstate_create(cipher_type_t cipher_type, bool fail_without_key)
+noise_cipherstate_t *noise_cipherstate_create(cipher_type_t cipher_type, enum noise_cipherstate_flags flags)
 {
     noise_cipherstate_t *ctx = xzalloc(sizeof(*ctx));
+
+    ctx->flags = flags;
 
     ctx->cipher_type = cipher_type;
     ctx->keylen = cipher_get_key_size_from_type(ctx->cipher_type);
     assert(ctx->keylen > 0);
     assert(ctx->keylen <= NOISE_CIPHER_KEY_MAXLEN);
     ctx->has_key = false;
-    ctx->fail_without_key = fail_without_key;
 
     ctx->ivlen = cipher_get_iv_size_from_type(ctx->cipher_type);
     assert(ctx->ivlen == sizeof(struct noise_cipher_iv));
@@ -190,7 +192,7 @@ bool noise_cipherstate_encrypt_with_ad(noise_cipherstate_t *ctx,
         return false;
 
     if (!noise_cipherstate_has_key(ctx)) {
-        if (ctx->fail_without_key)
+        if (ctx->flags & NOISE_CIPHERSTATE_FAIL_WITHOUT_KEY)
             return false;
 
         memcpy(output, plaintext, plaintext_len);
@@ -236,7 +238,7 @@ bool noise_cipherstate_decrypt_with_ad(noise_cipherstate_t *ctx,
         return false;
 
     if (!noise_cipherstate_has_key(ctx)) {
-        if (ctx->fail_without_key)
+        if (ctx->flags & NOISE_CIPHERSTATE_FAIL_WITHOUT_KEY)
             return false;
 
         memcpy(output, ciphertext, ciphertext_len);

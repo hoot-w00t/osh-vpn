@@ -7,10 +7,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+enum noise_cipherstate_flags {
+    NOISE_CIPHERSTATE_NO_FLAGS          = 0,
+
+    NOISE_CIPHERSTATE_FAIL_WITHOUT_KEY  = (1 << 0)
+};
+
 typedef struct noise_cipherstate noise_cipherstate_t;
 
 __attribute__((warn_unused_result))
-noise_cipherstate_t *noise_cipherstate_create(cipher_type_t cipher_type, bool fail_without_key);
+noise_cipherstate_t *noise_cipherstate_create(cipher_type_t cipher_type, enum noise_cipherstate_flags flags);
 void noise_cipherstate_destroy(noise_cipherstate_t *ctx);
 
 cipher_type_t noise_cipherstate_get_cipher_type(const noise_cipherstate_t *ctx);
