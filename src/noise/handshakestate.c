@@ -331,22 +331,23 @@ static bool process_pre_messages(noise_handshakestate_t *ctx)
 
         assert(premsg->tokens_count <= NOISE_MAX_TOKENS_PER_MESSAGE);
         for (unsigned int j = 0; j < premsg->tokens_count; ++j) {
+            bool msg_success;
+
             switch (premsg->tokens[j]) {
                 case NOISE_TOK_S:
-                    if (premsg->from_initiator) {
-                        if (!mix_initiator_public_key(ctx))
-                            return false;
-                    } else {
-                        if (!mix_responder_public_key(ctx))
-                            return false;
-                    }
+                    msg_success = premsg->from_initiator
+                                ? mix_initiator_public_key(ctx)
+                                : mix_responder_public_key(ctx);
                     break;
 
                 default:
                     logger(LOG_ERR, "%s: Invalid pre-message %u token %u for %s",
                         __func__, i, j, ctx->pattern->pattern_name);
-                    return false;
+                    msg_success = false;
             }
+
+            if (!msg_success)
+                return false;
         }
     }
 
@@ -640,47 +641,24 @@ bool noise_handshakestate_write_msg(noise_handshakestate_t *ctx,
         return false;
 
     for (unsigned int i = 0; i < msg->tokens_count; ++i) {
+        bool msg_success;
+
         switch (msg->tokens[i]) {
-            case NOISE_TOK_E:
-                if (!noise_handshakestate_write_e(ctx, output))
-                    return false;
-                break;
-
-            case NOISE_TOK_S:
-                if (!noise_handshakestate_write_s(ctx, output))
-                    return false;
-                break;
-
-            case NOISE_TOK_EE:
-                if (!noise_handshakestate_ee(ctx))
-                    return false;
-                break;
-
-            case NOISE_TOK_ES:
-                if (!noise_handshakestate_es(ctx))
-                    return false;
-                break;
-
-            case NOISE_TOK_SE:
-                if (!noise_handshakestate_se(ctx))
-                    return false;
-                break;
-
-            case NOISE_TOK_SS:
-                if (!noise_handshakestate_ss(ctx))
-                    return false;
-                break;
-
-            case NOISE_TOK_PSK:
-                if (!noise_handshakestate_psk(ctx))
-                    return false;
-                break;
-
+            case NOISE_TOK_E:   msg_success = noise_handshakestate_write_e(ctx, output); break;
+            case NOISE_TOK_S:   msg_success = noise_handshakestate_write_s(ctx, output); break;
+            case NOISE_TOK_EE:  msg_success = noise_handshakestate_ee(ctx); break;
+            case NOISE_TOK_ES:  msg_success = noise_handshakestate_es(ctx); break;
+            case NOISE_TOK_SE:  msg_success = noise_handshakestate_se(ctx); break;
+            case NOISE_TOK_SS:  msg_success = noise_handshakestate_ss(ctx); break;
+            case NOISE_TOK_PSK: msg_success = noise_handshakestate_psk(ctx); break;
             default:
                 logger(LOG_CRIT, "%s: Invalid message %u token %u for %s",
                     __func__, ctx->curr_msg_idx, i, ctx->pattern->pattern_name);
-                return false;
+                msg_success = false;
         }
+
+        if (!msg_success)
+            return false;
     }
 
     if (fixedbuf_has_data(payload)) {
@@ -715,47 +693,24 @@ bool noise_handshakestate_read_msg(noise_handshakestate_t *ctx,
 
     input_offset = 0;
     for (unsigned int i = 0; i < msg->tokens_count; ++i) {
+        bool msg_success;
+
         switch (msg->tokens[i]) {
-            case NOISE_TOK_E:
-                if (!noise_handshakestate_read_e(ctx, input, &input_offset))
-                    return false;
-                break;
-
-            case NOISE_TOK_S:
-                if (!noise_handshakestate_read_s(ctx, input, &input_offset))
-                    return false;
-                break;
-
-            case NOISE_TOK_EE:
-                if (!noise_handshakestate_ee(ctx))
-                    return false;
-                break;
-
-            case NOISE_TOK_ES:
-                if (!noise_handshakestate_es(ctx))
-                    return false;
-                break;
-
-            case NOISE_TOK_SE:
-                if (!noise_handshakestate_se(ctx))
-                    return false;
-                break;
-
-            case NOISE_TOK_SS:
-                if (!noise_handshakestate_ss(ctx))
-                    return false;
-                break;
-
-            case NOISE_TOK_PSK:
-                if (!noise_handshakestate_psk(ctx))
-                    return false;
-                break;
-
+            case NOISE_TOK_E:   msg_success = noise_handshakestate_read_e(ctx, input, &input_offset); break;
+            case NOISE_TOK_S:   msg_success = noise_handshakestate_read_s(ctx, input, &input_offset); break;
+            case NOISE_TOK_EE:  msg_success = noise_handshakestate_ee(ctx); break;
+            case NOISE_TOK_ES:  msg_success = noise_handshakestate_es(ctx); break;
+            case NOISE_TOK_SE:  msg_success = noise_handshakestate_se(ctx); break;
+            case NOISE_TOK_SS:  msg_success = noise_handshakestate_ss(ctx); break;
+            case NOISE_TOK_PSK: msg_success = noise_handshakestate_psk(ctx); break;
             default:
                 logger(LOG_CRIT, "%s: Invalid message %u token %u for %s",
                     __func__, ctx->curr_msg_idx, i, ctx->pattern->pattern_name);
-                return false;
+                msg_success = false;
         }
+
+        if (!msg_success)
+            return false;
     }
 
     const size_t remaining_len = fixedbuf_get_input_remaining_length(input, input_offset);
