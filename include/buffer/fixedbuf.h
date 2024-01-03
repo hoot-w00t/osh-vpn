@@ -67,12 +67,11 @@ static inline void *fixedbuf_get(struct fixedbuf *buf, size_t *offset, size_t n)
     return retptr;
 }
 
-// Return the remaining bytes from the buffer starting at *offset
+// Return the remaining bytes from the input buffer starting at offset
 // This returns 0 on error
-static inline size_t fixedbuf_get_remaining_length(const struct fixedbuf *buf, const size_t *offset)
+static inline size_t fixedbuf_get_input_remaining_length(const struct fixedbuf *buf, const size_t offset)
 {
-    assert(offset != NULL);
-    return (*offset < buf->len) ? (buf->len - *offset) : 0;
+    return (offset <= buf->len) ? (buf->len - offset) : 0;
 }
 
 // Return true if the fixed buffer contains at least 1 byte of data
