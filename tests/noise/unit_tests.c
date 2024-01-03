@@ -57,7 +57,7 @@ static void assert_message_tokens(const struct noise_message *msg, bool *has_psk
 {
     cr_assert(msg->tokens_count <= NOISE_MAX_TOKENS_PER_MESSAGE);
 
-    for (size_t i = 0; i < NOISE_MAX_TOKENS_PER_MESSAGE; ++i) {
+    for (unsigned int i = 0; i < NOISE_MAX_TOKENS_PER_MESSAGE; ++i) {
         if (i < msg->tokens_count) {
             cr_assert(msg->tokens[i] != NOISE_TOK_NONE);
             if (msg->tokens[i] == NOISE_TOK_PSK)
@@ -68,7 +68,7 @@ static void assert_message_tokens(const struct noise_message *msg, bool *has_psk
     }
 }
 
-static void assert_message_from_initiator(const struct noise_message *msgs, size_t count, size_t i)
+static void assert_message_from_initiator(const struct noise_message *msgs, unsigned int count, unsigned int i)
 {
     if (i < count) {
         if (i > 0)
@@ -89,7 +89,7 @@ Test(noise_patterns_table, validate_patterns_table)
 
         bool has_psk_token = false;
 
-        for (size_t i = 0; i < NOISE_MAX_PRE_MESSAGES; ++i) {
+        for (unsigned int i = 0; i < NOISE_MAX_PRE_MESSAGES; ++i) {
             const struct noise_message *msg = &pattern->pre_msgs[i];
 
             if (i >= pattern->pre_msgs_count)
@@ -98,7 +98,7 @@ Test(noise_patterns_table, validate_patterns_table)
             assert_message_tokens(msg, &has_psk_token);
         }
 
-        for (size_t i = 0; i < NOISE_MAX_MESSAGES; ++i) {
+        for (unsigned int i = 0; i < NOISE_MAX_MESSAGES; ++i) {
             const struct noise_message *msg = &pattern->msgs[i];
 
             if (i >= pattern->msgs_count)

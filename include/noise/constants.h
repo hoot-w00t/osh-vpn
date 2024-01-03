@@ -68,7 +68,7 @@ struct noise_message {
     bool from_initiator;
 
     enum noise_pattern_token tokens[NOISE_MAX_TOKENS_PER_MESSAGE];
-    size_t tokens_count;
+    unsigned int tokens_count;
 };
 
 // Definition of a handshake pattern
@@ -79,10 +79,10 @@ struct noise_pattern {
     bool psk_mode;
 
     struct noise_message pre_msgs[NOISE_MAX_PRE_MESSAGES];
-    size_t pre_msgs_count;
+    unsigned int pre_msgs_count;
 
     struct noise_message msgs[NOISE_MAX_MESSAGES];
-    size_t msgs_count;
+    unsigned int msgs_count;
 };
 
 #endif

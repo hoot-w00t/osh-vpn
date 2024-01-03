@@ -40,7 +40,7 @@ struct noise_handshakestate {
     bool initiator;
     struct noise_protocol_name protocol;
     const struct noise_pattern *pattern;
-    size_t curr_msg_idx;
+    unsigned int curr_msg_idx;
 
     bool has_processed_prologue;
     bool has_processed_pre_messages;
@@ -326,11 +326,11 @@ static bool process_pre_messages(noise_handshakestate_t *ctx)
     }
 
     // Process pre-messages
-    for (size_t i = 0; i < ctx->pattern->pre_msgs_count; ++i) {
+    for (unsigned int i = 0; i < ctx->pattern->pre_msgs_count; ++i) {
         const struct noise_message *premsg = &ctx->pattern->pre_msgs[i];
 
         assert(premsg->tokens_count <= NOISE_MAX_TOKENS_PER_MESSAGE);
-        for (size_t j = 0; j < premsg->tokens_count; ++j) {
+        for (unsigned int j = 0; j < premsg->tokens_count; ++j) {
             switch (premsg->tokens[j]) {
                 case NOISE_TOK_S:
                     if (premsg->from_initiator) {
@@ -343,7 +343,7 @@ static bool process_pre_messages(noise_handshakestate_t *ctx)
                     break;
 
                 default:
-                    logger(LOG_ERR, "%s: Invalid pre-message %zu token %zu for %s",
+                    logger(LOG_ERR, "%s: Invalid pre-message %u token %u for %s",
                         __func__, i, j, ctx->pattern->pattern_name);
                     return false;
             }
@@ -646,7 +646,7 @@ bool noise_handshakestate_write_msg(
     if (msg == NULL || !noise_handshakestate_expects_write(ctx))
         return false;
 
-    for (size_t i = 0; i < msg->tokens_count; ++i) {
+    for (unsigned int i = 0; i < msg->tokens_count; ++i) {
         switch (msg->tokens[i]) {
             case NOISE_TOK_E:
                 if (!noise_handshakestate_write_e(ctx, output))
@@ -684,7 +684,7 @@ bool noise_handshakestate_write_msg(
                 break;
 
             default:
-                logger(LOG_CRIT, "%s: Invalid message %zu token %zu for %s",
+                logger(LOG_CRIT, "%s: Invalid message %u token %u for %s",
                     __func__, ctx->curr_msg_idx, i, ctx->pattern->pattern_name);
                 return false;
         }
@@ -723,7 +723,7 @@ bool noise_handshakestate_read_msg(
         return false;
 
     input_offset = 0;
-    for (size_t i = 0; i < msg->tokens_count; ++i) {
+    for (unsigned int i = 0; i < msg->tokens_count; ++i) {
         switch (msg->tokens[i]) {
             case NOISE_TOK_E:
                 if (!noise_handshakestate_read_e(ctx, input, &input_offset))
@@ -761,7 +761,7 @@ bool noise_handshakestate_read_msg(
                 break;
 
             default:
-                logger(LOG_CRIT, "%s: Invalid message %zu token %zu for %s",
+                logger(LOG_CRIT, "%s: Invalid message %u token %u for %s",
                     __func__, ctx->curr_msg_idx, i, ctx->pattern->pattern_name);
                 return false;
         }
