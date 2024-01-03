@@ -536,9 +536,15 @@ static bool noise_handshakestate_read_payload(noise_handshakestate_t *ctx,
 {
     bool success = false;
     const size_t plaintext_maxlen = payload_len;
-    uint8_t *plaintext = xalloc(plaintext_maxlen);
+    uint8_t *plaintext = NULL;
     size_t len;
 
+    // Make sure the output buffer can hold the plaintext before allocating
+    // a temporary buffer for it
+    if ((output->len + plaintext_maxlen) > output->maxlen)
+        goto end;
+
+    plaintext = xalloc(plaintext_maxlen);
     if (!noise_symmetricstate_decrypt_and_hash(ctx->symmetric, payload, payload_len,
             plaintext, &len, mac, mac_len))
     {
@@ -553,7 +559,7 @@ static bool noise_handshakestate_read_payload(noise_handshakestate_t *ctx,
     success = true;
 
 end:
-    if (plaintext_maxlen > 0)
+    if (plaintext != NULL && plaintext_maxlen > 0)
         memzero(plaintext, plaintext_maxlen);
     free(plaintext);
     return success;
@@ -752,7 +758,7 @@ bool noise_handshakestate_read_msg(noise_handshakestate_t *ctx,
         }
     }
 
-    const size_t remaining_len = fixedbuf_get_remaining_length(input, &input_offset);
+    const size_t remaining_len = fixedbuf_get_input_remaining_length(input, input_offset);
     const size_t mac_len = noise_symmetricstate_has_key(ctx->symmetric) ? ctx->maclen : 0;
 
     if (remaining_len < mac_len)
