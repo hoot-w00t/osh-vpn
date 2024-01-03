@@ -10,9 +10,8 @@
 enum noise_cipherstate_flags {
     NOISE_CIPHERSTATE_NO_FLAGS          = 0,
 
-    NOISE_CIPHERSTATE_FAIL_WITHOUT_KEY  = (1 << 0),
-    NOISE_CIPHERSTATE_CAN_ENCRYPT       = (1 << 1),
-    NOISE_CIPHERSTATE_CAN_DECRYPT       = (1 << 2)
+    NOISE_CIPHERSTATE_CAN_ENCRYPT       = (1 << 0),
+    NOISE_CIPHERSTATE_CAN_DECRYPT       = (1 << 1)
 };
 
 typedef struct noise_cipherstate noise_cipherstate_t;

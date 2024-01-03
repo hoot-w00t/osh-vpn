@@ -186,16 +186,22 @@ bool noise_symmetricstate_encrypt_and_hash(noise_symmetricstate_t *ctx,
     void *output, size_t *output_len,
     void *mac, size_t mac_len)
 {
-    if (!noise_cipherstate_encrypt_with_ad_postinc(ctx->cipher,
-            ctx->hash, ctx->hash_len, plaintext, plaintext_len,
-            output, output_len, mac, mac_len))
-    {
-        return false;
-    }
-
     if (noise_cipherstate_has_key(ctx->cipher)) {
+        if (!noise_cipherstate_encrypt_with_ad_postinc(ctx->cipher,
+                ctx->hash, ctx->hash_len,
+                plaintext, plaintext_len,
+                output, output_len,
+                mac, mac_len))
+        {
+            return false;
+        }
+
         return noise_symmetricstate_mix_hash_2(ctx, output, *output_len, mac, mac_len);
     } else {
+        memcpy(output, plaintext, plaintext_len);
+        *output_len = plaintext_len;
+        memzero(mac, mac_len);
+
         return noise_symmetricstate_mix_hash(ctx, output, *output_len);
     }
 }
@@ -206,16 +212,21 @@ bool noise_symmetricstate_decrypt_and_hash(noise_symmetricstate_t *ctx,
     void *mac, size_t mac_len)
 // FIXME: Make *mac const once noise_cipherstate_decrypt_with_ad_postinc() *mac becomes const
 {
-    if (!noise_cipherstate_decrypt_with_ad_postinc(ctx->cipher,
-            ctx->hash, ctx->hash_len, ciphertext, ciphertext_len,
-            output, output_len, mac, mac_len))
-    {
-        return false;
-    }
-
     if (noise_cipherstate_has_key(ctx->cipher)) {
+        if (!noise_cipherstate_decrypt_with_ad_postinc(ctx->cipher,
+                ctx->hash, ctx->hash_len,
+                ciphertext, ciphertext_len,
+                output, output_len,
+                mac, mac_len))
+        {
+            return false;
+        }
+
         return noise_symmetricstate_mix_hash_2(ctx, ciphertext, ciphertext_len, mac, mac_len);
     } else {
+        memcpy(output, ciphertext, ciphertext_len);
+        *output_len = ciphertext_len;
+
         return noise_symmetricstate_mix_hash(ctx, ciphertext, ciphertext_len);
     }
 }
@@ -235,13 +246,11 @@ bool noise_symmetricstate_split(noise_symmetricstate_t *ctx, bool initiator,
     if (!noise_hkdf(ctx, &empty, 0, 2))
         goto end;
 
-    c1 = noise_cipherstate_create(ctx->cipher_type,
-        NOISE_CIPHERSTATE_FAIL_WITHOUT_KEY | NOISE_CIPHERSTATE_CAN_ENCRYPT);
+    c1 = noise_cipherstate_create(ctx->cipher_type, NOISE_CIPHERSTATE_CAN_ENCRYPT);
     if (c1 == NULL)
         goto end;
 
-    c2 = noise_cipherstate_create(ctx->cipher_type,
-        NOISE_CIPHERSTATE_FAIL_WITHOUT_KEY | NOISE_CIPHERSTATE_CAN_DECRYPT);
+    c2 = noise_cipherstate_create(ctx->cipher_type, NOISE_CIPHERSTATE_CAN_DECRYPT);
     if (c2 == NULL)
         goto end;
 

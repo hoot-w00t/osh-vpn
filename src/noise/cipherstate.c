@@ -185,24 +185,11 @@ bool noise_cipherstate_encrypt_with_ad(noise_cipherstate_t *ctx,
 {
     struct noise_cipher_iv iv;
 
-    if (plaintext_len > NOISE_MESSAGE_MAXLEN)
-        return false;
-
-    if (!noise_cipherstate_has_key(ctx)) {
-        if (ctx->flags & NOISE_CIPHERSTATE_FAIL_WITHOUT_KEY)
-            return false;
-
-        memcpy(output, plaintext, plaintext_len);
-        *output_len = plaintext_len;
-        memzero(mac, mac_len);
-        return true;
-    }
-
-    if (!noise_nonce_is_valid(ctx->nonce))
-        return false;
-
     ctx->make_iv_from_nonce(&iv, ctx->nonce);
-    return ctx->encrypt_cipher != NULL
+    return plaintext_len <= NOISE_MESSAGE_MAXLEN
+        && ctx->encrypt_cipher != NULL
+        && ctx->has_key
+        && noise_nonce_is_valid(ctx->nonce)
         && cipher_set_iv(ctx->encrypt_cipher, &iv, sizeof(iv))
         && cipher_encrypt(ctx->encrypt_cipher, output, output_len, plaintext, plaintext_len, ad, ad_len, mac, mac_len);
 }
@@ -229,23 +216,11 @@ bool noise_cipherstate_decrypt_with_ad(noise_cipherstate_t *ctx,
 {
     struct noise_cipher_iv iv;
 
-    if (ciphertext_len > NOISE_MESSAGE_MAXLEN)
-        return false;
-
-    if (!noise_cipherstate_has_key(ctx)) {
-        if (ctx->flags & NOISE_CIPHERSTATE_FAIL_WITHOUT_KEY)
-            return false;
-
-        memcpy(output, ciphertext, ciphertext_len);
-        *output_len = ciphertext_len;
-        return true;
-    }
-
-    if (!noise_nonce_is_valid(ctx->nonce))
-        return false;
-
     ctx->make_iv_from_nonce(&iv, ctx->nonce);
-    return ctx->decrypt_cipher != NULL
+    return ciphertext_len <= NOISE_MESSAGE_MAXLEN
+        && ctx->decrypt_cipher != NULL
+        && ctx->has_key
+        && noise_nonce_is_valid(ctx->nonce)
         && cipher_set_iv(ctx->decrypt_cipher, &iv, sizeof(iv))
         && cipher_decrypt(ctx->decrypt_cipher, output, output_len, ciphertext, ciphertext_len, ad, ad_len, mac, mac_len);
 }
