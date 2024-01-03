@@ -74,6 +74,13 @@ static inline size_t fixedbuf_get_input_remaining_length(const struct fixedbuf *
     return (offset <= buf->len) ? (buf->len - offset) : 0;
 }
 
+// Return the available bytes from the output buffer
+// This returns 0 on error
+static inline size_t fixedbuf_get_output_available_length(const struct fixedbuf *buf)
+{
+    return (buf->len <= buf->maxlen) ? (buf->maxlen - buf->len) : 0;
+}
+
 // Return true if the fixed buffer contains at least 1 byte of data
 __attribute__((warn_unused_result))
 static inline bool fixedbuf_has_data(const struct fixedbuf *buf)
