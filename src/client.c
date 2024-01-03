@@ -644,6 +644,9 @@ bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
     slot = netbuffer_reserve(c->io.sendq, packet_size);
     oshpacket_init(&pkt, slot, packet_size, c->send_seqno);
 
+    // Increment the send seqno for future packets
+    c->send_seqno += 1;
+
     // Initialize the packet header
     packet_init_hdr(&pkt, hdr);
 
@@ -659,9 +662,6 @@ bool client_queue_packet(client_t *c, const oshpacket_hdr_t *hdr,
     }
 
     // The packet was queued successfully
-
-    // Increment the send seqno for future packets
-    c->send_seqno += 1;
 
     // Make sure to enable writing on the socket
     aio_enable_poll_events(c->aio_event, AIO_WRITE);
