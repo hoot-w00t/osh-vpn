@@ -307,6 +307,23 @@ set(OSHD_TESTS_SOURCES
     tests/oshpacket_tests.c
     tests/random_tests.c)
 
+# All sources for noise_test_handshake
+set(NOISE_TEST_HANDSHAKE_SOURCES
+    src/crypto/cipher.c
+    src/crypto/hash.c
+    src/crypto/keypair.c
+    src/noise/cipherstate.c
+    src/noise/crypto_table.c
+    src/noise/handshakestate.c
+    src/noise/patterns_table.c
+    src/noise/protocol_name.c
+    src/noise/symmetricstate.c
+    src/base64.c
+    src/logger.c
+    src/memzero.c
+    src/xalloc.c
+    tests/noise/noise_test_handshake.c)
+
 # Osh daemon
 add_executable(oshd ${OSHD_SOURCES} src/main.c)
 set_target_properties(oshd PROPERTIES POSITION_INDEPENDENT_CODE ${ENABLE_PIC})
@@ -335,7 +352,7 @@ endif()
 # Noise test vectors
 find_package(Python COMPONENTS Interpreter REQUIRED)
 
-add_executable(noise_test_handshake ${OSHD_SOURCES} "tests/noise/noise_test_handshake.c")
+add_executable(noise_test_handshake ${NOISE_TEST_HANDSHAKE_SOURCES})
 target_link_libraries(noise_test_handshake ${OSH_LINK_LIBRARIES})
 add_dependencies(noise_test_handshake version_git)
 add_test(NAME noise_test_vectors
