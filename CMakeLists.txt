@@ -312,7 +312,7 @@ if (ENABLE_UNIT_TESTS)
     message(STATUS "Unit tests enabled")
 
     find_library(CRITERION_FOUND criterion REQUIRED)
-    add_executable(oshd_tests ${OSHD_SOURCES} ${OSHD_TESTS_SOURCES})
+    add_executable(oshd_tests ${OSHD_TESTS_SOURCES})
     set_target_properties(oshd_tests PROPERTIES POSITION_INDEPENDENT_CODE ${ENABLE_PIC})
     target_link_libraries(oshd_tests ${OSH_LINK_LIBRARIES} criterion)
     add_dependencies(oshd_tests version_git)
