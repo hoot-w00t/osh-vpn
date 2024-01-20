@@ -61,22 +61,6 @@ struct noise_handshakestate {
     } validity;
 };
 
-__attribute__((warn_unused_result))
-static bool mix_initiator_public_key(noise_handshakestate_t *ctx)
-{
-    const keypair_t *key = ctx->initiator ? ctx->s : ctx->rs;
-
-    return noise_symmetricstate_mix_hash(ctx->symmetric, keypair_get_public_key(key), keypair_get_public_key_length(key));
-}
-
-__attribute__((warn_unused_result))
-static bool mix_responder_public_key(noise_handshakestate_t *ctx)
-{
-    const keypair_t *key = ctx->initiator ? ctx->rs : ctx->s;
-
-    return noise_symmetricstate_mix_hash(ctx->symmetric, keypair_get_public_key(key), keypair_get_public_key_length(key));
-}
-
 noise_handshakestate_t *noise_handshakestate_create(const char *protocol_name, bool initiator)
 {
     noise_handshakestate_t *ctx = xzalloc(sizeof(*ctx));
@@ -310,6 +294,22 @@ bool noise_handshakestate_set_prologue(noise_handshakestate_t *ctx, const void *
     return process_prologue(ctx, prologue, prologue_len);
 }
 
+__attribute__((warn_unused_result))
+static bool mix_initiator_public_key(noise_handshakestate_t *ctx)
+{
+    const keypair_t *key = ctx->initiator ? ctx->s : ctx->rs;
+
+    return noise_symmetricstate_mix_hash(ctx->symmetric, keypair_get_public_key(key), keypair_get_public_key_length(key));
+}
+
+__attribute__((warn_unused_result))
+static bool mix_responder_public_key(noise_handshakestate_t *ctx)
+{
+    const keypair_t *key = ctx->initiator ? ctx->rs : ctx->s;
+
+    return noise_symmetricstate_mix_hash(ctx->symmetric, keypair_get_public_key(key), keypair_get_public_key_length(key));
+}
+
 // Mix empty prologue (if none was set) and process pattern pre-messages
 __attribute__((warn_unused_result))
 static bool process_pre_messages(noise_handshakestate_t *ctx)
@@ -453,30 +453,33 @@ static bool noise_handshakestate_write_payload(
             return false;
     }
 
+    // PSK validity rule (see Noise Protocol specification 9.3)
+    if (ctx->has_mixed_psk && !ctx->has_sent_e)
+        return false;
+
+    bool success = false;
+    uint8_t *buf = xalloc(payload_len);
+    uint8_t *mac = xalloc(ctx->maclen);
+    size_t len;
+
+    if (!noise_symmetricstate_encrypt_and_hash(ctx->symmetric, payload, payload_len, buf, &len, mac, ctx->maclen))
+        goto end;
+    if (!fixedbuf_append(output, buf, len))
+        goto end;
     if (noise_symmetricstate_has_key(ctx->symmetric)) {
-        // PSK validity rule (see Noise Protocol specification 9.3)
-        if (ctx->has_mixed_psk && !ctx->has_sent_e)
-            return false;
-
-        uint8_t *buf = xalloc(payload_len);
-        uint8_t *mac = xalloc(ctx->maclen);
-        size_t len;
-        bool success;
-
-        success = noise_symmetricstate_encrypt_and_hash(ctx->symmetric, payload, payload_len, buf, &len, mac, ctx->maclen)
-               && fixedbuf_append(output, buf, len)
-               && fixedbuf_append(output, mac, ctx->maclen);
-
-        if (payload_len > 0)
-            memzero(buf, payload_len);
-        free(buf);
-        memzero_free(mac, ctx->maclen);
-
-        return success;
-    } else {
-        return noise_symmetricstate_mix_hash(ctx->symmetric, payload, payload_len)
-            && fixedbuf_append(output, payload, payload_len);
+        if (!fixedbuf_append(output, mac, ctx->maclen))
+            goto end;
     }
+
+    success = true;
+
+end:
+    if (payload_len > 0)
+        memzero(buf, payload_len);
+    free(buf);
+    memzero_free(mac, ctx->maclen);
+
+    return success;
 }
 
 static bool noise_handshakestate_write_e(noise_handshakestate_t *ctx, struct fixedbuf *output)
@@ -594,38 +597,24 @@ static bool noise_handshakestate_read_s(noise_handshakestate_t *ctx, struct fixe
     }
     ctx->validity.read_s = true;
 
-    if (noise_symmetricstate_has_key(ctx->symmetric)) {
-        const size_t ciphertext_len = keypair_get_public_key_length(ctx->rs);
-        const void *ciphertext = fixedbuf_get(input, input_offset, ciphertext_len);
-        void *mac = fixedbuf_get(input, input_offset, ctx->maclen);
-        // FIXME: Make *mac const once noise_handshakestate_read_payload() *mac becomes const
+    const size_t ciphertext_len = keypair_get_public_key_length(ctx->rs);
+    const void *ciphertext = fixedbuf_get(input, input_offset, ciphertext_len);
+    const size_t mac_len = noise_symmetricstate_has_key(ctx->symmetric) ? ctx->maclen : 0;
+    void *mac = fixedbuf_get(input, input_offset, mac_len); // FIXME: Make *mac const once noise_handshakestate_read_payload() *mac becomes const
+    struct fixedbuf plaintext;
 
-        struct fixedbuf plaintext;
+    fixedbuf_init_output(&plaintext, NULL, keypair_get_public_key_length(ctx->rs));
+    plaintext.ptr = xzalloc(plaintext.maxlen);
 
-        fixedbuf_init_output(&plaintext, NULL, keypair_get_public_key_length(ctx->rs));
+    if (!noise_handshakestate_read_payload(ctx, ciphertext, ciphertext_len, mac, mac_len, &plaintext))
+        goto end;
+    if (plaintext.len != plaintext.maxlen)
+        goto end;
 
-        plaintext.ptr = xzalloc(plaintext.maxlen);
+    success = keypair_set_public_key(ctx->rs, plaintext.ptr, plaintext.len);
 
-        if (!noise_handshakestate_read_payload(ctx, ciphertext, ciphertext_len, mac, ctx->maclen, &plaintext)) {
-            memzero_free(plaintext.ptr, plaintext.maxlen);
-            return false;
-        }
-
-        if (plaintext.len != plaintext.maxlen) {
-            memzero_free(plaintext.ptr, plaintext.maxlen);
-            return false;
-        }
-
-        success = keypair_set_public_key(ctx->rs, plaintext.ptr, plaintext.len);
-        memzero_free(plaintext.ptr, plaintext.maxlen);
-    } else {
-        const size_t keylen = keypair_get_public_key_length(ctx->rs);
-        const void *key = fixedbuf_get(input, input_offset, keylen);
-
-        success = noise_symmetricstate_mix_hash(ctx->symmetric, key, keylen)
-               && keypair_set_public_key(ctx->rs, key, keylen);
-    }
-
+end:
+    memzero_free(plaintext.ptr, plaintext.maxlen);
     return success;
 }
 
@@ -764,29 +753,15 @@ bool noise_handshakestate_read_msg(noise_handshakestate_t *ctx,
     }
 
     const size_t remaining_len = fixedbuf_get_remaining_length(input, &input_offset);
-    bool success;
+    const size_t mac_len = noise_symmetricstate_has_key(ctx->symmetric) ? ctx->maclen : 0;
 
-    if (noise_symmetricstate_has_key(ctx->symmetric)) {
-        if (remaining_len < ctx->maclen)
-            return false;
+    if (remaining_len < mac_len)
+        return false;
 
-        const size_t ciphertext_len = remaining_len - ctx->maclen;
-        void *ciphertext = fixedbuf_get(input, &input_offset, ciphertext_len);
-        void *mac = fixedbuf_get(input, &input_offset, ctx->maclen);
-
-        success = noise_handshakestate_read_payload(ctx, ciphertext, ciphertext_len, mac, ctx->maclen, payload);
-
-    } else if (remaining_len != 0) {
-        void *plaintext = fixedbuf_get(input, &input_offset, remaining_len);
-
-        if (plaintext == NULL)
-            return false;
-
-        success = noise_symmetricstate_mix_hash(ctx->symmetric, plaintext, remaining_len)
-               && fixedbuf_append(payload, plaintext, remaining_len);
-    } else {
-        success = true;
-    }
+    const size_t ciphertext_len = remaining_len - mac_len;
+    void *ciphertext = fixedbuf_get(input, &input_offset, ciphertext_len);
+    void *mac = fixedbuf_get(input, &input_offset, mac_len);
+    bool success = noise_handshakestate_read_payload(ctx, ciphertext, ciphertext_len, mac, mac_len, payload);
 
     if (success)
         ctx->curr_msg_idx += 1;
