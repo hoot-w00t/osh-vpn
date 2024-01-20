@@ -75,6 +75,9 @@ struct noise_message {
 struct noise_pattern {
     const char *pattern_name;
 
+    // This is true for one-way handshake patterns
+    bool one_way_pattern;
+
     // This must be true only if at least one psk token exists in the messages
     bool psk_mode;
 

@@ -381,6 +381,8 @@ int main(int ac, char **av)
     }
 
     bool initiator = true;
+    const bool is_one_way = noise_handshakestate_is_one_way(init_handshake);
+    assert(is_one_way == noise_handshakestate_is_one_way(resp_handshake));
     const size_t buffer_maxlen = 1024;
     uint8_t *buffer = xalloc(buffer_maxlen);
     uint8_t *temp_buffer = xalloc(buffer_maxlen);
@@ -433,12 +435,17 @@ int main(int ac, char **av)
             noise_cipherstate_t *send_cipher;
             noise_cipherstate_t *recv_cipher;
 
-            if (initiator) {
+            if (is_one_way) {
                 send_cipher = init_send_cipher;
                 recv_cipher = resp_recv_cipher;
             } else {
-                send_cipher = resp_send_cipher;
-                recv_cipher = init_recv_cipher;
+                if (initiator) {
+                    send_cipher = init_send_cipher;
+                    recv_cipher = resp_recv_cipher;
+                } else {
+                    send_cipher = resp_send_cipher;
+                    recv_cipher = init_recv_cipher;
+                }
             }
             initiator = !initiator;
 
@@ -490,15 +497,42 @@ int main(int ac, char **av)
 
             const bool init_ready_to_split = noise_handshakestate_ready_to_split(init_handshake);
             const bool resp_ready_to_split = noise_handshakestate_ready_to_split(resp_handshake);
-            const bool init_has_split = noise_handshakestate_split(init_handshake, &init_send_cipher, &init_recv_cipher);
-            const bool resp_has_split = noise_handshakestate_split(resp_handshake, &resp_send_cipher, &resp_recv_cipher);
-
             assert(init_ready_to_split == resp_ready_to_split);
+
+            bool init_has_split;
+            bool resp_has_split;
+
+            if (is_one_way) {
+                assert(noise_handshakestate_split(init_handshake, &init_send_cipher, &init_recv_cipher) == false);
+                assert(noise_handshakestate_split(resp_handshake, &resp_send_cipher, &resp_recv_cipher) == false);
+
+                init_has_split = noise_handshakestate_split_one_way(init_handshake, &init_send_cipher);
+                resp_has_split = noise_handshakestate_split_one_way(resp_handshake, &resp_recv_cipher);
+            } else {
+                assert(noise_handshakestate_split_one_way(init_handshake, &init_send_cipher) == false);
+                assert(noise_handshakestate_split_one_way(resp_handshake, &resp_recv_cipher) == false);
+
+                init_has_split = noise_handshakestate_split(init_handshake, &init_send_cipher, &init_recv_cipher);
+                resp_has_split = noise_handshakestate_split(resp_handshake, &resp_send_cipher, &resp_recv_cipher);
+            }
+
             assert(init_has_split == resp_has_split);
             assert(init_ready_to_split == init_has_split);
             has_split = init_has_split && resp_has_split;
 
             if (has_split) {
+                if (is_one_way) {
+                    assert(init_send_cipher != NULL);
+                    assert(init_recv_cipher == NULL);
+                    assert(resp_send_cipher == NULL);
+                    assert(resp_recv_cipher != NULL);
+                } else {
+                    assert(init_send_cipher != NULL);
+                    assert(init_recv_cipher != NULL);
+                    assert(resp_send_cipher != NULL);
+                    assert(resp_recv_cipher != NULL);
+                }
+
                 assert(noise_handshakestate_expects_write(ctx_write) == false);
                 assert(noise_handshakestate_expects_write(ctx_read) == false);
                 assert(noise_handshakestate_expects_read(ctx_write) == false);

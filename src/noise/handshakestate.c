@@ -222,6 +222,11 @@ bool noise_handshakestate_is_initiator(const noise_handshakestate_t *ctx)
     return ctx->initiator;
 }
 
+bool noise_handshakestate_is_one_way(const noise_handshakestate_t *ctx)
+{
+    return ctx->pattern->one_way_pattern;
+}
+
 bool noise_handshakestate_expects_write(const noise_handshakestate_t *ctx)
 {
     const struct noise_message *msg = get_curr_msg(ctx);
@@ -743,11 +748,25 @@ bool noise_handshakestate_split(noise_handshakestate_t *ctx,
 {
     bool success;
 
-    if (!noise_handshakestate_ready_to_split(ctx))
+    if (!noise_handshakestate_ready_to_split(ctx) || noise_handshakestate_is_one_way(ctx))
         return false;
 
     success = noise_symmetricstate_split(ctx->symmetric, ctx->initiator,
         send_cipher, recv_cipher);
+
+    ctx->has_split = success;
+    return success;
+}
+
+bool noise_handshakestate_split_one_way(noise_handshakestate_t *ctx,
+    noise_cipherstate_t **cipher)
+{
+    bool success;
+
+    if (!noise_handshakestate_ready_to_split(ctx) || !noise_handshakestate_is_one_way(ctx))
+        return false;
+
+    success = noise_symmetricstate_split_one_way(ctx->symmetric, ctx->initiator, cipher);
 
     ctx->has_split = success;
     return success;

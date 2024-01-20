@@ -41,5 +41,8 @@ bool noise_symmetricstate_decrypt_and_hash(noise_symmetricstate_t *ctx,
 __attribute__((warn_unused_result))
 bool noise_symmetricstate_split(noise_symmetricstate_t *ctx, bool initiator,
     noise_cipherstate_t **send_cipher, noise_cipherstate_t **recv_cipher);
+__attribute__((warn_unused_result))
+bool noise_symmetricstate_split_one_way(noise_symmetricstate_t *ctx, bool initiator,
+    noise_cipherstate_t **cipher);
 
 #endif

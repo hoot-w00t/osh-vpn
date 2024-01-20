@@ -89,6 +89,13 @@ Test(noise_patterns_table, validate_patterns_table)
 
         bool has_psk_token = false;
 
+        if (pattern->one_way_pattern) {
+            cr_assert(pattern->pre_msgs_count > 0);
+            cr_assert(pattern->msgs_count == 1);
+        } else {
+            cr_assert(pattern->msgs_count >= 2);
+        }
+
         for (unsigned int i = 0; i < NOISE_MAX_PRE_MESSAGES; ++i) {
             const struct noise_message *msg = &pattern->pre_msgs[i];
 

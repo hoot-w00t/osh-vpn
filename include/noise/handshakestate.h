@@ -26,6 +26,7 @@ const keypair_t *noise_handshakestate_get_s(const noise_handshakestate_t *ctx);
 const keypair_t *noise_handshakestate_get_rs(const noise_handshakestate_t *ctx);
 
 bool noise_handshakestate_is_initiator(const noise_handshakestate_t *ctx);
+bool noise_handshakestate_is_one_way(const noise_handshakestate_t *ctx);
 
 bool noise_handshakestate_expects_write(const noise_handshakestate_t *ctx);
 bool noise_handshakestate_expects_read(const noise_handshakestate_t *ctx);
@@ -48,6 +49,9 @@ bool noise_handshakestate_ready_to_split(const noise_handshakestate_t *ctx);
 __attribute__((warn_unused_result))
 bool noise_handshakestate_split(noise_handshakestate_t *ctx,
     noise_cipherstate_t **send_cipher, noise_cipherstate_t **recv_cipher);
+__attribute__((warn_unused_result))
+bool noise_handshakestate_split_one_way(noise_handshakestate_t *ctx,
+    noise_cipherstate_t **cipher);
 
 __attribute__((warn_unused_result))
 bool noise_handshakestate_get_handshake_hash(const noise_handshakestate_t *ctx, void *dest, size_t dest_len);

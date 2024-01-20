@@ -280,3 +280,22 @@ end:
     }
     return success;
 }
+
+bool noise_symmetricstate_split_one_way(noise_symmetricstate_t *ctx, bool initiator,
+    noise_cipherstate_t **cipher)
+{
+    noise_cipherstate_t *send_cipher = NULL;
+    noise_cipherstate_t *recv_cipher = NULL;
+
+    if (!noise_symmetricstate_split(ctx, initiator, &send_cipher, &recv_cipher))
+        return false;
+
+    if (initiator) {
+        noise_cipherstate_destroy(recv_cipher);
+        *cipher = send_cipher;
+    } else {
+        noise_cipherstate_destroy(send_cipher);
+        *cipher = recv_cipher;
+    }
+    return true;
+}
