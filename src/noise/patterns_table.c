@@ -11,7 +11,6 @@
 static const struct noise_pattern noise_patterns_array[] = {
     {
         .pattern_name = "IK",
-        .psk_mode = false,
 
         .pre_msgs = {
             {
@@ -95,7 +94,6 @@ static const struct noise_pattern noise_patterns_array[] = {
 
     {
         .pattern_name = "XK",
-        .psk_mode = false,
 
         .pre_msgs = {
             {
@@ -194,7 +192,6 @@ static const struct noise_pattern noise_patterns_array[] = {
 
     {
         .pattern_name = "IX",
-        .psk_mode = false,
 
         .pre_msgs = {0},
         .pre_msgs_count = 0,
@@ -263,7 +260,6 @@ static const struct noise_pattern noise_patterns_array[] = {
 
     {
         .pattern_name = "XX",
-        .psk_mode = false,
 
         .pre_msgs = {0},
         .pre_msgs_count = 0,
@@ -347,7 +343,6 @@ static const struct noise_pattern noise_patterns_array[] = {
 
     {
         .pattern_name = "KK",
-        .psk_mode = false,
 
         .pre_msgs = {
             {
@@ -479,7 +474,6 @@ static const struct noise_pattern noise_patterns_array[] = {
 
     { // array terminator, invalid
         .pattern_name = NULL,
-        .psk_mode = false,
         .pre_msgs = {0},
         .pre_msgs_count = 0,
         .msgs = {0},
