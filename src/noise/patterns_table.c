@@ -10,6 +10,157 @@
 
 static const struct noise_pattern noise_patterns_array[] = {
     {
+        .pattern_name = "N",
+        .one_way_pattern = true,
+
+        .pre_msgs = {
+            {
+                .from_initiator = false,
+                .tokens = { NOISE_TOK_S },
+                .tokens_count = 1
+            }
+        },
+        .pre_msgs_count = 1,
+
+        .msgs = {
+            {
+                .from_initiator = true,
+                .tokens = { NOISE_TOK_E, NOISE_TOK_ES },
+                .tokens_count = 2
+            }
+        },
+        .msgs_count = 1
+    },
+
+    {
+        .pattern_name = "Npsk0",
+        .one_way_pattern = true,
+        .psk_mode = true,
+
+        .pre_msgs = {
+            {
+                .from_initiator = false,
+                .tokens = { NOISE_TOK_S },
+                .tokens_count = 1
+            }
+        },
+        .pre_msgs_count = 1,
+
+        .msgs = {
+            {
+                .from_initiator = true,
+                .tokens = { NOISE_TOK_PSK, NOISE_TOK_E, NOISE_TOK_ES },
+                .tokens_count = 3
+            }
+        },
+        .msgs_count = 1
+    },
+
+    {
+        .pattern_name = "K",
+        .one_way_pattern = true,
+
+        .pre_msgs = {
+            {
+                .from_initiator = true,
+                .tokens = { NOISE_TOK_S },
+                .tokens_count = 1
+            },
+            {
+                .from_initiator = false,
+                .tokens = { NOISE_TOK_S },
+                .tokens_count = 1
+            }
+        },
+        .pre_msgs_count = 2,
+
+        .msgs = {
+            {
+                .from_initiator = true,
+                .tokens = { NOISE_TOK_E, NOISE_TOK_ES, NOISE_TOK_SS },
+                .tokens_count = 3
+            }
+        },
+        .msgs_count = 1
+    },
+
+    {
+        .pattern_name = "Kpsk0",
+        .one_way_pattern = true,
+        .psk_mode = true,
+
+        .pre_msgs = {
+            {
+                .from_initiator = true,
+                .tokens = { NOISE_TOK_S },
+                .tokens_count = 1
+            },
+            {
+                .from_initiator = false,
+                .tokens = { NOISE_TOK_S },
+                .tokens_count = 1
+            }
+        },
+        .pre_msgs_count = 2,
+
+        .msgs = {
+            {
+                .from_initiator = true,
+                .tokens = { NOISE_TOK_PSK, NOISE_TOK_E, NOISE_TOK_ES, NOISE_TOK_SS },
+                .tokens_count = 4
+            }
+        },
+        .msgs_count = 1
+    },
+
+    {
+        .pattern_name = "X",
+        .one_way_pattern = true,
+
+        .pre_msgs = {
+            {
+                .from_initiator = false,
+                .tokens = { NOISE_TOK_S },
+                .tokens_count = 1
+            }
+        },
+        .pre_msgs_count = 1,
+
+        .msgs = {
+            {
+                .from_initiator = true,
+                .tokens = { NOISE_TOK_E, NOISE_TOK_ES, NOISE_TOK_S, NOISE_TOK_SS },
+                .tokens_count = 4
+            }
+        },
+        .msgs_count = 1
+    },
+
+    {
+        .pattern_name = "Xpsk1",
+        .one_way_pattern = true,
+        .psk_mode = true,
+
+        .pre_msgs = {
+            {
+                .from_initiator = false,
+                .tokens = { NOISE_TOK_S },
+                .tokens_count = 1
+            }
+        },
+        .pre_msgs_count = 1,
+
+        .msgs = {
+            {
+                .from_initiator = true,
+                .tokens = { NOISE_TOK_E, NOISE_TOK_ES, NOISE_TOK_S, NOISE_TOK_SS, NOISE_TOK_PSK },
+                .tokens_count = 5
+            }
+        },
+        .msgs_count = 1
+    },
+
+    {
         .pattern_name = "IK",
 
         .pre_msgs = {
