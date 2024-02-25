@@ -356,7 +356,7 @@ add_executable(noise_test_handshake ${NOISE_TEST_HANDSHAKE_SOURCES})
 target_link_libraries(noise_test_handshake ${OSH_LINK_LIBRARIES})
 add_dependencies(noise_test_handshake version_git)
 add_test(NAME noise_test_vectors
-         COMMAND ${Python_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/noise/run_noise_test_vectors.py" $<TARGET_FILE:noise_test_handshake> "${CMAKE_CURRENT_BINARY_DIR}/noise_test_vector_tmp.json" "${CMAKE_CURRENT_SOURCE_DIR}/tests/noise/cacophony.json" "${CMAKE_CURRENT_SOURCE_DIR}/tests/noise/snow.json")
+         COMMAND ${Python_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/noise/check_test_vectors.py" $<TARGET_FILE:noise_test_handshake> "${CMAKE_CURRENT_BINARY_DIR}/noise_test_vector_tmp.json" "${CMAKE_CURRENT_SOURCE_DIR}/tests/noise/cacophony.json" "${CMAKE_CURRENT_SOURCE_DIR}/tests/noise/snow.json")
 
 # Installation rules
 install(TARGETS oshd RUNTIME)
