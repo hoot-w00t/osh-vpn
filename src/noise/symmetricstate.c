@@ -141,7 +141,7 @@ bool noise_symmetricstate_mix_key(noise_symmetricstate_t *ctx, const void *ikm, 
     return success;
 }
 
-bool noise_symmetricstate_mix_hash(noise_symmetricstate_t *ctx, const void *data, size_t data_len)
+bool noise_symmetricstate_mix_hash1(noise_symmetricstate_t *ctx, const void *data, size_t data_len)
 {
     return hash_ctx_reset(ctx->hash_ctx)
         && hash_ctx_update(ctx->hash_ctx, ctx->hash, ctx->hash_len)
@@ -149,8 +149,8 @@ bool noise_symmetricstate_mix_hash(noise_symmetricstate_t *ctx, const void *data
         && hash_ctx_final(ctx->hash_ctx, ctx->hash, ctx->hash_len);
 }
 
-// same as mix_hash but hashes data1 then data2 (avoids byte array concats)
-bool noise_symmetricstate_mix_hash_2(noise_symmetricstate_t *ctx,
+// same as mix_hash1 but hashes data1 then data2 to avoid concatenating the two
+bool noise_symmetricstate_mix_hash2(noise_symmetricstate_t *ctx,
     const void *data1, size_t data1_len,
     const void *data2, size_t data2_len)
 {
@@ -169,7 +169,7 @@ bool noise_symmetricstate_mix_key_and_hash(noise_symmetricstate_t *ctx, const vo
         return false;
 
     memcpy(ctx->chaining_key, ctx->hkdf_output1, ctx->hash_len);
-    success = noise_symmetricstate_mix_hash(ctx, ctx->hkdf_output2, ctx->hash_len)
+    success = noise_symmetricstate_mix_hash1(ctx, ctx->hkdf_output2, ctx->hash_len)
            && noise_cipherstate_initialize_key(ctx->cipher, ctx->hkdf_output3, ctx->keylen);
 
     reset_hkdf_output(ctx);
@@ -196,13 +196,13 @@ bool noise_symmetricstate_encrypt_and_hash(noise_symmetricstate_t *ctx,
             return false;
         }
 
-        return noise_symmetricstate_mix_hash_2(ctx, output, *output_len, mac, mac_len);
+        return noise_symmetricstate_mix_hash2(ctx, output, *output_len, mac, mac_len);
     } else {
         memcpy(output, plaintext, plaintext_len);
         *output_len = plaintext_len;
         memzero(mac, mac_len);
 
-        return noise_symmetricstate_mix_hash(ctx, output, *output_len);
+        return noise_symmetricstate_mix_hash1(ctx, output, *output_len);
     }
 }
 
@@ -222,12 +222,12 @@ bool noise_symmetricstate_decrypt_and_hash(noise_symmetricstate_t *ctx,
             return false;
         }
 
-        return noise_symmetricstate_mix_hash_2(ctx, ciphertext, ciphertext_len, mac, mac_len);
+        return noise_symmetricstate_mix_hash2(ctx, ciphertext, ciphertext_len, mac, mac_len);
     } else {
         memcpy(output, ciphertext, ciphertext_len);
         *output_len = ciphertext_len;
 
-        return noise_symmetricstate_mix_hash(ctx, ciphertext, ciphertext_len);
+        return noise_symmetricstate_mix_hash1(ctx, ciphertext, ciphertext_len);
     }
 }
 

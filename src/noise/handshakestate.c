@@ -283,10 +283,10 @@ static bool process_prologue(noise_handshakestate_t *ctx,
 
     // Mix handshake prologue
     if (prologue != NULL && prologue_len > 0) {
-        if (!noise_symmetricstate_mix_hash(ctx->symmetric, prologue, prologue_len))
+        if (!noise_symmetricstate_mix_hash1(ctx->symmetric, prologue, prologue_len))
             return false;
     } else {
-        if (!noise_symmetricstate_mix_hash(ctx->symmetric, &empty, 0))
+        if (!noise_symmetricstate_mix_hash1(ctx->symmetric, &empty, 0))
             return false;
     }
 
@@ -304,7 +304,7 @@ static bool mix_initiator_public_key(noise_handshakestate_t *ctx)
 {
     const keypair_t *key = ctx->initiator ? ctx->s : ctx->rs;
 
-    return noise_symmetricstate_mix_hash(ctx->symmetric, keypair_get_public_key(key), keypair_get_public_key_length(key));
+    return noise_symmetricstate_mix_hash1(ctx->symmetric, keypair_get_public_key(key), keypair_get_public_key_length(key));
 }
 
 __attribute__((warn_unused_result))
@@ -312,7 +312,7 @@ static bool mix_responder_public_key(noise_handshakestate_t *ctx)
 {
     const keypair_t *key = ctx->initiator ? ctx->rs : ctx->s;
 
-    return noise_symmetricstate_mix_hash(ctx->symmetric, keypair_get_public_key(key), keypair_get_public_key_length(key));
+    return noise_symmetricstate_mix_hash1(ctx->symmetric, keypair_get_public_key(key), keypair_get_public_key_length(key));
 }
 
 // Mix empty prologue (if none was set) and process pattern pre-messages
@@ -507,7 +507,7 @@ static bool noise_handshakestate_write_e(noise_handshakestate_t *ctx, struct fix
     pub = keypair_get_public_key(ctx->e);
     publen = keypair_get_public_key_length(ctx->e);
 
-    if (!noise_symmetricstate_mix_hash(ctx->symmetric, pub, publen))
+    if (!noise_symmetricstate_mix_hash1(ctx->symmetric, pub, publen))
         return false;
     if (ctx->pattern->psk_mode) {
         if (!noise_symmetricstate_mix_key(ctx->symmetric, pub, publen))
@@ -589,7 +589,7 @@ static bool noise_handshakestate_read_e(noise_handshakestate_t *ctx, struct fixe
     if (!keypair_set_public_key(ctx->re, pub, publen))
         return false;
 
-    if (!noise_symmetricstate_mix_hash(ctx->symmetric, keypair_get_public_key(ctx->re), keypair_get_public_key_length(ctx->re)))
+    if (!noise_symmetricstate_mix_hash1(ctx->symmetric, keypair_get_public_key(ctx->re), keypair_get_public_key_length(ctx->re)))
         return false;
     if (ctx->pattern->psk_mode) {
         if (!noise_symmetricstate_mix_key(ctx->symmetric, keypair_get_public_key(ctx->re), keypair_get_public_key_length(ctx->re)))

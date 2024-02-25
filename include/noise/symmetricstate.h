@@ -16,9 +16,9 @@ bool noise_symmetricstate_has_key(noise_symmetricstate_t *ctx);
 __attribute__((warn_unused_result))
 bool noise_symmetricstate_mix_key(noise_symmetricstate_t *ctx, const void *ikm, size_t ikm_len);
 __attribute__((warn_unused_result))
-bool noise_symmetricstate_mix_hash(noise_symmetricstate_t *ctx, const void *data, size_t data_len);
+bool noise_symmetricstate_mix_hash1(noise_symmetricstate_t *ctx, const void *data, size_t data_len);
 __attribute__((warn_unused_result))
-bool noise_symmetricstate_mix_hash_2(noise_symmetricstate_t *ctx,
+bool noise_symmetricstate_mix_hash2(noise_symmetricstate_t *ctx,
     const void *data1, size_t data1_len,
     const void *data2, size_t data2_len);
 __attribute__((warn_unused_result))
