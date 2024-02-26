@@ -9,12 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-// FIXME: Add an "error-lock" to make sure that the handshake state context is
-//        not going to go into an undefined state after an unexpected error
-//        i.e. once we encounter an error (after noise_handshakestate_create())
-//             the context fully resets or is locked down to prevent calling any
-//             member function on it (apart from error getters and noise_handshakestate_destroy())
-
 struct noise_handshakestate {
     noise_symmetricstate_t *symmetric;
 
@@ -45,6 +39,8 @@ struct noise_handshakestate {
     bool has_processed_prologue;
     bool has_processed_pre_messages;
     bool has_split;
+
+    bool has_failed;
 
     struct {
         // 7.3 rule 2
@@ -95,6 +91,7 @@ noise_handshakestate_t *noise_handshakestate_create(const char *protocol_name, b
 
     // Initialize context
     ctx->initiator = initiator;
+    ctx->has_failed = false;
     ctx->has_split = false;
     ctx->has_sent_e = false;
     ctx->has_mixed_psk = false;
@@ -168,6 +165,13 @@ void noise_handshakestate_destroy(noise_handshakestate_t *ctx)
     }
 }
 
+// Mark handshake state as failed, this is just a way to lock it down after an
+// error occurs to make sure the handshake doesn't go further
+static void mark_handshake_as_failed(noise_handshakestate_t *ctx)
+{
+    ctx->has_failed = true;
+}
+
 // Return current message from pattern (NULL if no messages are left)
 __attribute__((warn_unused_result))
 static const struct noise_message *get_curr_msg(const noise_handshakestate_t *ctx)
@@ -227,6 +231,11 @@ bool noise_handshakestate_is_one_way(const noise_handshakestate_t *ctx)
     return ctx->pattern->one_way_pattern;
 }
 
+bool noise_handshakestate_has_failed(const noise_handshakestate_t *ctx)
+{
+    return ctx->has_failed;
+}
+
 bool noise_handshakestate_expects_write(const noise_handshakestate_t *ctx)
 {
     const struct noise_message *msg = get_curr_msg(ctx);
@@ -275,23 +284,27 @@ static bool process_prologue(noise_handshakestate_t *ctx,
     const void *prologue, const size_t prologue_len)
 {
     const uint8_t empty = 0;
+    bool success;
 
     if (ctx->has_processed_prologue) {
         logger(LOG_ERR, "%s: Already processed prologue", __func__);
         return false;
     }
 
+    if (noise_handshakestate_has_failed(ctx))
+        return false;
+
     // Mix handshake prologue
     if (prologue != NULL && prologue_len > 0) {
-        if (!noise_symmetricstate_mix_hash1(ctx->symmetric, prologue, prologue_len))
-            return false;
+        success = noise_symmetricstate_mix_hash1(ctx->symmetric, prologue, prologue_len);
     } else {
-        if (!noise_symmetricstate_mix_hash1(ctx->symmetric, &empty, 0))
-            return false;
+        success = noise_symmetricstate_mix_hash1(ctx->symmetric, &empty, 0);
     }
 
-    ctx->has_processed_prologue = true;
-    return true;
+    if (!success)
+        mark_handshake_as_failed(ctx);
+    ctx->has_processed_prologue = success;
+    return success;
 }
 
 bool noise_handshakestate_set_prologue(noise_handshakestate_t *ctx, const void *prologue, size_t prologue_len)
@@ -630,7 +643,7 @@ end:
     return success;
 }
 
-bool noise_handshakestate_write_msg(noise_handshakestate_t *ctx,
+static bool _noise_handshakestate_write_msg(noise_handshakestate_t *ctx,
     struct fixedbuf *output, const struct fixedbuf *payload)
 {
     const uint8_t empty = 0;
@@ -678,7 +691,22 @@ bool noise_handshakestate_write_msg(noise_handshakestate_t *ctx,
     return true;
 }
 
-bool noise_handshakestate_read_msg(noise_handshakestate_t *ctx,
+bool noise_handshakestate_write_msg(noise_handshakestate_t *ctx,
+    struct fixedbuf *output, const struct fixedbuf *payload)
+{
+    bool success;
+
+    if (noise_handshakestate_has_failed(ctx))
+        return false;
+
+    success = _noise_handshakestate_write_msg(ctx, output, payload);
+    if (!success)
+        mark_handshake_as_failed(ctx);
+
+    return success;
+}
+
+static bool _noise_handshakestate_read_msg(noise_handshakestate_t *ctx,
     struct fixedbuf *input, struct fixedbuf *payload)
 {
     const struct noise_message *msg;
@@ -734,13 +762,29 @@ bool noise_handshakestate_read_msg(noise_handshakestate_t *ctx,
     return success;
 }
 
+bool noise_handshakestate_read_msg(noise_handshakestate_t *ctx,
+    struct fixedbuf *input, struct fixedbuf *payload)
+{
+    bool success;
+
+    if (noise_handshakestate_has_failed(ctx))
+        return false;
+
+    success = _noise_handshakestate_read_msg(ctx, input, payload);
+    if (!success)
+        mark_handshake_as_failed(ctx);
+
+    return success;
+}
+
 bool noise_handshakestate_ready_to_split(const noise_handshakestate_t *ctx)
 {
     return  get_curr_msg(ctx) == NULL
         &&  ctx->has_processed_prologue
         &&  ctx->has_processed_pre_messages
         &&  ctx->curr_msg_idx == ctx->pattern->msgs_count
-        && !ctx->has_split;
+        && !ctx->has_split
+        && !noise_handshakestate_has_failed(ctx);
 }
 
 bool noise_handshakestate_split(noise_handshakestate_t *ctx,
@@ -774,7 +818,7 @@ bool noise_handshakestate_split_one_way(noise_handshakestate_t *ctx,
 
 bool noise_handshakestate_get_handshake_hash(const noise_handshakestate_t *ctx, void *dest, size_t dest_len)
 {
-    if (!ctx->has_split || dest == NULL || dest_len != ctx->hash_len)
+    if (!ctx->has_split || dest == NULL || dest_len != ctx->hash_len || noise_handshakestate_has_failed(ctx))
         return false;
 
     memcpy(dest, noise_symmetricstate_get_handshake_hash(ctx->symmetric), ctx->hash_len);

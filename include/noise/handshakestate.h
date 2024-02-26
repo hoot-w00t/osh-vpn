@@ -27,6 +27,7 @@ const keypair_t *noise_handshakestate_get_rs(const noise_handshakestate_t *ctx);
 
 bool noise_handshakestate_is_initiator(const noise_handshakestate_t *ctx);
 bool noise_handshakestate_is_one_way(const noise_handshakestate_t *ctx);
+bool noise_handshakestate_has_failed(const noise_handshakestate_t *ctx);
 
 bool noise_handshakestate_expects_write(const noise_handshakestate_t *ctx);
 bool noise_handshakestate_expects_read(const noise_handshakestate_t *ctx);
