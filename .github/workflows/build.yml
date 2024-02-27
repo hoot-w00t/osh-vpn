@@ -27,7 +27,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -yq ninja-build git gcc pkg-config libssl-dev cmake libcriterion-dev
+          sudo apt-get install -yq ninja-build git gcc pkg-config libssl-dev cmake libcriterion-dev python3
 
       - name: Install requirements (windows)
         if: matrix.os == 'windows-latest'

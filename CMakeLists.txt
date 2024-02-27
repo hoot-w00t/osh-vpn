@@ -231,6 +231,12 @@ set(OSHD_SOURCES
     src/netutil/arp.c
     src/netutil/icmp_nd.c
     src/netutil/icmp.c
+    src/noise/cipherstate.c
+    src/noise/crypto_table.c
+    src/noise/handshakestate.c
+    src/noise/patterns_table.c
+    src/noise/protocol_name.c
+    src/noise/symmetricstate.c
     src/oshpacket_handlers/data.c
     src/oshpacket_handlers/devmode.c
     src/oshpacket_handlers/edge.c
@@ -288,6 +294,7 @@ set(OSHD_TESTS_SOURCES
     ${OSHD_SOURCES}
     tests/crypto/cipher_tests.c
     tests/crypto/keypair_tests.c
+    tests/noise/unit_tests.c
     tests/base64_tests.c
     tests/device_mode_tests.c
     tests/hashtable_tests.c
@@ -299,6 +306,23 @@ set(OSHD_TESTS_SOURCES
     tests/node_id_tests.c
     tests/oshpacket_tests.c
     tests/random_tests.c)
+
+# All sources for noise_test_handshake
+set(NOISE_TEST_HANDSHAKE_SOURCES
+    src/crypto/cipher.c
+    src/crypto/hash.c
+    src/crypto/keypair.c
+    src/noise/cipherstate.c
+    src/noise/crypto_table.c
+    src/noise/handshakestate.c
+    src/noise/patterns_table.c
+    src/noise/protocol_name.c
+    src/noise/symmetricstate.c
+    src/base64.c
+    src/logger.c
+    src/memzero.c
+    src/xalloc.c
+    tests/noise/noise_test_handshake.c)
 
 # Osh daemon
 add_executable(oshd ${OSHD_SOURCES} src/main.c)
@@ -325,6 +349,15 @@ else()
     message(STATUS "Unit tests disabled")
 endif()
 
+# Noise test vectors
+find_package(Python COMPONENTS Interpreter REQUIRED)
+
+add_executable(noise_test_handshake ${NOISE_TEST_HANDSHAKE_SOURCES})
+target_link_libraries(noise_test_handshake ${OSH_LINK_LIBRARIES})
+add_dependencies(noise_test_handshake version_git)
+add_test(NAME noise_test_vectors
+         COMMAND ${Python_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/noise/check_test_vectors.py" $<TARGET_FILE:noise_test_handshake> "${CMAKE_CURRENT_BINARY_DIR}/noise_test_vector_tmp.json" "${CMAKE_CURRENT_SOURCE_DIR}/tests/noise/cacophony.json" "${CMAKE_CURRENT_SOURCE_DIR}/tests/noise/snow.json")
+
 # Installation rules
 install(TARGETS oshd RUNTIME)
 
@@ -343,6 +376,15 @@ add_compiler_flag(CMAKE_C_FLAGS -Wno-newline-eof)
 # Casting function pointers from GetProcAddress() always makes the compiler emit
 # warnings about it, we silence these ones here because it is intended
 set_source_files_properties("src/tuntap/wintun.c" PROPERTIES COMPILE_FLAGS -Wno-strict-aliasing)
+
+if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    # Disable -Wmissing-braces warning the noise patterns table
+    # {0} is used multiple times to statically initialize Noise patterns and GCC
+    # wrongly emits a warning about it
+    # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80454
+    message(STATUS "Setting -Wno-missing-braces for src/noise/patterns_table.c")
+    set_source_files_properties("src/noise/patterns_table.c" PROPERTIES COMPILE_FLAGS -Wno-missing-braces)
+endif()
 
 if (CYGWIN)
     add_compiler_flag_nocheck(CMAKE_C_FLAGS "-D_GNU_SOURCE")
