@@ -411,6 +411,8 @@ endif()
 add_have_symbol(CMAKE_C_FLAGS "memset_s" "string.h" HAVE_MEMSET_S)
 add_have_symbol(CMAKE_C_FLAGS "memset_explicit" "string.h" HAVE_MEMSET_EXPLICIT)
 add_have_symbol(CMAKE_C_FLAGS "explicit_bzero" "string.h" HAVE_EXPLICIT_BZERO)
+add_have_symbol(CMAKE_C_FLAGS "gettimeofday" "sys/time.h" HAVE_GETTIMEOFDAY)
+add_have_symbol(CMAKE_C_FLAGS "clock_gettime" "time.h" HAVE_CLOCK_GETTIME)
 
 # If no build type was specified we will use the default
 set(default_build_type "Debug")
